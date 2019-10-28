@@ -9,3 +9,7 @@ honour their wishes, whatever they may be.
 I have previously successfully done something similar with another early program, Microchess
 by Peter Jennings. A google search should locate the code for that project, but I should
 really bring it over to Github.
+
+To turn on assembly programming
+Menu Project, build cusomizationz, turn on MASM
+Linker option LSAFESEH:NO

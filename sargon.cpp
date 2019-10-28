@@ -14,11 +14,15 @@
 
 static void convert( std::string fin, std::string fout );
 
+extern "C" {
+    int base_function();
+}
+
 int main( int argc, const char *argv[] )
 {
     util::tests();
 #if 1
-    convert("sargon-andre.asm","sargon-andre.txt");
+    convert("sargon-step2.asm","sargon-step2.txt");
 #else
     bool ok = (argc==3);
     if( !ok )
@@ -48,6 +52,13 @@ struct statement
     std::string comment;
 };
 
+struct name_plus_parameters
+{
+    //name_plus_parameters( std::set<std::vector<std::string>> &p ) : name(n), parameters(p) {}
+    std::string name;
+    std::set<std::vector<std::string>> parameters;
+};
+
 static void convert( std::string fin, std::string fout )
 {
     std::ifstream in(fin);
@@ -62,11 +73,25 @@ static void convert( std::string fin, std::string fout )
         printf( "Error; Cannot open file %s for writing\n", fout.c_str() );
         return;
     }
+    std::set<std::string> labels;
+    std::map< std::string, std::vector<std::string> > equates;
+    std::map< std::string, std::set<std::vector<std::string>> > instructions;
+    bool skip=false;
     for(;;)
     {
         std::string line;
         if( !std::getline(in,line) )
             break;
+        if( line.length()>=5 && line.substr(0,5)=="#if 0" )
+            skip = true;
+        bool skip_endif=false;
+        if( line.length()>=6 && line.substr(0,6)=="#endif" )
+        {
+            skip = false;
+            skip_endif = true;
+        }
+        if( skip || skip_endif )
+            continue;
         util::replace_all(line,"\t"," ");
         std::string original_line = line;
         statement stmt;
@@ -226,6 +251,7 @@ static void convert( std::string fin, std::string fout )
         {
             if( stmt.label != "" )
             {
+                labels.insert(stmt.label);
                 line_out += " label: ";
                 line_out += "\"";
                 line_out += stmt.label;
@@ -237,6 +263,11 @@ static void convert( std::string fin, std::string fout )
                 line_out += "\"";
                 line_out += stmt.equate;
                 line_out += "\"";
+                auto it = equates.find(stmt.equate);
+                if( it != equates.end() )
+                    line_out += " Error: dup equate";
+                else
+                    equates.insert( std::pair<std::string,std::vector<std::string>> (stmt.equate, stmt.parameters) );
             }
             if( stmt.instruction != "" )
             {
@@ -244,6 +275,7 @@ static void convert( std::string fin, std::string fout )
                 line_out += "\"";
                 line_out += stmt.instruction;
                 line_out += "\"";
+                instructions[stmt.instruction].insert(stmt.parameters);
             }
             bool first=true;
             for( std::string parm: stmt.parameters )
@@ -258,5 +290,51 @@ static void convert( std::string fin, std::string fout )
         if( !done )
             util::putline(out,line_out);
     }
+    util::putline(out,"\nLABELS\n");
+    for( const std::string &s: labels )
+    {
+        util::putline(out,s);
+    }
+    util::putline(out,"\nEQUATES\n");
+    for( const std::pair<std::string,std::vector<std::string>> &p: equates )
+    {
+        std::string s;
+        s += p.first;
+        s += ": ";
+        bool init = true;
+        for( const std::string &t: p.second )
+        {
+            s += init?" ":", ";
+            init = false;
+            s += t;
+        }
+        util::putline(out,s);
+    }
+    util::putline(out,"\nINSTRUCTIONS\n");
+    for( const std::pair<std::string,std::set<std::vector<std::string>> > &p: instructions )
+    {
+        std::string s;
+        s += p.first;
+        util::putline(out,s);
+        for( const std::vector<std::string> &v: p.second )
+        {
+            s = " >";
+            bool init = true;
+            for( const std::string &t: v )
+            {
+                s += init?" ":", ";
+                init = false;
+                s += t;
+            }
+            util::putline(out,s);
+        }
+    }
+    char buf[100];
+    extern int simple_function( int x );
+    sprintf_s( buf, sizeof(buf), "Force call to skeleton.asm function %d\n", simple_function(34) );
+    util::putline(out,buf);
+    extern int base_function();
+    sprintf_s( buf, sizeof(buf), "Force call to base.asm function %d\n", base_function() );
+    util::putline(out,buf);
 }
 

@@ -2134,3 +2134,1105 @@ NORMAL instruction: "POP" parameters: "B"
 NORMAL instruction: "POP" parameters: "PSW"
 NORMAL instruction: "RET"
 NORMAL instruction: ".END" parameters: "DRIVER"
+
+LABELS
+
+ADJPTR
+ADMOVE
+AGAIN
+AM10
+AN04
+AN08
+AN0B
+AN18
+AN19
+AN1A
+AN1B
+AN1C
+AN20
+ANALYS
+ANAMSG
+ANBDPS
+AS19
+AS20
+AS25
+ASCEND
+ASNTBI
+AT04
+AT10
+AT12
+AT13
+AT14
+AT14A
+AT14B
+AT15
+AT16
+AT20
+AT21
+AT25
+AT30
+AT31
+AT32
+AT5
+ATKLST
+ATKSAV
+ATTACK
+BC0
+BESTM
+BITASN
+BL04
+BL08
+BL0C
+BL10
+BLANKR
+BLNKER
+BM5
+BM9
+BMOVES
+BOARDA
+BOOK
+BRDC
+BRDPOS
+BSET04
+BSETUP
+CA10
+CA15
+CA20
+CA5
+CASTLE
+CHARTR
+CKFLG
+CKMSG
+CLRMSG
+COLOR
+CONVRT
+CP0C
+CP10
+CP1C
+CP24
+CPTRMV
+CRLF
+CRTNES
+DB04
+DB08
+DD04
+DIVIDE
+DR08
+DR0C
+DR10
+DR14
+DRIV01
+DRIV04
+DRIVER
+DSPBRD
+ENPSNT
+EV10
+EV5
+EVAL
+EX04
+EX08
+EX0C
+EX10
+EX14
+EXECMV
+FCDMAT
+FM04
+FM08
+FM09
+FM0C
+FM15
+FM18
+FM19
+FM25
+FM30
+FM35
+FM36
+FM37
+FM40
+FM5
+FNDMOV
+GENMOV
+GM10
+GM5
+GRTTNG
+IB2
+IN04
+IN08
+INCHK
+INCHK1
+INDX1
+INDX2
+INDXER
+INITBD
+INSPCE
+INTERR
+INVAL1
+INVAL2
+IP04
+IP08
+IP0C
+IP10
+IP14
+IP18
+IP1C
+IP20
+IP24
+IP28
+IP2C
+IWIN
+KOLOR
+LIM10
+LIMIT
+LINECT
+M1
+M2
+M3
+M4
+MA08
+MA0C
+MAKEMV
+MATED
+MATEF
+ML04
+MLIST
+MLLST
+MLNXT
+MLPTRI
+MLPTRJ
+MLTPLY
+MM04
+MM08
+MOVE
+MOVENO
+MP10
+MP15
+MP20
+MP25
+MP26
+MP30
+MP31
+MP35
+MP36
+MP37
+MP5
+MPIECE
+MTMSG
+MTPL
+MTRL
+MV0
+MV1
+MV10
+MV15
+MV20
+MV21
+MV22
+MV30
+MV40
+MV5
+MVEMSG
+MVENUM
+NEXTAD
+NORMAD
+NPINS
+NPLY
+NX6
+O.O
+O.O.O
+P.PEP
+P1
+P2
+P3
+PA1
+PA2
+PATH
+PC1
+PC3
+PC5
+PCS
+PF1
+PF10
+PF15
+PF19
+PF2
+PF20
+PF25
+PF26
+PF27
+PF5
+PGIFND
+PINFND
+PL08
+PLISTA
+PLYDEP
+PLYIX
+PLYMAX
+PLYRMV
+PMATE
+PNCK
+POINTS
+POSK
+POSQ
+PT20
+PT23
+PT25
+PT25A
+PT5
+PT6A
+PT6AA
+PT6B
+PT6C
+PT6D
+PT6X
+PTSCK
+PTSL
+PTSW1
+PTSW2
+ROYALT
+RY04
+RY08
+RY0C
+SCORE
+SCRIX
+SORTM
+SPACE
+SR10
+SR15
+SR25
+SR30
+SR5
+STACK
+START
+T1
+T2
+T3
+TBCPCL
+TBCPMV
+TBPLCL
+TBPLMV
+TITLE1
+TITLE2
+TITLE3
+TITLE4
+UM1
+UM10
+UM15
+UM16
+UM20
+UM21
+UM22
+UM30
+UM40
+UM5
+UM6
+UNMOVE
+UWIN
+VA10
+VA5
+VA6
+VA7
+VA8
+VA9
+VALM
+VALMOV
+WSMOVE
+XC10
+XC15
+XC18
+XC19
+XCHNG
+
+EQUATES
+
+BACT:  ATKLST+7
+BISHOP:  3
+BLACK:  80H
+BLBASE:  START+1F0H
+BLOCK:  .-BLBASE
+BOARD:  .-TBASE
+BPAWN:  BLACK+PAWN
+DCOUNT:  .-TBASE
+DIRECT:  .-TBASE
+DPOINT:  .-TBASE
+KERNEL:  .-BLBASE
+KING:  6
+KNIGHT:  2
+MLEND:  MLIST+2040
+MLFLG:  4
+MLFRP:  2
+MLPTR:  0
+MLTOP:  3
+MLVAL:  5
+PAWN:  1
+PIECES:  .-TBASE
+PLIST:  .-TBASE-1
+PLISTD:  PLIST+10
+PVALUE:  .-TBASE-1
+QUEEN:  5
+ROOK:  4
+TBASE:  START+0F0H
+WACT:  ATKLST
+WHITE:  0
+
+INSTRUCTIONS
+
+.ASCII
+ > ", ", "$"
+ > "0-0, ", "$"
+ > "0-0-0", "$"
+ > "01, ", "$"
+ > "2", "$"
+ > "CARE, FOR, ANOTHER, GAME?", "$"
+ > "CHECK", "$"
+ > "DO, YOU, WANT, TO, PLAY, WHITE(w), OR, BLACK(b)?", "$"
+ > "I, WIN", "$"
+ > "INVALID, MOVE", [^H0D], [^H0A], "$"
+ > "IS, THIS, RIGHT?", "$"
+ > "KQRBNP", "$"
+ > "MATE, IN, ", "$"
+ > "PLAYER", "$"
+ > "PxPep", "$"
+ > "SARGON", "$"
+ > "SELECT, LOOK, AHEAD, (1-6)", "$"
+ > "TRY, AGAIN", [^H0D], [^H0A], "$"
+ > "WELCOME, TO, CHESS!, CARE, FOR, A, GAME?", "$"
+ > "WHOSE, MOVE, IS, IT?", "$"
+ > "WOULD, YOU, LIKE, TO, ANALYZE, A, POSITION?", "$"
+ > "YOU, WIN", "$"
+ > "a1-a1", "$"
+ > [^H0D], [^H0A], ", ======, ======", [^H0D], [^H0A], "$"
+ > [^H0D], [^H0A], "$"
+ > [^H1C], "$"
+.BLKB
+ > 1
+ > 120
+ > 2048
+.BLKW
+ > 1
+.BYTE
+ > +09, +11, -11, -09
+ > +10, +10, +11, +09
+ > +10, -10, +01, -01
+ > +21, +12, -08, -19
+ > -1
+ > -10, -10, -11, -09
+ > -21, -12, +08, +19
+ > 0
+ > 0A0, 0BE, 0BF, 85
+ > 0A3, 85, 0A7, 9A, 0BF, 9F
+ > 0A8, 0BF, 0BD, 80
+ > 0A8, 0BF, 89, 0A2, 8F, 86
+ > 0A8, 9B, 0B9, 0B6, 0AF, 0A7
+ > 0AF, 0BF, 0BF, 85
+ > 0B5, 0A1, 92, 0BF, 0AA, 95
+ > 0BC, 0BA, 0B8, 94
+ > 0BE, 0BF, 0BF, 95
+ > 0BF, 0B4, 0BE, 95
+ > 0BF, 0BF, 0B7, 80
+ > 0BF, 9F, 0AF, 0BF, 9A, 0A5
+ > 1, 3, 3, 5, 9, 10
+ > 14, 94
+ > 2
+ > 20, 16, 8, 0, 4, 0, 0
+ > 24, 95
+ > 34, 54, 10H
+ > 35, 55, 10H
+ > 4, 2, 3, 5, 6, 3, 2, 4
+ > 4, 4, 8, 4, 4, 8, 8
+ > 80, 0A0, 00, 80
+ > 80, 0A0, 90, 80
+ > 80, 0AF, 9F, 80
+ > 80, 0B0, 0B0, 80
+ > 80, 0B8, 90, 80
+ > 80, 0BF, 0BF, 80
+ > 80, 80, 80, 80
+ > 80, 80, 88, 9D
+ > 80, 83, 83, 80
+ > 82, 0AF, 87, 80
+ > 82, 83, 83, 80
+ > 82, 83, 83, 81
+ > 83, 83, 83, 81
+ > 84, 64, 10H
+ > 85, 65, 10H
+ > 89, 0AF, 0BF, 9F, 0B9, 9F
+ > 8A, 0BE, 0BD, 85
+ > 8B, 0BF, 9F, 81
+ > 90, 0B0, 0B0, 80
+ > 90, 80, 80, 90
+ > 97, 0BE, 96, 0BD, 9B, 0B9
+ > 9F, 0BF, 0BD, 80
+.DEFINE
+ > CARRET=
+ > CLRSCR=
+ > EXIT=
+ > GETCHAR=
+ > PRTBLK[NAME, LNGTH]=
+ > PRTLIN[NAME, LNGTH]=
+ > PUTCHAR=
+.END
+ > DRIVER
+.LOC
+ > START+0
+ > START+170H
+ > START+18F0H
+ > START+1AF0H
+ > START+3EFH
+ > START+3F0H
+ > START+70H
+.RADIX
+ > 10
+ > 16
+.WORD
+ > 0
+ > 0, 0, 0, 0, 0, 0
+ > 0, 0, 0, 0, 0, 0, 0
+ > 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+ > BLBASE
+ > MLIST
+ > PLYIX
+ > TBASE
+ADD
+ > A
+ > B
+ > C
+ > D
+ > E
+ > M
+ADI
+ > 0C0H
+ > 10
+ > 10H
+ > 2
+ > 30H
+ > 3AH
+ > 3CH
+ > 3DH
+ > 40H
+ > 60H
+ > 80H
+ANA
+ > A
+ANI
+ > 0F0H
+ > 0FH
+ > 7
+ > 7FH
+ > 87H
+ > 8FH
+BIT
+ > 0, A
+ > 0, C
+ > 0, D
+ > 0, E
+ > 0, M
+ > 1, B
+ > 1, C
+ > 1, D
+ > 2, B
+ > 2, D
+ > 3, A
+ > 3, M
+ > 4, D
+ > 4, M
+ > 4, MLFLG(X)
+ > 5, D
+ > 6, D
+ > 7, A
+ > 7, B
+ > 7, D
+ > 7, E
+ > 7, M
+CALL
+ > ADJPTR
+ > ADMOVE
+ > ASCEND
+ > ASNTBI
+ > ATKSAV
+ > ATTACK
+ > BDOS
+ > BITASN
+ > BLNKER
+ > CHARTR
+ > CONVRT
+ > CPTRMV
+ > DIVIDE
+ > DSPBRD
+ > ENPSNT
+ > EVAL
+ > EXECMV
+ > FCDMAT
+ > FNDMOV
+ > GENMOV
+ > INCHK
+ > INCHK1
+ > INITBD
+ > INSPCE
+ > INTERR
+ > LIMIT
+ > MAKEMV
+ > MATED
+ > MLTPLY
+ > MOVE
+ > NEXTAD
+ > PATH
+ > PGIFND
+ > PINFND
+ > PLYRMV
+ > POINTS
+ > ROYALT
+ > TBPLCL
+ > TBPLMV
+ > UNMOVE
+ > VALMOV
+ > XCHNG
+CARRET
+ >
+CC
+ > SORTM
+CCIR
+ >
+CLRSCR
+ >
+CMP
+ > B
+ > C
+ > D
+ > E
+ > L
+ > M
+ > MLFRP(X)
+ > MLTOP(X)
+ > MLVAL(X)
+CNZ
+ > PNCK
+ > TBCPMV
+CPI
+ > -1
+ > 08H
+ > 0AH
+ > 0DH
+ > 0FFH
+ > 1
+ > 10
+ > 12H
+ > 13
+ > 15
+ > 1AH
+ > 1BH
+ > 2
+ > 20
+ > 22
+ > 27
+ > 29
+ > 3
+ > 31H
+ > 34
+ > 35
+ > 37H
+ > 42H
+ > 4EH
+ > 5
+ > 57H
+ > 59H
+ > 6
+ > 60H
+ > 61
+ > 61H
+ > 69
+ > 7
+ > 7BH
+ > 9
+ > 91
+ > 92
+ > 99
+ > BISHOP
+ > BPAWN
+ > KING
+ > KNIGHT
+ > PAWN
+ > PAWN+1
+ > QUEEN
+ > ROOK
+CZ
+ > BOOK
+ > CASTLE
+ > MPIECE
+ > TBCPCL
+DAD
+ > B
+ > D
+DADX
+ > D
+DCR
+ > A
+ > B
+ > C
+ > D
+ > M
+DCX
+ > H
+DJNZ
+ > .-2
+ > .-3
+ > AT5
+ > BL04
+ > BL10
+ > DB04
+ > DB08
+ > DD04
+ > IB2
+ > IP10
+ > IP24
+ > ML04
+ > MM08
+ > MP5
+ > PF27
+DSBC
+ > D
+EXAF
+ >
+EXIT
+ >
+EXX
+ >
+GETCHAR
+ >
+INR
+ > A
+ > B
+ > C
+ > D
+ > L
+ > M
+INX
+ > D
+ > H
+ > X
+ > Y
+JC
+ > FM15
+JM
+ > .+6
+ > AT04
+JMP
+ > AN08
+ > AT10
+ > AT13
+ > AT14
+ > CA5
+ > DR0C
+ > DRIV01
+ > DRIV04
+ > EV10
+ > FM15
+ > FM19
+ > FM36
+ > FM37
+ > FM5
+ > IP04
+ > MP15
+ > MV1
+ > MV21
+ > MV5
+ > PF1
+ > PF2
+ > PF20
+ > PF5
+ > PLYRMV
+ > PT23
+ > PT6C
+ > PT6D
+ > PT6X
+ > SR15
+ > SR5
+ > UM1
+ > UM21
+ > UM5
+ > UM6
+ > XC10
+JMPR
+ > .+3
+ > AN04
+ > AS20
+ > AS25
+ > AT30
+ > CA15
+ > CP1C
+ > DR0C
+ > EX10
+ > FM08
+ > IN08
+ > IP1C
+ > MA08
+ > MP31
+ > VA5
+JNC
+ > AN08
+JNZ
+ > ANALYS
+ > FM15
+ > GM5
+ > PF25
+ > PL08
+ > PT5
+JP
+ > .+5
+ > PF25
+JPE
+ > PC1
+JRC
+ > .+4
+ > AM10
+ > AT12
+ > AT21
+ > AT25
+ > BSET04
+ > FM18
+ > FM40
+ > MP20
+ > MP35
+ > PF10
+ > PT23
+ > PT6A
+ > PT6B
+ > PT6X
+JRNC
+ > AT04
+ > AT10
+ > AT12
+ > MP10
+ > MP15
+ > MP25
+ > MP26
+ > MP31
+ > MP37
+ > SR30
+ > XC19
+JRNZ
+ > .+3
+ > .+4
+ > .+6
+ > .+7
+ > AN04
+ > AN08
+ > AN18
+ > AN20
+ > AT12
+ > AT15
+ > AT16
+ > BL0C
+ > BL10
+ > BM5
+ > CA10
+ > CA20
+ > CP0C
+ > CP10
+ > DR08
+ > DR14
+ > EX04
+ > EX08
+ > EX0C
+ > FM0C
+ > FM30
+ > FM35
+ > IP18
+ > IP28
+ > IP2C
+ > MP15
+ > MV15
+ > MV40
+ > PC5
+ > PF20
+ > PT20
+ > PT23
+ > PT6X
+ > RY04
+ > RY0C
+ > UM15
+ > UM16
+ > UM40
+ > VA6
+ > VA9
+ > XC15
+JRZ
+ > .+11
+ > .+3
+ > .+4
+ > .+5
+ > .+6
+ > .+8
+ > .+9
+ > .-2
+ > AN19
+ > AN1A
+ > AN1B
+ > AS19
+ > AS20
+ > AT14A
+ > AT14B
+ > AT20
+ > AT30
+ > AT31
+ > AT32
+ > BL08
+ > BM9
+ > CA15
+ > CP24
+ > DR10
+ > EV5
+ > EX14
+ > FM04
+ > FM15
+ > FM25
+ > FM35
+ > FM36
+ > FM40
+ > GM10
+ > IN04
+ > IP04
+ > IP08
+ > IP0C
+ > IP14
+ > IP20
+ > IP2C
+ > MM04
+ > MP10
+ > MP15
+ > MP30
+ > MP36
+ > MV10
+ > MV20
+ > MV21
+ > MV22
+ > MV30
+ > NX6
+ > PA1
+ > PA2
+ > PC3
+ > PF15
+ > PF5
+ > PL08
+ > PT23
+ > PT25A
+ > PT6A
+ > PT6AA
+ > PT6D
+ > PT6X
+ > RY08
+ > SR25
+ > UM10
+ > UM20
+ > UM21
+ > UM22
+ > UM30
+ > VA10
+ > VA7
+ > XC18
+JZ
+ > AN04
+ > AT12
+ > DRIV04
+ > FM09
+ > FM15
+ > LIM10
+ > PF19
+ > PF25
+ > PF26
+ > PT25
+LBCD
+ > MLPTRI
+ > MLPTRJ
+LDA
+ > ANBDPS
+ > BRDC
+ > BRDPOS
+ > CKFLG
+ > COLOR
+ > KOLOR
+ > M1
+ > M2
+ > M3
+ > M4
+ > MATEF
+ > MOVENO
+ > MTRL
+ > MVEMSG
+ > MVEMSG+1
+ > NPINS
+ > NPLY
+ > P1
+ > P2
+ > P3
+ > PLYMAX
+ > PMATE
+ > POSK
+ > POSK+1
+ > PTSCK
+ > PTSL
+ > PTSW1
+ > PTSW2
+ > SCORE+1
+ > T1
+ > T2
+ > VALM
+ > WACT
+LDAR
+ >
+LDAX
+ > D
+LDED
+ > MLNXT
+LDIR
+ >
+LHLD
+ > BESTM
+ > MLLST
+ > MLPTRI
+ > MLPTRJ
+ > NORMAD
+ > SCRIX
+LIXD
+ > INDXER
+ > M1
+ > M2
+ > M3
+ > M4
+ > MLPTRJ
+ > NPINS
+ > T2
+ > T3
+LIYD
+ > INDX2
+ > M1
+ > M2
+ > T1
+LXI
+ > B, 0
+ > B, 01FCH
+ > B, 0C0H
+ > B, 0D0H
+ > B, 0FF03H
+ > B, 15
+ > B, 3030H
+ > B, 36
+ > B, 42
+ > B, 6
+ > B, 600H
+ > B, 7
+ > D, -6
+ > D, 0
+ > D, 0C001H
+ > D, 6
+ > D, 8
+ > D, BACT
+ > D, BLANKR
+ > D, CRLF
+ > D, NAME
+ > D, POSK
+ > D, TITLE4+2
+ > D, TITLE4+9
+ > H, 0
+ > H, 0C000H
+ > H, 0C010H
+ > H, 0C016H
+ > H, 0C100H
+ > H, ATKLST
+ > H, BACT
+ > H, BC0
+ > H, BESTM
+ > H, BMOVES-2
+ > H, BOARDA
+ > H, BRDC
+ > H, COLOR
+ > H, LINECT
+ > H, M1
+ > H, M2
+ > H, MATEF
+ > H, MLEND
+ > H, MLIST
+ > H, MLIST+1024
+ > H, MOVENO
+ > H, MTRL
+ > H, MV0
+ > H, MVENUM
+ > H, MVENUM+2
+ > H, NPINS
+ > H, NPLY
+ > H, P1
+ > H, P2
+ > H, PCS
+ > H, PLISTA
+ > H, PLYIX-2
+ > H, PLYMAX
+ > H, PMATE
+ > H, POSK
+ > H, POSQ
+ > H, PTSL
+ > H, PTSW1
+ > H, PTSW2
+ > H, SCORE
+ > H, SCORE+1
+ > H, T1
+ > H, TITLE1
+ > H, TITLE2
+ > H, WACT
+ > SP, STACK
+ > X, BOARDA
+ > X, MLIST+1024
+ > X, POSK
+ > Y, MA0C
+MOV
+ > 21(X), A
+ > 91(X), A
+ > A, -8(X)
+ > A, 9(X)
+ > A, B
+ > A, BLOCK(X)
+ > A, BOARD(X)
+ > A, C
+ > A, D
+ > A, DPOINT(Y)
+ > A, E
+ > A, H
+ > A, KERNEL(X)
+ > A, L
+ > A, M
+ > A, MLFRP(X)
+ > A, MLTOP(X)
+ > A, MLVAL(X)
+ > A, PVALUE(X)
+ > B, A
+ > B, C
+ > B, D
+ > B, DCOUNT(Y)
+ > B, L
+ > B, M
+ > BOARD(X), A
+ > BOARD(X), C
+ > BOARD(Y), E
+ > C, A
+ > C, D
+ > C, DIRECT(Y)
+ > C, M
+ > C, MLFRP(X)
+ > D, A
+ > D, C
+ > D, E
+ > D, M
+ > D, MLFLG(X)
+ > D, MLPTR+1(X)
+ > D, PVALUE(X)
+ > E, A
+ > E, BOARD(X)
+ > E, M
+ > E, MLPTR(X)
+ > E, MLTOP(X)
+ > H, A
+ > H, B
+ > L, A
+ > L, C
+ > M, A
+ > M, B
+ > M, C
+ > M, D
+ > M, E
+ > MLVAL(X
