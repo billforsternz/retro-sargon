@@ -22,7 +22,7 @@ int main( int argc, const char *argv[] )
 {
     util::tests();
 #if 1
-    convert("sargon-step2.asm","sargon-step2.txt");
+    convert("sargon-step3.asm","sargon-step3.txt");
 #else
     bool ok = (argc==3);
     if( !ok )
@@ -329,6 +329,7 @@ static void convert( std::string fin, std::string fout )
             util::putline(out,s);
         }
     }
+#if 0
     char buf[100];
     extern int simple_function( int x );
     sprintf_s( buf, sizeof(buf), "Force call to skeleton.asm function %d\n", simple_function(34) );
@@ -336,5 +337,6 @@ static void convert( std::string fin, std::string fout )
     extern int base_function();
     sprintf_s( buf, sizeof(buf), "Force call to base.asm function %d\n", base_function() );
     util::putline(out,buf);
+#endif
 }
 
