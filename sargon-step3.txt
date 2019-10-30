@@ -113,6 +113,7 @@ NORMAL instruction: "MVI" parameters: "1(X)", "95"
 NORMAL instruction: "MVI" parameters: "2(X)", "24"
 NORMAL instruction: "MVI" parameters: "3(X)", "94"
 NORMAL instruction: "RET"
+NORMAL instruction: ".END"
 NORMAL label: "PATH" instruction: "LXI" parameters: "H", "M2"
 NORMAL instruction: "MOV" parameters: "A", "M"
 NORMAL instruction: "ADD" parameters: "C"
@@ -1862,6 +1863,8 @@ INSTRUCTIONS
 .CODE
  >
 .DATA
+ >
+.END
  >
 .LOC
  > START+0
