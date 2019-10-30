@@ -18,6 +18,14 @@ extern "C" {
     int base_function();
 }
 
+extern void translate(
+    std::ofstream &asm_out,
+    const std::string &line,
+    const std::string &label,
+    const std::string &equate, 
+    const std::string &instruction,
+    const std::vector<std::string> &parameters );
+
 int main( int argc, const char *argv[] )
 {
     util::tests();
@@ -71,6 +79,13 @@ static void convert( std::string fin, std::string fout )
     if( !out )
     {
         printf( "Error; Cannot open file %s for writing\n", fout.c_str() );
+        return;
+    }
+    const char *x86_asm_filename = "mutated.asm";
+    std::ofstream asm_out(x86_asm_filename);
+    if( !asm_out )
+    {
+        printf( "Error; Cannot open file %s for writing\n", x86_asm_filename );
         return;
     }
     std::set<std::string> labels;
@@ -249,6 +264,7 @@ static void convert( std::string fin, std::string fout )
         }
         if( !done )
         {
+            translate( asm_out, original_line, stmt.label, stmt.equate, stmt.instruction, stmt.parameters );
             if( stmt.label != "" )
             {
                 labels.insert(stmt.label);
