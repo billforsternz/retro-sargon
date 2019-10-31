@@ -1,0 +1,2592 @@
+EQUATE equate: "PAWN" parameters: "1"
+EQUATE equate: "KNIGHT" parameters: "2"
+EQUATE equate: "BISHOP" parameters: "3"
+EQUATE equate: "ROOK" parameters: "4"
+EQUATE equate: "QUEEN" parameters: "5"
+EQUATE equate: "KING" parameters: "6"
+EQUATE equate: "WHITE" parameters: "0"
+EQUATE equate: "BLACK" parameters: "80H"
+EQUATE equate: "BPAWN" parameters: "BLACK+PAWN"
+NORMAL instruction: ".DATA"
+NORMAL label: "START" instruction: ".BLKB" parameters: "100h"
+NORMAL label: "TBASE"
+NORMAL label: "DIRECT" instruction: ".BYTE" parameters: "+09", "+11", "-11", "-09"
+NORMAL instruction: ".BYTE" parameters: "+10", "-10", "+01", "-01"
+NORMAL instruction: ".BYTE" parameters: "-21", "-12", "+08", "+19"
+NORMAL instruction: ".BYTE" parameters: "+21", "+12", "-08", "-19"
+NORMAL instruction: ".BYTE" parameters: "+10", "+10", "+11", "+09"
+NORMAL instruction: ".BYTE" parameters: "-10", "-10", "-11", "-09"
+EQUATE equate: "DPOINT" parameters: "18h"
+NORMAL instruction: ".BYTE" parameters: "20", "16", "8", "0", "4", "0", "0"
+EQUATE equate: "DCOUNT" parameters: "1fh"
+NORMAL instruction: ".BYTE" parameters: "4", "4", "8", "4", "4", "8", "8"
+EQUATE equate: "PVALUE" parameters: "25h"
+NORMAL instruction: ".BYTE" parameters: "1", "3", "3", "5", "9", "10"
+EQUATE equate: "PIECES" parameters: "2ch"
+NORMAL instruction: ".BYTE" parameters: "4", "2", "3", "5", "6", "3", "2", "4"
+EQUATE equate: "BOARD" parameters: "34h"
+NORMAL label: "BOARDA" instruction: ".BLKB" parameters: "120"
+EQUATE equate: "WACT" parameters: "ATKLST"
+EQUATE equate: "BACT" parameters: "ATKLST+7"
+NORMAL label: "ATKLST" instruction: ".WORD" parameters: "0", "0", "0", "0", "0", "0", "0"
+EQUATE equate: "PLIST" parameters: "0c7h"
+EQUATE equate: "PLISTD" parameters: "PLIST+10"
+NORMAL label: "PLISTA" instruction: ".WORD" parameters: "0", "0", "0", "0", "0", "0", "0", "0", "0", "0"
+NORMAL label: "POSK" instruction: ".BYTE" parameters: "24", "95"
+NORMAL label: "POSQ" instruction: ".BYTE" parameters: "14", "94"
+NORMAL instruction: ".BYTE" parameters: "-1"
+NORMAL label: "SCORE" instruction: ".WORD" parameters: "0", "0", "0", "0", "0", "0"
+NORMAL label: "PLYIX" instruction: ".WORD" parameters: "0", "0", "0", "0", "0", "0", "0", "0", "0", "0"
+NORMAL instruction: ".WORD" parameters: "0", "0", "0", "0", "0", "0", "0", "0", "0", "0"
+NORMAL instruction: ".LOC" parameters: "START+0"
+NORMAL label: "M1" instruction: ".WORD" parameters: "TBASE"
+NORMAL label: "M2" instruction: ".WORD" parameters: "TBASE"
+NORMAL label: "M3" instruction: ".WORD" parameters: "TBASE"
+NORMAL label: "M4" instruction: ".WORD" parameters: "TBASE"
+NORMAL label: "T1" instruction: ".WORD" parameters: "TBASE"
+NORMAL label: "T2" instruction: ".WORD" parameters: "TBASE"
+NORMAL label: "T3" instruction: ".WORD" parameters: "TBASE"
+NORMAL label: "INDX1" instruction: ".WORD" parameters: "TBASE"
+NORMAL label: "INDX2" instruction: ".WORD" parameters: "TBASE"
+NORMAL label: "NPINS" instruction: ".WORD" parameters: "TBASE"
+NORMAL label: "MLPTRI" instruction: ".WORD" parameters: "PLYIX"
+NORMAL label: "MLPTRJ" instruction: ".WORD" parameters: "0"
+NORMAL label: "SCRIX" instruction: ".WORD" parameters: "0"
+NORMAL label: "BESTM" instruction: ".WORD" parameters: "0"
+NORMAL label: "MLLST" instruction: ".WORD" parameters: "0"
+NORMAL label: "MLNXT" instruction: ".WORD" parameters: "MLIST"
+NORMAL label: "KOLOR" instruction: ".BYTE" parameters: "0"
+NORMAL label: "COLOR" instruction: ".BYTE" parameters: "0"
+NORMAL label: "P1" instruction: ".BYTE" parameters: "0"
+NORMAL label: "P2" instruction: ".BYTE" parameters: "0"
+NORMAL label: "P3" instruction: ".BYTE" parameters: "0"
+NORMAL label: "PMATE" instruction: ".BYTE" parameters: "0"
+NORMAL label: "MOVENO" instruction: ".BYTE" parameters: "0"
+NORMAL label: "PLYMAX" instruction: ".BYTE" parameters: "2"
+NORMAL label: "NPLY" instruction: ".BYTE" parameters: "0"
+NORMAL label: "CKFLG" instruction: ".BYTE" parameters: "0"
+NORMAL label: "MATEF" instruction: ".BYTE" parameters: "0"
+NORMAL label: "VALM" instruction: ".BYTE" parameters: "0"
+NORMAL label: "BRDC" instruction: ".BYTE" parameters: "0"
+NORMAL label: "PTSL" instruction: ".BYTE" parameters: "0"
+NORMAL label: "PTSW1" instruction: ".BYTE" parameters: "0"
+NORMAL label: "PTSW2" instruction: ".BYTE" parameters: "0"
+NORMAL label: "MTRL" instruction: ".BYTE" parameters: "0"
+NORMAL label: "BC0" instruction: ".BYTE" parameters: "0"
+NORMAL label: "MV0" instruction: ".BYTE" parameters: "0"
+NORMAL label: "PTSCK" instruction: ".BYTE" parameters: "0"
+NORMAL label: "BMOVES" instruction: ".BYTE" parameters: "35", "55", "10H"
+NORMAL instruction: ".BYTE" parameters: "34", "54", "10H"
+NORMAL instruction: ".BYTE" parameters: "85", "65", "10H"
+NORMAL instruction: ".BYTE" parameters: "84", "64", "10H"
+NORMAL label: "MVEMSG" instruction: ".WORD" parameters: "0"
+NORMAL label: "MVEMSG_2" instruction: ".WORD" parameters: "0"
+NORMAL label: "BRDPOS" instruction: ".BLKB" parameters: "1"
+NORMAL label: "ANBDPS" instruction: ".BLKB" parameters: "1"
+NORMAL label: "LINECT" instruction: ".BYTE" parameters: "0"
+NORMAL instruction: ".LOC" parameters: "START+3F0H"
+NORMAL label: "MLIST" instruction: ".BLKB" parameters: "2048"
+NORMAL label: "MLEND" instruction: ".WORD" parameters: "0"
+EQUATE equate: "MLPTR" parameters: "0"
+EQUATE equate: "MLFRP" parameters: "2"
+EQUATE equate: "MLTOP" parameters: "3"
+EQUATE equate: "MLFLG" parameters: "4"
+EQUATE equate: "MLVAL" parameters: "5"
+NORMAL instruction: ".BLKB" parameters: "8"
+NORMAL instruction: ".CODE"
+NORMAL label: "Z80_EXAF" instruction: "RET"
+NORMAL label: "Z80_EXX" instruction: "RET"
+NORMAL label: "Z80_RLD" instruction: "RET"
+NORMAL label: "Z80_RRD" instruction: "RET"
+NORMAL label: "Z80_LDAR" instruction: "RET"
+NORMAL label: "CHARTR" instruction: "RET"
+NORMAL label: "PGIFND" instruction: "RET"
+NORMAL label: "MATED" instruction: "RET"
+NORMAL label: "ANALYS" instruction: "RET"
+NORMAL label: "FCDMAT" instruction: "RET"
+NORMAL label: "TBPLCL" instruction: "RET"
+NORMAL label: "TBCPCL" instruction: "RET"
+NORMAL label: "TBPLMV" instruction: "RET"
+NORMAL label: "TBCPMV" instruction: "RET"
+NORMAL label: "DSPBRD" instruction: "RET"
+NORMAL label: "INSPCE" instruction: "RET"
+NORMAL label: "BLNKER" instruction: "RET"
+NORMAL label: "INITBD" instruction: "MVI" parameters: "B", "120"
+NORMAL instruction: "LXI" parameters: "H", "BOARDA"
+NORMAL label: "back01" instruction: "MVI" parameters: "M", "-1"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "DJNZ" parameters: "back01"
+NORMAL instruction: "MVI" parameters: "B", "8"
+NORMAL instruction: "LXI" parameters: "X", "BOARDA"
+NORMAL label: "IB2" instruction: "MOV" parameters: "A", "-8(X)"
+NORMAL instruction: "MOV" parameters: "21(X)", "A"
+NORMAL instruction: "SET" parameters: "7", "A"
+NORMAL instruction: "MOV" parameters: "91(X)", "A"
+NORMAL instruction: "MVI" parameters: "31(X)", "PAWN"
+NORMAL instruction: "MVI" parameters: "81(X)", "BPAWN"
+NORMAL instruction: "MVI" parameters: "41(X)", "0"
+NORMAL instruction: "MVI" parameters: "51(X)", "0"
+NORMAL instruction: "MVI" parameters: "61(X)", "0"
+NORMAL instruction: "MVI" parameters: "71(X)", "0"
+NORMAL instruction: "INX" parameters: "X"
+NORMAL instruction: "DJNZ" parameters: "IB2"
+NORMAL instruction: "LXI" parameters: "X", "POSK"
+NORMAL instruction: "MVI" parameters: "0(X)", "25"
+NORMAL instruction: "MVI" parameters: "1(X)", "95"
+NORMAL instruction: "MVI" parameters: "2(X)", "24"
+NORMAL instruction: "MVI" parameters: "3(X)", "94"
+NORMAL instruction: "RET"
+NORMAL label: "PATH" instruction: "LXI" parameters: "H", "M2"
+NORMAL instruction: "MOV" parameters: "A", "M"
+NORMAL instruction: "ADD" parameters: "C"
+NORMAL instruction: "MOV" parameters: "M", "A"
+NORMAL instruction: "LIXD" parameters: "M2"
+NORMAL instruction: "MOV" parameters: "A", "BOARD(X)"
+NORMAL instruction: "CPI" parameters: "-1"
+NORMAL instruction: "JRZ" parameters: "PA2"
+NORMAL instruction: "STA" parameters: "P2"
+NORMAL instruction: "ANI" parameters: "7"
+NORMAL instruction: "STA" parameters: "T2"
+NORMAL instruction: "RZ"
+NORMAL instruction: "LDA" parameters: "P2"
+NORMAL instruction: "LXI" parameters: "H", "P1"
+NORMAL instruction: "XRA" parameters: "M"
+NORMAL instruction: "BIT" parameters: "7", "A"
+NORMAL instruction: "JRZ" parameters: "PA1"
+NORMAL instruction: "MVI" parameters: "A", "1"
+NORMAL instruction: "RET"
+NORMAL label: "PA1" instruction: "MVI" parameters: "A", "2"
+NORMAL instruction: "RET"
+NORMAL label: "PA2" instruction: "MVI" parameters: "A", "3"
+NORMAL instruction: "RET"
+NORMAL label: "MPIECE" instruction: "XRA" parameters: "M"
+NORMAL instruction: "ANI" parameters: "87H"
+NORMAL instruction: "CPI" parameters: "BPAWN"
+NORMAL instruction: "JRNZ" parameters: "rel001"
+NORMAL instruction: "DCR" parameters: "A"
+NORMAL label: "rel001" instruction: "ANI" parameters: "7"
+NORMAL instruction: "STA" parameters: "T1"
+NORMAL instruction: "LIYD" parameters: "T1"
+NORMAL instruction: "MOV" parameters: "B", "DCOUNT(Y)"
+NORMAL instruction: "MOV" parameters: "A", "DPOINT(Y)"
+NORMAL instruction: "STA" parameters: "INDX2"
+NORMAL instruction: "LIYD" parameters: "INDX2"
+NORMAL label: "MP5" instruction: "MOV" parameters: "C", "DIRECT(Y)"
+NORMAL instruction: "LDA" parameters: "M1"
+NORMAL instruction: "STA" parameters: "M2"
+NORMAL label: "MP10" instruction: "CALL" parameters: "PATH"
+NORMAL instruction: "CPI" parameters: "2"
+NORMAL instruction: "JRNC" parameters: "MP15"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "EXAF"
+NORMAL instruction: "LDA" parameters: "T1"
+NORMAL instruction: "CPI" parameters: "PAWN+1"
+NORMAL instruction: "JRC" parameters: "MP20"
+NORMAL instruction: "CALL" parameters: "ADMOVE"
+NORMAL instruction: "EXAF"
+NORMAL instruction: "JRNZ" parameters: "MP15"
+NORMAL instruction: "LDA" parameters: "T1"
+NORMAL instruction: "CPI" parameters: "KING"
+NORMAL instruction: "JRZ" parameters: "MP15"
+NORMAL instruction: "CPI" parameters: "BISHOP"
+NORMAL instruction: "JRNC" parameters: "MP10"
+NORMAL label: "MP15" instruction: "INX" parameters: "Y"
+NORMAL instruction: "DJNZ" parameters: "MP5"
+NORMAL instruction: "LDA" parameters: "T1"
+NORMAL instruction: "CPI" parameters: "KING"
+NORMAL instruction: "CZ" parameters: "CASTLE"
+NORMAL instruction: "RET"
+NORMAL label: "MP20" instruction: "MOV" parameters: "A", "B"
+NORMAL instruction: "CPI" parameters: "3"
+NORMAL instruction: "JRC" parameters: "MP35"
+NORMAL instruction: "JRZ" parameters: "MP30"
+NORMAL instruction: "EXAF"
+NORMAL instruction: "JRNZ" parameters: "MP15"
+NORMAL instruction: "LDA" parameters: "M2"
+NORMAL instruction: "CPI" parameters: "91"
+NORMAL instruction: "JRNC" parameters: "MP25"
+NORMAL instruction: "CPI" parameters: "29"
+NORMAL instruction: "JRNC" parameters: "MP26"
+NORMAL label: "MP25" instruction: "LXI" parameters: "H", "P2"
+NORMAL instruction: "SET" parameters: "5", "M"
+NORMAL label: "MP26" instruction: "CALL" parameters: "ADMOVE"
+NORMAL instruction: "INX" parameters: "Y"
+NORMAL instruction: "DCR" parameters: "B"
+NORMAL instruction: "LXI" parameters: "H", "P1"
+NORMAL instruction: "BIT" parameters: "3", "M"
+NORMAL instruction: "JRZ" parameters: "MP10"
+NORMAL instruction: "JMP" parameters: "MP15"
+NORMAL label: "MP30" instruction: "EXAF"
+NORMAL instruction: "JRNZ" parameters: "MP15"
+NORMAL label: "MP31" instruction: "CALL" parameters: "ADMOVE"
+NORMAL instruction: "JMP" parameters: "MP15"
+NORMAL label: "MP35" instruction: "EXAF"
+NORMAL instruction: "JRZ" parameters: "MP36"
+NORMAL instruction: "LDA" parameters: "M2"
+NORMAL instruction: "CPI" parameters: "91"
+NORMAL instruction: "JRNC" parameters: "MP37"
+NORMAL instruction: "CPI" parameters: "29"
+NORMAL instruction: "JRNC" parameters: "MP31"
+NORMAL label: "MP37" instruction: "LXI" parameters: "H", "P2"
+NORMAL instruction: "SET" parameters: "5", "M"
+NORMAL instruction: "JMPR" parameters: "MP31"
+NORMAL label: "MP36" instruction: "CALL" parameters: "ENPSNT"
+NORMAL instruction: "JMP" parameters: "MP15"
+NORMAL label: "ENPSNT" instruction: "LDA" parameters: "M1"
+NORMAL instruction: "LXI" parameters: "H", "P1"
+NORMAL instruction: "BIT" parameters: "7", "M"
+NORMAL instruction: "JRZ" parameters: "rel002"
+NORMAL instruction: "ADI" parameters: "10"
+NORMAL label: "rel002" instruction: "CPI" parameters: "61"
+NORMAL instruction: "RC"
+NORMAL instruction: "CPI" parameters: "69"
+NORMAL instruction: "RNC"
+NORMAL instruction: "LIXD" parameters: "MLPTRJ"
+NORMAL instruction: "BIT" parameters: "4", "MLFLG(X)"
+NORMAL instruction: "RZ"
+NORMAL instruction: "MOV" parameters: "A", "MLTOP(X)"
+NORMAL instruction: "STA" parameters: "M4"
+NORMAL instruction: "LIXD" parameters: "M4"
+NORMAL instruction: "MOV" parameters: "A", "BOARD(X)"
+NORMAL instruction: "STA" parameters: "P3"
+NORMAL instruction: "ANI" parameters: "7"
+NORMAL instruction: "CPI" parameters: "PAWN"
+NORMAL instruction: "RNZ"
+NORMAL instruction: "LDA" parameters: "M4"
+NORMAL instruction: "LXI" parameters: "H", "M2"
+NORMAL instruction: "SUB" parameters: "M"
+NORMAL instruction: "JP" parameters: "rel003"
+NORMAL instruction: "NEG"
+NORMAL instruction: "CPI" parameters: "10"
+NORMAL label: "rel003" instruction: "RNZ"
+NORMAL instruction: "LXI" parameters: "H", "P2"
+NORMAL instruction: "SET" parameters: "6", "M"
+NORMAL instruction: "CALL" parameters: "ADMOVE"
+NORMAL instruction: "LDA" parameters: "M1"
+NORMAL instruction: "STA" parameters: "M3"
+NORMAL instruction: "LDA" parameters: "M4"
+NORMAL instruction: "STA" parameters: "M1"
+NORMAL instruction: "STA" parameters: "M2"
+NORMAL instruction: "LDA" parameters: "P3"
+NORMAL instruction: "STA" parameters: "P2"
+NORMAL instruction: "CALL" parameters: "ADMOVE"
+NORMAL instruction: "LDA" parameters: "M3"
+NORMAL instruction: "STA" parameters: "M1"
+NORMAL label: "ADJPTR" instruction: "LHLD" parameters: "MLLST"
+NORMAL instruction: "LXI" parameters: "D", "-6"
+NORMAL instruction: "DAD" parameters: "D"
+NORMAL instruction: "SHLD" parameters: "MLLST"
+NORMAL instruction: "MVI" parameters: "M", "0"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "MVI" parameters: "M", "0"
+NORMAL instruction: "RET"
+NORMAL label: "CASTLE" instruction: "LDA" parameters: "P1"
+NORMAL instruction: "BIT" parameters: "3", "A"
+NORMAL instruction: "RNZ"
+NORMAL instruction: "LDA" parameters: "CKFLG"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "RNZ"
+NORMAL instruction: "LXI" parameters: "B", "0FF03H"
+NORMAL label: "CA5" instruction: "LDA" parameters: "M1"
+NORMAL instruction: "ADD" parameters: "C"
+NORMAL instruction: "MOV" parameters: "C", "A"
+NORMAL instruction: "STA" parameters: "M3"
+NORMAL instruction: "LIXD" parameters: "M3"
+NORMAL instruction: "MOV" parameters: "A", "BOARD(X)"
+NORMAL instruction: "ANI" parameters: "7FH"
+NORMAL instruction: "CPI" parameters: "ROOK"
+NORMAL instruction: "JRNZ" parameters: "CA20"
+NORMAL instruction: "MOV" parameters: "A", "C"
+NORMAL instruction: "JMPR" parameters: "CA15"
+NORMAL label: "CA10" instruction: "LIXD" parameters: "M3"
+NORMAL instruction: "MOV" parameters: "A", "BOARD(X)"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JRNZ" parameters: "CA20"
+NORMAL instruction: "LDA" parameters: "M3"
+NORMAL instruction: "CPI" parameters: "22"
+NORMAL instruction: "JRZ" parameters: "CA15"
+NORMAL instruction: "CPI" parameters: "92"
+NORMAL instruction: "JRZ" parameters: "CA15"
+NORMAL instruction: "CALL" parameters: "ATTACK"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JRNZ" parameters: "CA20"
+NORMAL instruction: "LDA" parameters: "M3"
+NORMAL label: "CA15" instruction: "ADD" parameters: "B"
+NORMAL instruction: "STA" parameters: "M3"
+NORMAL instruction: "LXI" parameters: "H", "M1"
+NORMAL instruction: "CMP" parameters: "M"
+NORMAL instruction: "JRNZ" parameters: "CA10"
+NORMAL instruction: "SUB" parameters: "B"
+NORMAL instruction: "SUB" parameters: "B"
+NORMAL instruction: "STA" parameters: "M2"
+NORMAL instruction: "LXI" parameters: "H", "P2"
+NORMAL instruction: "MVI" parameters: "M", "40H"
+NORMAL instruction: "CALL" parameters: "ADMOVE"
+NORMAL instruction: "LXI" parameters: "H", "M1"
+NORMAL instruction: "MOV" parameters: "A", "M"
+NORMAL instruction: "MOV" parameters: "M", "C"
+NORMAL instruction: "SUB" parameters: "B"
+NORMAL instruction: "STA" parameters: "M2"
+NORMAL instruction: "XRA" parameters: "A"
+NORMAL instruction: "STA" parameters: "P2"
+NORMAL instruction: "CALL" parameters: "ADMOVE"
+NORMAL instruction: "CALL" parameters: "ADJPTR"
+NORMAL instruction: "LDA" parameters: "M3"
+NORMAL instruction: "STA" parameters: "M1"
+NORMAL label: "CA20" instruction: "MOV" parameters: "A", "B"
+NORMAL instruction: "CPI" parameters: "1"
+NORMAL instruction: "RZ"
+NORMAL instruction: "LXI" parameters: "B", "01FCH"
+NORMAL instruction: "JMP" parameters: "CA5"
+NORMAL label: "ADMOVE" instruction: "LDED" parameters: "MLNXT"
+NORMAL instruction: "LXI" parameters: "H", "MLEND"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "DSBC" parameters: "D"
+NORMAL instruction: "JRC" parameters: "AM10"
+NORMAL instruction: "LHLD" parameters: "MLLST"
+NORMAL instruction: "SDED" parameters: "MLLST"
+NORMAL instruction: "MOV" parameters: "M", "E"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "MOV" parameters: "M", "D"
+NORMAL instruction: "LXI" parameters: "H", "P1"
+NORMAL instruction: "BIT" parameters: "3", "M"
+NORMAL instruction: "JRNZ" parameters: "rel004"
+NORMAL instruction: "LXI" parameters: "H", "P2"
+NORMAL instruction: "SET" parameters: "4", "M"
+NORMAL label: "rel004" instruction: "XCHG"
+NORMAL instruction: "MVI" parameters: "M", "0"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "MVI" parameters: "M", "0"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "LDA" parameters: "M1"
+NORMAL instruction: "MOV" parameters: "M", "A"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "LDA" parameters: "M2"
+NORMAL instruction: "MOV" parameters: "M", "A"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "LDA" parameters: "P2"
+NORMAL instruction: "MOV" parameters: "M", "A"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "MVI" parameters: "M", "0"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "SHLD" parameters: "MLNXT"
+NORMAL instruction: "RET"
+NORMAL label: "AM10" instruction: "MVI" parameters: "M", "0"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "MVI" parameters: "M", "0"
+NORMAL instruction: "DCX" parameters: "H"
+NORMAL instruction: "RET"
+NORMAL label: "GENMOV" instruction: "CALL" parameters: "INCHK"
+NORMAL instruction: "STA" parameters: "CKFLG"
+NORMAL instruction: "LDED" parameters: "MLNXT"
+NORMAL instruction: "LHLD" parameters: "MLPTRI"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "MOV" parameters: "M", "E"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "MOV" parameters: "M", "D"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "SHLD" parameters: "MLPTRI"
+NORMAL instruction: "SHLD" parameters: "MLLST"
+NORMAL instruction: "MVI" parameters: "A", "21"
+NORMAL label: "GM5" instruction: "STA" parameters: "M1"
+NORMAL instruction: "LIXD" parameters: "M1"
+NORMAL instruction: "MOV" parameters: "A", "BOARD(X)"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JRZ" parameters: "GM10"
+NORMAL instruction: "CPI" parameters: "-1"
+NORMAL instruction: "JRZ" parameters: "GM10"
+NORMAL instruction: "STA" parameters: "P1"
+NORMAL instruction: "LXI" parameters: "H", "COLOR"
+NORMAL instruction: "XRA" parameters: "M"
+NORMAL instruction: "BIT" parameters: "7", "A"
+NORMAL instruction: "CZ" parameters: "MPIECE"
+NORMAL label: "GM10" instruction: "LDA" parameters: "M1"
+NORMAL instruction: "INR" parameters: "A"
+NORMAL instruction: "CPI" parameters: "99"
+NORMAL instruction: "JNZ" parameters: "GM5"
+NORMAL instruction: "RET"
+NORMAL label: "INCHK" instruction: "LDA" parameters: "COLOR"
+NORMAL label: "INCHK1" instruction: "LXI" parameters: "H", "POSK"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JRZ" parameters: "rel005"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL label: "rel005" instruction: "MOV" parameters: "A", "M"
+NORMAL instruction: "STA" parameters: "M3"
+NORMAL instruction: "LIXD" parameters: "M3"
+NORMAL instruction: "MOV" parameters: "A", "BOARD(X)"
+NORMAL instruction: "STA" parameters: "P1"
+NORMAL instruction: "ANI" parameters: "7"
+NORMAL instruction: "STA" parameters: "T1"
+NORMAL instruction: "CALL" parameters: "ATTACK"
+NORMAL instruction: "RET"
+NORMAL label: "ATTACK" instruction: "PUSH" parameters: "B"
+NORMAL instruction: "XRA" parameters: "A"
+NORMAL instruction: "MVI" parameters: "B", "16"
+NORMAL instruction: "STA" parameters: "INDX2"
+NORMAL instruction: "LIYD" parameters: "INDX2"
+NORMAL label: "AT5" instruction: "MOV" parameters: "C", "DIRECT(Y)"
+NORMAL instruction: "MVI" parameters: "D", "0"
+NORMAL instruction: "LDA" parameters: "M3"
+NORMAL instruction: "STA" parameters: "M2"
+NORMAL label: "AT10" instruction: "INR" parameters: "D"
+NORMAL instruction: "CALL" parameters: "PATH"
+NORMAL instruction: "CPI" parameters: "1"
+NORMAL instruction: "JRZ" parameters: "AT14A"
+NORMAL instruction: "CPI" parameters: "2"
+NORMAL instruction: "JRZ" parameters: "AT14B"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JRNZ" parameters: "AT12"
+NORMAL instruction: "MOV" parameters: "A", "B"
+NORMAL instruction: "CPI" parameters: "9"
+NORMAL instruction: "JRNC" parameters: "AT10"
+NORMAL label: "AT12" instruction: "INX" parameters: "Y"
+NORMAL instruction: "DJNZ" parameters: "AT5"
+NORMAL instruction: "XRA" parameters: "A"
+NORMAL label: "AT13" instruction: "POP" parameters: "B"
+NORMAL instruction: "RET"
+NORMAL label: "AT14A" instruction: "BIT" parameters: "6", "D"
+NORMAL instruction: "JRNZ" parameters: "AT12"
+NORMAL instruction: "SET" parameters: "5", "D"
+NORMAL instruction: "JMP" parameters: "AT14"
+NORMAL label: "AT14B" instruction: "BIT" parameters: "5", "D"
+NORMAL instruction: "JRNZ" parameters: "AT12"
+NORMAL instruction: "SET" parameters: "6", "D"
+NORMAL label: "AT14" instruction: "LDA" parameters: "T2"
+NORMAL instruction: "MOV" parameters: "E", "A"
+NORMAL instruction: "MOV" parameters: "A", "B"
+NORMAL instruction: "CPI" parameters: "9"
+NORMAL instruction: "JRC" parameters: "AT25"
+NORMAL instruction: "MOV" parameters: "A", "E"
+NORMAL instruction: "CPI" parameters: "QUEEN"
+NORMAL instruction: "JRNZ" parameters: "AT15"
+NORMAL instruction: "SET" parameters: "7", "D"
+NORMAL instruction: "JMPR" parameters: "AT30"
+NORMAL label: "AT15" instruction: "MOV" parameters: "A", "D"
+NORMAL instruction: "ANI" parameters: "0FH"
+NORMAL instruction: "CPI" parameters: "1"
+NORMAL instruction: "JRNZ" parameters: "AT16"
+NORMAL instruction: "MOV" parameters: "A", "E"
+NORMAL instruction: "CPI" parameters: "KING"
+NORMAL instruction: "JRZ" parameters: "AT30"
+NORMAL label: "AT16" instruction: "MOV" parameters: "A", "B"
+NORMAL instruction: "CPI" parameters: "13"
+NORMAL instruction: "JRC" parameters: "AT21"
+NORMAL instruction: "MOV" parameters: "A", "E"
+NORMAL instruction: "CPI" parameters: "BISHOP"
+NORMAL instruction: "JRZ" parameters: "AT30"
+NORMAL instruction: "MOV" parameters: "A", "D"
+NORMAL instruction: "ANI" parameters: "0FH"
+NORMAL instruction: "CPI" parameters: "1"
+NORMAL instruction: "JRNZ" parameters: "AT12"
+NORMAL instruction: "CMP" parameters: "E"
+NORMAL instruction: "JRNZ" parameters: "AT12"
+NORMAL instruction: "LDA" parameters: "P2"
+NORMAL instruction: "BIT" parameters: "7", "A"
+NORMAL instruction: "JRZ" parameters: "AT20"
+NORMAL instruction: "MOV" parameters: "A", "B"
+NORMAL instruction: "CPI" parameters: "15"
+NORMAL instruction: "JRC" parameters: "AT12"
+NORMAL instruction: "JMPR" parameters: "AT30"
+NORMAL label: "AT20" instruction: "MOV" parameters: "A", "B"
+NORMAL instruction: "CPI" parameters: "15"
+NORMAL instruction: "JRNC" parameters: "AT12"
+NORMAL instruction: "JMPR" parameters: "AT30"
+NORMAL label: "AT21" instruction: "MOV" parameters: "A", "E"
+NORMAL instruction: "CPI" parameters: "ROOK"
+NORMAL instruction: "JRNZ" parameters: "AT12"
+NORMAL instruction: "JMPR" parameters: "AT30"
+NORMAL label: "AT25" instruction: "MOV" parameters: "A", "E"
+NORMAL instruction: "CPI" parameters: "KNIGHT"
+NORMAL instruction: "JRNZ" parameters: "AT12"
+NORMAL label: "AT30" instruction: "LDA" parameters: "T1"
+NORMAL instruction: "CPI" parameters: "7"
+NORMAL instruction: "JRZ" parameters: "AT31"
+NORMAL instruction: "BIT" parameters: "5", "D"
+NORMAL instruction: "JRZ" parameters: "AT32"
+NORMAL instruction: "MVI" parameters: "A", "1"
+NORMAL instruction: "JMP" parameters: "AT13"
+NORMAL label: "AT31" instruction: "CALL" parameters: "ATKSAV"
+NORMAL label: "AT32" instruction: "LDA" parameters: "T2"
+NORMAL instruction: "CPI" parameters: "KING"
+NORMAL instruction: "JZ" parameters: "AT12"
+NORMAL instruction: "CPI" parameters: "KNIGHT"
+NORMAL instruction: "JZ" parameters: "AT12"
+NORMAL instruction: "JMP" parameters: "AT10"
+NORMAL label: "ATKSAV" instruction: "PUSH" parameters: "B"
+NORMAL instruction: "PUSH" parameters: "D"
+NORMAL instruction: "LDA" parameters: "NPINS"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "CNZ" parameters: "PNCK"
+NORMAL instruction: "LIXD" parameters: "T2"
+NORMAL instruction: "LXI" parameters: "H", "ATKLST"
+NORMAL instruction: "LXI" parameters: "B", "0"
+NORMAL instruction: "LDA" parameters: "P2"
+NORMAL instruction: "BIT" parameters: "7", "A"
+NORMAL instruction: "JRZ" parameters: "rel006"
+NORMAL instruction: "MVI" parameters: "C", "7"
+NORMAL label: "rel006" instruction: "ANI" parameters: "7"
+NORMAL instruction: "MOV" parameters: "E", "A"
+NORMAL instruction: "BIT" parameters: "7", "D"
+NORMAL instruction: "JRZ" parameters: "rel007"
+NORMAL instruction: "MVI" parameters: "E", "QUEEN"
+NORMAL label: "rel007" instruction: "DAD" parameters: "B"
+NORMAL instruction: "INR" parameters: "M"
+NORMAL instruction: "MVI" parameters: "D", "0"
+NORMAL instruction: "DAD" parameters: "D"
+NORMAL instruction: "MOV" parameters: "A", "M"
+NORMAL instruction: "ANI" parameters: "0FH"
+NORMAL instruction: "JRZ" parameters: "AS20"
+NORMAL instruction: "MOV" parameters: "A", "M"
+NORMAL instruction: "ANI" parameters: "0F0H"
+NORMAL instruction: "JRZ" parameters: "AS19"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "JMPR" parameters: "AS20"
+NORMAL label: "AS19" instruction: "RLD"
+NORMAL instruction: "MOV" parameters: "A", "PVALUE(X)"
+NORMAL instruction: "RRD"
+NORMAL instruction: "JMPR" parameters: "AS25"
+NORMAL label: "AS20" instruction: "MOV" parameters: "A", "PVALUE(X)"
+NORMAL instruction: "RLD"
+NORMAL label: "AS25" instruction: "POP" parameters: "D"
+NORMAL instruction: "POP" parameters: "B"
+NORMAL instruction: "RET"
+NORMAL label: "PNCK" instruction: "MOV" parameters: "D", "C"
+NORMAL instruction: "MVI" parameters: "E", "0"
+NORMAL instruction: "MOV" parameters: "C", "A"
+NORMAL instruction: "MVI" parameters: "B", "0"
+NORMAL instruction: "LDA" parameters: "M2"
+NORMAL instruction: "LXI" parameters: "H", "PLISTA"
+NORMAL label: "PC1" instruction: "CCIR"
+NORMAL instruction: "RNZ"
+NORMAL instruction: "EXAF"
+NORMAL instruction: "BIT" parameters: "0", "E"
+NORMAL instruction: "JRNZ" parameters: "PC5"
+NORMAL instruction: "SET" parameters: "0", "E"
+NORMAL instruction: "PUSH" parameters: "H"
+NORMAL instruction: "POP" parameters: "X"
+NORMAL instruction: "MOV" parameters: "A", "9(X)"
+NORMAL instruction: "CMP" parameters: "D"
+NORMAL instruction: "JRZ" parameters: "PC3"
+NORMAL instruction: "NEG"
+NORMAL instruction: "CMP" parameters: "D"
+NORMAL instruction: "JRNZ" parameters: "PC5"
+NORMAL label: "PC3" instruction: "EXAF"
+NORMAL instruction: "JPE" parameters: "PC1"
+NORMAL instruction: "RET"
+NORMAL label: "PC5" instruction: "POP" parameters: "PSW"
+NORMAL instruction: "POP" parameters: "D"
+NORMAL instruction: "POP" parameters: "B"
+NORMAL instruction: "RET"
+NORMAL label: "PINFND" instruction: "XRA" parameters: "A"
+NORMAL instruction: "STA" parameters: "NPINS"
+NORMAL instruction: "LXI" parameters: "D", "POSK"
+NORMAL label: "PF1" instruction: "LDAX" parameters: "D"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JZ" parameters: "PF26"
+NORMAL instruction: "CPI" parameters: "-1"
+NORMAL instruction: "RZ"
+NORMAL instruction: "STA" parameters: "M3"
+NORMAL instruction: "LIXD" parameters: "M3"
+NORMAL instruction: "MOV" parameters: "A", "BOARD(X)"
+NORMAL instruction: "STA" parameters: "P1"
+NORMAL instruction: "MVI" parameters: "B", "8"
+NORMAL instruction: "XRA" parameters: "A"
+NORMAL instruction: "STA" parameters: "INDX2"
+NORMAL instruction: "LIYD" parameters: "INDX2"
+NORMAL label: "PF2" instruction: "LDA" parameters: "M3"
+NORMAL instruction: "STA" parameters: "M2"
+NORMAL instruction: "XRA" parameters: "A"
+NORMAL instruction: "STA" parameters: "M4"
+NORMAL instruction: "MOV" parameters: "C", "DIRECT(Y)"
+NORMAL label: "PF5" instruction: "CALL" parameters: "PATH"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JRZ" parameters: "PF5"
+NORMAL instruction: "CPI" parameters: "3"
+NORMAL instruction: "JZ" parameters: "PF25"
+NORMAL instruction: "CPI" parameters: "2"
+NORMAL instruction: "LDA" parameters: "M4"
+NORMAL instruction: "JRZ" parameters: "PF15"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JZ" parameters: "PF25"
+NORMAL instruction: "LDA" parameters: "T2"
+NORMAL instruction: "CPI" parameters: "QUEEN"
+NORMAL instruction: "JZ" parameters: "PF19"
+NORMAL instruction: "MOV" parameters: "L", "A"
+NORMAL instruction: "MOV" parameters: "A", "B"
+NORMAL instruction: "CPI" parameters: "5"
+NORMAL instruction: "JRC" parameters: "PF10"
+NORMAL instruction: "MOV" parameters: "A", "L"
+NORMAL instruction: "CPI" parameters: "BISHOP"
+NORMAL instruction: "JNZ" parameters: "PF25"
+NORMAL instruction: "JMP" parameters: "PF20"
+NORMAL label: "PF10" instruction: "MOV" parameters: "A", "L"
+NORMAL instruction: "CPI" parameters: "ROOK"
+NORMAL instruction: "JNZ" parameters: "PF25"
+NORMAL instruction: "JMP" parameters: "PF20"
+NORMAL label: "PF15" instruction: "ANA" parameters: "A"
+NORMAL instruction: "JNZ" parameters: "PF25"
+NORMAL instruction: "LDA" parameters: "M2"
+NORMAL instruction: "STA" parameters: "M4"
+NORMAL instruction: "JMP" parameters: "PF5"
+NORMAL label: "PF19" instruction: "LDA" parameters: "P1"
+NORMAL instruction: "ANI" parameters: "7"
+NORMAL instruction: "CPI" parameters: "QUEEN"
+NORMAL instruction: "JRNZ" parameters: "PF20"
+NORMAL instruction: "PUSH" parameters: "B"
+NORMAL instruction: "PUSH" parameters: "D"
+NORMAL instruction: "PUSH" parameters: "Y"
+NORMAL instruction: "XRA" parameters: "A"
+NORMAL instruction: "MVI" parameters: "B", "14"
+NORMAL instruction: "LXI" parameters: "H", "ATKLST"
+NORMAL label: "back02" instruction: "MOV" parameters: "M", "A"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "DJNZ" parameters: "back02"
+NORMAL instruction: "MVI" parameters: "A", "7"
+NORMAL instruction: "STA" parameters: "T1"
+NORMAL instruction: "CALL" parameters: "ATTACK"
+NORMAL instruction: "LXI" parameters: "H", "WACT"
+NORMAL instruction: "LXI" parameters: "D", "BACT"
+NORMAL instruction: "LDA" parameters: "P1"
+NORMAL instruction: "BIT" parameters: "7", "A"
+NORMAL instruction: "JRZ" parameters: "rel008"
+NORMAL instruction: "XCHG"
+NORMAL label: "rel008" instruction: "MOV" parameters: "A", "M"
+NORMAL instruction: "XCHG"
+NORMAL instruction: "SUB" parameters: "M"
+NORMAL instruction: "DCR" parameters: "A"
+NORMAL instruction: "POP" parameters: "Y"
+NORMAL instruction: "POP" parameters: "D"
+NORMAL instruction: "POP" parameters: "B"
+NORMAL instruction: "JP" parameters: "PF25"
+NORMAL label: "PF20" instruction: "LXI" parameters: "H", "NPINS"
+NORMAL instruction: "INR" parameters: "M"
+NORMAL instruction: "LIXD" parameters: "NPINS"
+NORMAL instruction: "MOV" parameters: "PLISTD(X)", "C"
+NORMAL instruction: "LDA" parameters: "M4"
+NORMAL instruction: "MOV" parameters: "PLIST(X)", "A"
+NORMAL label: "PF25" instruction: "INX" parameters: "Y"
+NORMAL instruction: "DJNZ" parameters: "PF27"
+NORMAL label: "PF26" instruction: "INX" parameters: "D"
+NORMAL instruction: "JMP" parameters: "PF1"
+NORMAL label: "PF27" instruction: "JMP" parameters: "PF2"
+NORMAL label: "XCHNG" instruction: "EXX"
+NORMAL instruction: "LDA" parameters: "P1"
+NORMAL instruction: "LXI" parameters: "H", "WACT"
+NORMAL instruction: "LXI" parameters: "D", "BACT"
+NORMAL instruction: "BIT" parameters: "7", "A"
+NORMAL instruction: "JRZ" parameters: "rel009"
+NORMAL instruction: "XCHG"
+NORMAL label: "rel009" instruction: "MOV" parameters: "B", "M"
+NORMAL instruction: "XCHG"
+NORMAL instruction: "MOV" parameters: "C", "M"
+NORMAL instruction: "XCHG"
+NORMAL instruction: "EXX"
+NORMAL instruction: "MVI" parameters: "C", "0"
+NORMAL instruction: "MVI" parameters: "E", "0"
+NORMAL instruction: "LIXD" parameters: "T3"
+NORMAL instruction: "MOV" parameters: "D", "PVALUE(X)"
+NORMAL instruction: "SLAR" parameters: "D"
+NORMAL instruction: "MOV" parameters: "B", "D"
+NORMAL instruction: "CALL" parameters: "NEXTAD"
+NORMAL instruction: "RZ"
+NORMAL label: "XC10" instruction: "MOV" parameters: "L", "A"
+NORMAL instruction: "CALL" parameters: "NEXTAD"
+NORMAL instruction: "JRZ" parameters: "XC18"
+NORMAL instruction: "EXAF"
+NORMAL instruction: "MOV" parameters: "A", "B"
+NORMAL instruction: "CMP" parameters: "L"
+NORMAL instruction: "JRNC" parameters: "XC19"
+NORMAL instruction: "EXAF"
+NORMAL label: "XC15" instruction: "CMP" parameters: "L"
+NORMAL instruction: "RC"
+NORMAL instruction: "CALL" parameters: "NEXTAD"
+NORMAL instruction: "RZ"
+NORMAL instruction: "MOV" parameters: "L", "A"
+NORMAL instruction: "CALL" parameters: "NEXTAD"
+NORMAL instruction: "JRNZ" parameters: "XC15"
+NORMAL label: "XC18" instruction: "EXAF"
+NORMAL instruction: "MOV" parameters: "A", "B"
+NORMAL label: "XC19" instruction: "BIT" parameters: "0", "C"
+NORMAL instruction: "JRZ" parameters: "rel010"
+NORMAL instruction: "NEG"
+NORMAL instruction: "ADD" parameters: "E"
+NORMAL label: "rel010" instruction: "MOV" parameters: "E", "A"
+NORMAL instruction: "EXAF"
+NORMAL instruction: "RZ"
+NORMAL instruction: "MOV" parameters: "B", "L"
+NORMAL instruction: "JMP" parameters: "XC10"
+NORMAL label: "NEXTAD" instruction: "INR" parameters: "C"
+NORMAL instruction: "EXX"
+NORMAL instruction: "MOV" parameters: "A", "B"
+NORMAL instruction: "MOV" parameters: "B", "C"
+NORMAL instruction: "MOV" parameters: "C", "A"
+NORMAL instruction: "XCHG"
+NORMAL instruction: "XRA" parameters: "A"
+NORMAL instruction: "CMP" parameters: "B"
+NORMAL instruction: "JRZ" parameters: "NX6"
+NORMAL instruction: "DCR" parameters: "B"
+NORMAL label: "back03" instruction: "INX" parameters: "H"
+NORMAL instruction: "CMP" parameters: "M"
+NORMAL instruction: "JRZ" parameters: "back03"
+NORMAL instruction: "RRD"
+NORMAL instruction: "ADD" parameters: "A"
+NORMAL instruction: "DCX" parameters: "H"
+NORMAL label: "NX6" instruction: "EXX"
+NORMAL instruction: "RET"
+NORMAL label: "POINTS" instruction: "XRA" parameters: "A"
+NORMAL instruction: "STA" parameters: "MTRL"
+NORMAL instruction: "STA" parameters: "BRDC"
+NORMAL instruction: "STA" parameters: "PTSL"
+NORMAL instruction: "STA" parameters: "PTSW1"
+NORMAL instruction: "STA" parameters: "PTSW2"
+NORMAL instruction: "STA" parameters: "PTSCK"
+NORMAL instruction: "LXI" parameters: "H", "T1"
+NORMAL instruction: "MVI" parameters: "M", "7"
+NORMAL instruction: "MVI" parameters: "A", "21"
+NORMAL label: "PT5" instruction: "STA" parameters: "M3"
+NORMAL instruction: "LIXD" parameters: "M3"
+NORMAL instruction: "MOV" parameters: "A", "BOARD(X)"
+NORMAL instruction: "CPI" parameters: "-1"
+NORMAL instruction: "JZ" parameters: "PT25"
+NORMAL instruction: "LXI" parameters: "H", "P1"
+NORMAL instruction: "MOV" parameters: "M", "A"
+NORMAL instruction: "ANI" parameters: "7"
+NORMAL instruction: "STA" parameters: "T3"
+NORMAL instruction: "CPI" parameters: "KNIGHT"
+NORMAL instruction: "JRC" parameters: "PT6X"
+NORMAL instruction: "CPI" parameters: "ROOK"
+NORMAL instruction: "JRC" parameters: "PT6B"
+NORMAL instruction: "CPI" parameters: "KING"
+NORMAL instruction: "JRZ" parameters: "PT6AA"
+NORMAL instruction: "LDA" parameters: "MOVENO"
+NORMAL instruction: "CPI" parameters: "7"
+NORMAL instruction: "JRC" parameters: "PT6A"
+NORMAL instruction: "JMP" parameters: "PT6X"
+NORMAL label: "PT6AA" instruction: "BIT" parameters: "4", "M"
+NORMAL instruction: "JRZ" parameters: "PT6A"
+NORMAL instruction: "MVI" parameters: "A", "+6"
+NORMAL instruction: "BIT" parameters: "7", "M"
+NORMAL instruction: "JRZ" parameters: "PT6D"
+NORMAL instruction: "MVI" parameters: "A", "-6"
+NORMAL instruction: "JMP" parameters: "PT6D"
+NORMAL label: "PT6A" instruction: "BIT" parameters: "3", "M"
+NORMAL instruction: "JRZ" parameters: "PT6X"
+NORMAL instruction: "JMP" parameters: "PT6C"
+NORMAL label: "PT6B" instruction: "BIT" parameters: "3", "M"
+NORMAL instruction: "JRNZ" parameters: "PT6X"
+NORMAL label: "PT6C" instruction: "MVI" parameters: "A", "-2"
+NORMAL instruction: "BIT" parameters: "7", "M"
+NORMAL instruction: "JRZ" parameters: "PT6D"
+NORMAL instruction: "MVI" parameters: "A", "+2"
+NORMAL label: "PT6D" instruction: "LXI" parameters: "H", "BRDC"
+NORMAL instruction: "ADD" parameters: "M"
+NORMAL instruction: "MOV" parameters: "M", "A"
+NORMAL label: "PT6X" instruction: "XRA" parameters: "A"
+NORMAL instruction: "MVI" parameters: "B", "14"
+NORMAL instruction: "LXI" parameters: "H", "ATKLST"
+NORMAL label: "back04" instruction: "MOV" parameters: "M", "A"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "DJNZ" parameters: "back04"
+NORMAL instruction: "CALL" parameters: "ATTACK"
+NORMAL instruction: "LXI" parameters: "H", "BACT"
+NORMAL instruction: "LDA" parameters: "WACT"
+NORMAL instruction: "SUB" parameters: "M"
+NORMAL instruction: "LXI" parameters: "H", "BRDC"
+NORMAL instruction: "ADD" parameters: "M"
+NORMAL instruction: "MOV" parameters: "M", "A"
+NORMAL instruction: "LDA" parameters: "P1"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JZ" parameters: "PT25"
+NORMAL instruction: "CALL" parameters: "XCHNG"
+NORMAL instruction: "XRA" parameters: "A"
+NORMAL instruction: "CMP" parameters: "E"
+NORMAL instruction: "JRZ" parameters: "PT23"
+NORMAL instruction: "DCR" parameters: "D"
+NORMAL instruction: "LDA" parameters: "P1"
+NORMAL instruction: "LXI" parameters: "H", "COLOR"
+NORMAL instruction: "XRA" parameters: "M"
+NORMAL instruction: "BIT" parameters: "7", "A"
+NORMAL instruction: "MOV" parameters: "A", "E"
+NORMAL instruction: "JRNZ" parameters: "PT20"
+NORMAL instruction: "LXI" parameters: "H", "PTSL"
+NORMAL instruction: "CMP" parameters: "M"
+NORMAL instruction: "JRC" parameters: "PT23"
+NORMAL instruction: "MOV" parameters: "M", "E"
+NORMAL instruction: "LIXD" parameters: "MLPTRJ"
+NORMAL instruction: "LDA" parameters: "M3"
+NORMAL instruction: "CMP" parameters: "MLTOP(X)"
+NORMAL instruction: "JRNZ" parameters: "PT23"
+NORMAL instruction: "STA" parameters: "PTSCK"
+NORMAL instruction: "JMP" parameters: "PT23"
+NORMAL label: "PT20" instruction: "LXI" parameters: "H", "PTSW1"
+NORMAL instruction: "CMP" parameters: "M"
+NORMAL instruction: "JRC" parameters: "rel011"
+NORMAL instruction: "MOV" parameters: "A", "M"
+NORMAL instruction: "MOV" parameters: "M", "E"
+NORMAL label: "rel011" instruction: "LXI" parameters: "H", "PTSW2"
+NORMAL instruction: "CMP" parameters: "M"
+NORMAL instruction: "JRC" parameters: "PT23"
+NORMAL instruction: "MOV" parameters: "M", "A"
+NORMAL label: "PT23" instruction: "LXI" parameters: "H", "P1"
+NORMAL instruction: "BIT" parameters: "7", "M"
+NORMAL instruction: "MOV" parameters: "A", "D"
+NORMAL instruction: "JRZ" parameters: "rel012"
+NORMAL instruction: "NEG"
+NORMAL label: "rel012" instruction: "LXI" parameters: "H", "MTRL"
+NORMAL instruction: "ADD" parameters: "M"
+NORMAL instruction: "MOV" parameters: "M", "A"
+NORMAL label: "PT25" instruction: "LDA" parameters: "M3"
+NORMAL instruction: "INR" parameters: "A"
+NORMAL instruction: "CPI" parameters: "99"
+NORMAL instruction: "JNZ" parameters: "PT5"
+NORMAL instruction: "LDA" parameters: "PTSCK"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JRZ" parameters: "PT25A"
+NORMAL instruction: "LDA" parameters: "PTSW2"
+NORMAL instruction: "STA" parameters: "PTSW1"
+NORMAL instruction: "XRA" parameters: "A"
+NORMAL instruction: "STA" parameters: "PTSW2"
+NORMAL label: "PT25A" instruction: "LDA" parameters: "PTSL"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JRZ" parameters: "rel013"
+NORMAL instruction: "DCR" parameters: "A"
+NORMAL label: "rel013" instruction: "MOV" parameters: "B", "A"
+NORMAL instruction: "LDA" parameters: "PTSW1"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JRZ" parameters: "rel014"
+NORMAL instruction: "LDA" parameters: "PTSW2"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JRZ" parameters: "rel014"
+NORMAL instruction: "DCR" parameters: "A"
+NORMAL instruction: "SRLR" parameters: "A"
+NORMAL instruction: "SUB" parameters: "B"
+NORMAL label: "rel014" instruction: "LXI" parameters: "H", "COLOR"
+NORMAL instruction: "BIT" parameters: "7", "M"
+NORMAL instruction: "JRZ" parameters: "rel015"
+NORMAL instruction: "NEG"
+NORMAL label: "rel015" instruction: "LXI" parameters: "H", "MTRL"
+NORMAL instruction: "ADD" parameters: "M"
+NORMAL instruction: "LXI" parameters: "H", "MV0"
+NORMAL instruction: "SUB" parameters: "M"
+NORMAL instruction: "MOV" parameters: "B", "A"
+NORMAL instruction: "MVI" parameters: "A", "30"
+NORMAL instruction: "CALL" parameters: "LIMIT"
+NORMAL instruction: "MOV" parameters: "E", "A"
+NORMAL instruction: "LDA" parameters: "BRDC"
+NORMAL instruction: "LXI" parameters: "H", "BC0"
+NORMAL instruction: "SUB" parameters: "M"
+NORMAL instruction: "MOV" parameters: "B", "A"
+NORMAL instruction: "LDA" parameters: "PTSCK"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JRZ" parameters: "rel026"
+NORMAL instruction: "MVI" parameters: "B", "0"
+NORMAL label: "rel026" instruction: "MVI" parameters: "A", "6"
+NORMAL instruction: "CALL" parameters: "LIMIT"
+NORMAL instruction: "MOV" parameters: "D", "A"
+NORMAL instruction: "MOV" parameters: "A", "E"
+NORMAL instruction: "ADD" parameters: "A"
+NORMAL instruction: "ADD" parameters: "A"
+NORMAL instruction: "ADD" parameters: "D"
+NORMAL instruction: "LXI" parameters: "H", "COLOR"
+NORMAL instruction: "BIT" parameters: "7", "M"
+NORMAL instruction: "JRNZ" parameters: "rel016"
+NORMAL instruction: "NEG"
+NORMAL label: "rel016" instruction: "ADI" parameters: "80H"
+NORMAL instruction: "STA" parameters: "VALM"
+NORMAL instruction: "LIXD" parameters: "MLPTRJ"
+NORMAL instruction: "MOV" parameters: "MLVAL(X)", "A"
+NORMAL instruction: "RET"
+NORMAL label: "LIMIT" instruction: "BIT" parameters: "7", "B"
+NORMAL instruction: "JZ" parameters: "LIM10"
+NORMAL instruction: "NEG"
+NORMAL instruction: "CMP" parameters: "B"
+NORMAL instruction: "RNC"
+NORMAL instruction: "MOV" parameters: "A", "B"
+NORMAL instruction: "RET"
+NORMAL label: "LIM10" instruction: "CMP" parameters: "B"
+NORMAL instruction: "RC"
+NORMAL instruction: "MOV" parameters: "A", "B"
+NORMAL instruction: "RET"
+NORMAL label: "MOVE" instruction: "LHLD" parameters: "MLPTRJ"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL label: "MV1" instruction: "MOV" parameters: "A", "M"
+NORMAL instruction: "STA" parameters: "M1"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "MOV" parameters: "A", "M"
+NORMAL instruction: "STA" parameters: "M2"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "MOV" parameters: "D", "M"
+NORMAL instruction: "LIXD" parameters: "M1"
+NORMAL instruction: "MOV" parameters: "E", "BOARD(X)"
+NORMAL instruction: "BIT" parameters: "5", "D"
+NORMAL instruction: "JRNZ" parameters: "MV15"
+NORMAL instruction: "MOV" parameters: "A", "E"
+NORMAL instruction: "ANI" parameters: "7"
+NORMAL instruction: "CPI" parameters: "QUEEN"
+NORMAL instruction: "JRZ" parameters: "MV20"
+NORMAL instruction: "CPI" parameters: "KING"
+NORMAL instruction: "JRZ" parameters: "MV30"
+NORMAL label: "MV5" instruction: "LIYD" parameters: "M2"
+NORMAL instruction: "SET" parameters: "3", "E"
+NORMAL instruction: "MOV" parameters: "BOARD(Y)", "E"
+NORMAL instruction: "MVI" parameters: "BOARD(X)", "0"
+NORMAL instruction: "BIT" parameters: "6", "D"
+NORMAL instruction: "JRNZ" parameters: "MV40"
+NORMAL instruction: "MOV" parameters: "A", "D"
+NORMAL instruction: "ANI" parameters: "7"
+NORMAL instruction: "CPI" parameters: "QUEEN"
+NORMAL instruction: "RNZ"
+NORMAL instruction: "LXI" parameters: "H", "POSQ"
+NORMAL instruction: "BIT" parameters: "7", "D"
+NORMAL instruction: "JRZ" parameters: "MV10"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL label: "MV10" instruction: "XRA" parameters: "A"
+NORMAL instruction: "MOV" parameters: "M", "A"
+NORMAL instruction: "RET"
+NORMAL label: "MV15" instruction: "SET" parameters: "2", "E"
+NORMAL instruction: "JMP" parameters: "MV5"
+NORMAL label: "MV20" instruction: "LXI" parameters: "H", "POSQ"
+NORMAL label: "MV21" instruction: "BIT" parameters: "7", "E"
+NORMAL instruction: "JRZ" parameters: "MV22"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL label: "MV22" instruction: "LDA" parameters: "M2"
+NORMAL instruction: "MOV" parameters: "M", "A"
+NORMAL instruction: "JMP" parameters: "MV5"
+NORMAL label: "MV30" instruction: "LXI" parameters: "H", "POSK"
+NORMAL instruction: "BIT" parameters: "6", "D"
+NORMAL instruction: "JRZ" parameters: "MV21"
+NORMAL instruction: "SET" parameters: "4", "E"
+NORMAL instruction: "JMP" parameters: "MV21"
+NORMAL label: "MV40" instruction: "LHLD" parameters: "MLPTRJ"
+NORMAL instruction: "LXI" parameters: "D", "8"
+NORMAL instruction: "DAD" parameters: "D"
+NORMAL instruction: "JMP" parameters: "MV1"
+NORMAL label: "UNMOVE" instruction: "LHLD" parameters: "MLPTRJ"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL label: "UM1" instruction: "MOV" parameters: "A", "M"
+NORMAL instruction: "STA" parameters: "M1"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "MOV" parameters: "A", "M"
+NORMAL instruction: "STA" parameters: "M2"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "MOV" parameters: "D", "M"
+NORMAL instruction: "LIXD" parameters: "M2"
+NORMAL instruction: "MOV" parameters: "E", "BOARD(X)"
+NORMAL instruction: "BIT" parameters: "5", "D"
+NORMAL instruction: "JRNZ" parameters: "UM15"
+NORMAL instruction: "MOV" parameters: "A", "E"
+NORMAL instruction: "ANI" parameters: "7"
+NORMAL instruction: "CPI" parameters: "QUEEN"
+NORMAL instruction: "JRZ" parameters: "UM20"
+NORMAL instruction: "CPI" parameters: "KING"
+NORMAL instruction: "JRZ" parameters: "UM30"
+NORMAL label: "UM5" instruction: "BIT" parameters: "4", "D"
+NORMAL instruction: "JRNZ" parameters: "UM16"
+NORMAL label: "UM6" instruction: "LIYD" parameters: "M1"
+NORMAL instruction: "MOV" parameters: "BOARD(Y)", "E"
+NORMAL instruction: "MOV" parameters: "A", "D"
+NORMAL instruction: "ANI" parameters: "8FH"
+NORMAL instruction: "MOV" parameters: "BOARD(X)", "A"
+NORMAL instruction: "BIT" parameters: "6", "D"
+NORMAL instruction: "JRNZ" parameters: "UM40"
+NORMAL instruction: "MOV" parameters: "A", "D"
+NORMAL instruction: "ANI" parameters: "7"
+NORMAL instruction: "CPI" parameters: "QUEEN"
+NORMAL instruction: "RNZ"
+NORMAL instruction: "LXI" parameters: "H", "POSQ"
+NORMAL instruction: "BIT" parameters: "7", "D"
+NORMAL instruction: "JRZ" parameters: "UM10"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL label: "UM10" instruction: "LDA" parameters: "M2"
+NORMAL instruction: "MOV" parameters: "M", "A"
+NORMAL instruction: "RET"
+NORMAL label: "UM15" instruction: "RES" parameters: "2", "E"
+NORMAL instruction: "JMP" parameters: "UM5"
+NORMAL label: "UM16" instruction: "RES" parameters: "3", "E"
+NORMAL instruction: "JMP" parameters: "UM6"
+NORMAL label: "UM20" instruction: "LXI" parameters: "H", "POSQ"
+NORMAL label: "UM21" instruction: "BIT" parameters: "7", "E"
+NORMAL instruction: "JRZ" parameters: "UM22"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL label: "UM22" instruction: "LDA" parameters: "M1"
+NORMAL instruction: "MOV" parameters: "M", "A"
+NORMAL instruction: "JMP" parameters: "UM5"
+NORMAL label: "UM30" instruction: "LXI" parameters: "H", "POSK"
+NORMAL instruction: "BIT" parameters: "6", "D"
+NORMAL instruction: "JRZ" parameters: "UM21"
+NORMAL instruction: "RES" parameters: "4", "E"
+NORMAL instruction: "JMP" parameters: "UM21"
+NORMAL label: "UM40" instruction: "LHLD" parameters: "MLPTRJ"
+NORMAL instruction: "LXI" parameters: "D", "8"
+NORMAL instruction: "DAD" parameters: "D"
+NORMAL instruction: "JMP" parameters: "UM1"
+NORMAL label: "SORTM" instruction: "LBCD" parameters: "MLPTRI"
+NORMAL instruction: "LXI" parameters: "D", "0"
+NORMAL label: "SR5" instruction: "MOV" parameters: "H", "B"
+NORMAL instruction: "MOV" parameters: "L", "C"
+NORMAL instruction: "MOV" parameters: "C", "M"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "MOV" parameters: "B", "M"
+NORMAL instruction: "MOV" parameters: "M", "D"
+NORMAL instruction: "DCX" parameters: "H"
+NORMAL instruction: "MOV" parameters: "M", "E"
+NORMAL instruction: "XRA" parameters: "A"
+NORMAL instruction: "CMP" parameters: "B"
+NORMAL instruction: "RZ"
+NORMAL label: "SR10" instruction: "SBCD" parameters: "MLPTRJ"
+NORMAL instruction: "CALL" parameters: "EVAL"
+NORMAL instruction: "LHLD" parameters: "MLPTRI"
+NORMAL instruction: "LBCD" parameters: "MLPTRJ"
+NORMAL label: "SR15" instruction: "MOV" parameters: "E", "M"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "MOV" parameters: "D", "M"
+NORMAL instruction: "XRA" parameters: "A"
+NORMAL instruction: "CMP" parameters: "D"
+NORMAL instruction: "JRZ" parameters: "SR25"
+NORMAL instruction: "PUSH" parameters: "D"
+NORMAL instruction: "POP" parameters: "X"
+NORMAL instruction: "LDA" parameters: "VALM"
+NORMAL instruction: "CMP" parameters: "MLVAL(X)"
+NORMAL instruction: "JRNC" parameters: "SR30"
+NORMAL label: "SR25" instruction: "MOV" parameters: "M", "B"
+NORMAL instruction: "DCX" parameters: "H"
+NORMAL instruction: "MOV" parameters: "M", "C"
+NORMAL instruction: "JMP" parameters: "SR5"
+NORMAL label: "SR30" instruction: "XCHG"
+NORMAL instruction: "JMP" parameters: "SR15"
+NORMAL label: "EVAL" instruction: "CALL" parameters: "MOVE"
+NORMAL instruction: "CALL" parameters: "INCHK"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JRZ" parameters: "EV5"
+NORMAL instruction: "XRA" parameters: "A"
+NORMAL instruction: "STA" parameters: "VALM"
+NORMAL instruction: "JMP" parameters: "EV10"
+NORMAL label: "EV5" instruction: "CALL" parameters: "PINFND"
+NORMAL instruction: "CALL" parameters: "POINTS"
+NORMAL label: "EV10" instruction: "CALL" parameters: "UNMOVE"
+NORMAL instruction: "RET"
+NORMAL label: "FNDMOV" instruction: "LDA" parameters: "MOVENO"
+NORMAL instruction: "CPI" parameters: "1"
+NORMAL instruction: "CZ" parameters: "BOOK"
+NORMAL instruction: "XRA" parameters: "A"
+NORMAL instruction: "STA" parameters: "NPLY"
+NORMAL instruction: "LXI" parameters: "H", "0"
+NORMAL instruction: "SHLD" parameters: "BESTM"
+NORMAL instruction: "LXI" parameters: "H", "MLIST"
+NORMAL instruction: "SHLD" parameters: "MLNXT"
+NORMAL instruction: "LXI" parameters: "H", "PLYIX-2"
+NORMAL instruction: "SHLD" parameters: "MLPTRI"
+NORMAL instruction: "LDA" parameters: "KOLOR"
+NORMAL instruction: "STA" parameters: "COLOR"
+NORMAL instruction: "LXI" parameters: "H", "SCORE"
+NORMAL instruction: "SHLD" parameters: "SCRIX"
+NORMAL instruction: "LDA" parameters: "PLYMAX"
+NORMAL instruction: "ADI" parameters: "2"
+NORMAL instruction: "MOV" parameters: "B", "A"
+NORMAL instruction: "XRA" parameters: "A"
+NORMAL label: "back05" instruction: "MOV" parameters: "M", "A"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "DJNZ" parameters: "back05"
+NORMAL instruction: "STA" parameters: "BC0"
+NORMAL instruction: "STA" parameters: "MV0"
+NORMAL instruction: "CALL" parameters: "PINFND"
+NORMAL instruction: "CALL" parameters: "POINTS"
+NORMAL instruction: "LDA" parameters: "BRDC"
+NORMAL instruction: "STA" parameters: "BC0"
+NORMAL instruction: "LDA" parameters: "MTRL"
+NORMAL instruction: "STA" parameters: "MV0"
+NORMAL label: "FM5" instruction: "LXI" parameters: "H", "NPLY"
+NORMAL instruction: "INR" parameters: "M"
+NORMAL instruction: "XRA" parameters: "A"
+NORMAL instruction: "STA" parameters: "MATEF"
+NORMAL instruction: "CALL" parameters: "GENMOV"
+NORMAL instruction: "LDA" parameters: "NPLY"
+NORMAL instruction: "LXI" parameters: "H", "PLYMAX"
+NORMAL instruction: "CMP" parameters: "M"
+NORMAL instruction: "CC" parameters: "SORTM"
+NORMAL instruction: "LHLD" parameters: "MLPTRI"
+NORMAL instruction: "SHLD" parameters: "MLPTRJ"
+NORMAL label: "FM15" instruction: "LHLD" parameters: "MLPTRJ"
+NORMAL instruction: "MOV" parameters: "E", "M"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "MOV" parameters: "D", "M"
+NORMAL instruction: "MOV" parameters: "A", "D"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JRZ" parameters: "FM25"
+NORMAL instruction: "SDED" parameters: "MLPTRJ"
+NORMAL instruction: "LHLD" parameters: "MLPTRI"
+NORMAL instruction: "MOV" parameters: "M", "E"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "MOV" parameters: "M", "D"
+NORMAL instruction: "LDA" parameters: "NPLY"
+NORMAL instruction: "LXI" parameters: "H", "PLYMAX"
+NORMAL instruction: "CMP" parameters: "M"
+NORMAL instruction: "JRC" parameters: "FM18"
+NORMAL instruction: "CALL" parameters: "MOVE"
+NORMAL instruction: "CALL" parameters: "INCHK"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JRZ" parameters: "rel017"
+NORMAL instruction: "CALL" parameters: "UNMOVE"
+NORMAL instruction: "JMP" parameters: "FM15"
+NORMAL label: "rel017" instruction: "LDA" parameters: "NPLY"
+NORMAL instruction: "LXI" parameters: "H", "PLYMAX"
+NORMAL instruction: "CMP" parameters: "M"
+NORMAL instruction: "JRNZ" parameters: "FM35"
+NORMAL instruction: "LDA" parameters: "COLOR"
+NORMAL instruction: "XRI" parameters: "80H"
+NORMAL instruction: "CALL" parameters: "INCHK1"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JRZ" parameters: "FM35"
+NORMAL instruction: "JMP" parameters: "FM19"
+NORMAL label: "FM18" instruction: "LIXD" parameters: "MLPTRJ"
+NORMAL instruction: "MOV" parameters: "A", "MLVAL(X)"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JRZ" parameters: "FM15"
+NORMAL instruction: "CALL" parameters: "MOVE"
+NORMAL label: "FM19" instruction: "LXI" parameters: "H", "COLOR"
+NORMAL instruction: "MVI" parameters: "A", "80H"
+NORMAL instruction: "XRA" parameters: "M"
+NORMAL instruction: "MOV" parameters: "M", "A"
+NORMAL instruction: "BIT" parameters: "7", "A"
+NORMAL instruction: "JRNZ" parameters: "rel018"
+NORMAL instruction: "LXI" parameters: "H", "MOVENO"
+NORMAL instruction: "INR" parameters: "M"
+NORMAL label: "rel018" instruction: "LHLD" parameters: "SCRIX"
+NORMAL instruction: "MOV" parameters: "A", "M"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "MOV" parameters: "M", "A"
+NORMAL instruction: "DCX" parameters: "H"
+NORMAL instruction: "SHLD" parameters: "SCRIX"
+NORMAL instruction: "JMP" parameters: "FM5"
+NORMAL label: "FM25" instruction: "LDA" parameters: "MATEF"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JRNZ" parameters: "FM30"
+NORMAL instruction: "LDA" parameters: "CKFLG"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "MVI" parameters: "A", "80H"
+NORMAL instruction: "JRZ" parameters: "FM36"
+NORMAL instruction: "LDA" parameters: "MOVENO"
+NORMAL instruction: "STA" parameters: "PMATE"
+NORMAL instruction: "MVI" parameters: "A", "0FFH"
+NORMAL instruction: "JMP" parameters: "FM36"
+NORMAL label: "FM30" instruction: "LDA" parameters: "NPLY"
+NORMAL instruction: "CPI" parameters: "1"
+NORMAL instruction: "RZ"
+NORMAL instruction: "CALL" parameters: "ASCEND"
+NORMAL instruction: "LHLD" parameters: "SCRIX"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "MOV" parameters: "A", "M"
+NORMAL instruction: "DCX" parameters: "H"
+NORMAL instruction: "DCX" parameters: "H"
+NORMAL instruction: "JMP" parameters: "FM37"
+NORMAL label: "FM35" instruction: "CALL" parameters: "PINFND"
+NORMAL instruction: "CALL" parameters: "POINTS"
+NORMAL instruction: "CALL" parameters: "UNMOVE"
+NORMAL instruction: "LDA" parameters: "VALM"
+NORMAL label: "FM36" instruction: "LXI" parameters: "H", "MATEF"
+NORMAL instruction: "SET" parameters: "0", "M"
+NORMAL instruction: "LHLD" parameters: "SCRIX"
+NORMAL label: "FM37" instruction: "CMP" parameters: "M"
+NORMAL instruction: "JRC" parameters: "FM40"
+NORMAL instruction: "JRZ" parameters: "FM40"
+NORMAL instruction: "NEG"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "CMP" parameters: "M"
+NORMAL instruction: "JC" parameters: "FM15"
+NORMAL instruction: "JZ" parameters: "FM15"
+NORMAL instruction: "MOV" parameters: "M", "A"
+NORMAL instruction: "LDA" parameters: "NPLY"
+NORMAL instruction: "CPI" parameters: "1"
+NORMAL instruction: "JNZ" parameters: "FM15"
+NORMAL instruction: "LHLD" parameters: "MLPTRJ"
+NORMAL instruction: "SHLD" parameters: "BESTM"
+NORMAL instruction: "LDA" parameters: "SCORE+1"
+NORMAL instruction: "CPI" parameters: "0FFH"
+NORMAL instruction: "JNZ" parameters: "FM15"
+NORMAL instruction: "LXI" parameters: "H", "PLYMAX"
+NORMAL instruction: "DCR" parameters: "M"
+NORMAL instruction: "DCR" parameters: "M"
+NORMAL instruction: "LDA" parameters: "KOLOR"
+NORMAL instruction: "BIT" parameters: "7", "A"
+NORMAL instruction: "RZ"
+NORMAL instruction: "LXI" parameters: "H", "PMATE"
+NORMAL instruction: "DCR" parameters: "M"
+NORMAL instruction: "RET"
+NORMAL label: "FM40" instruction: "CALL" parameters: "ASCEND"
+NORMAL instruction: "JMP" parameters: "FM15"
+NORMAL label: "ASCEND" instruction: "LXI" parameters: "H", "COLOR"
+NORMAL instruction: "MVI" parameters: "A", "80H"
+NORMAL instruction: "XRA" parameters: "M"
+NORMAL instruction: "MOV" parameters: "M", "A"
+NORMAL instruction: "BIT" parameters: "7", "A"
+NORMAL instruction: "JRZ" parameters: "rel019"
+NORMAL instruction: "LXI" parameters: "H", "MOVENO"
+NORMAL instruction: "DCR" parameters: "M"
+NORMAL label: "rel019" instruction: "LHLD" parameters: "SCRIX"
+NORMAL instruction: "DCX" parameters: "H"
+NORMAL instruction: "SHLD" parameters: "SCRIX"
+NORMAL instruction: "LXI" parameters: "H", "NPLY"
+NORMAL instruction: "DCR" parameters: "M"
+NORMAL instruction: "LHLD" parameters: "MLPTRI"
+NORMAL instruction: "DCX" parameters: "H"
+NORMAL instruction: "MOV" parameters: "D", "M"
+NORMAL instruction: "DCX" parameters: "H"
+NORMAL instruction: "MOV" parameters: "E", "M"
+NORMAL instruction: "SDED" parameters: "MLNXT"
+NORMAL instruction: "DCX" parameters: "H"
+NORMAL instruction: "MOV" parameters: "D", "M"
+NORMAL instruction: "DCX" parameters: "H"
+NORMAL instruction: "MOV" parameters: "E", "M"
+NORMAL instruction: "SHLD" parameters: "MLPTRI"
+NORMAL instruction: "SDED" parameters: "MLPTRJ"
+NORMAL instruction: "CALL" parameters: "UNMOVE"
+NORMAL instruction: "RET"
+NORMAL label: "BOOK" instruction: "POP" parameters: "PSW"
+NORMAL instruction: "LXI" parameters: "H", "SCORE+1"
+NORMAL instruction: "MVI" parameters: "M", "0"
+NORMAL instruction: "LXI" parameters: "H", "BMOVES-2"
+NORMAL instruction: "SHLD" parameters: "BESTM"
+NORMAL instruction: "LXI" parameters: "H", "BESTM"
+NORMAL instruction: "LDA" parameters: "KOLOR"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JRNZ" parameters: "BM5"
+NORMAL instruction: "LDAR"
+NORMAL instruction: "BIT" parameters: "0", "A"
+NORMAL instruction: "RZ"
+NORMAL instruction: "INR" parameters: "M"
+NORMAL instruction: "INR" parameters: "M"
+NORMAL instruction: "INR" parameters: "M"
+NORMAL instruction: "RET"
+NORMAL label: "BM5" instruction: "INR" parameters: "M"
+NORMAL instruction: "INR" parameters: "M"
+NORMAL instruction: "INR" parameters: "M"
+NORMAL instruction: "INR" parameters: "M"
+NORMAL instruction: "INR" parameters: "M"
+NORMAL instruction: "INR" parameters: "M"
+NORMAL instruction: "LIXD" parameters: "MLPTRJ"
+NORMAL instruction: "MOV" parameters: "A", "MLFRP(X)"
+NORMAL instruction: "CPI" parameters: "22"
+NORMAL instruction: "JRZ" parameters: "BM9"
+NORMAL instruction: "CPI" parameters: "27"
+NORMAL instruction: "JRZ" parameters: "BM9"
+NORMAL instruction: "CPI" parameters: "34"
+NORMAL instruction: "JRZ" parameters: "BM9"
+NORMAL instruction: "RC"
+NORMAL instruction: "CPI" parameters: "35"
+NORMAL instruction: "RZ"
+NORMAL label: "BM9" instruction: "INR" parameters: "M"
+NORMAL instruction: "INR" parameters: "M"
+NORMAL instruction: "INR" parameters: "M"
+NORMAL instruction: "RET"
+NORMAL label: "CPTRMV" instruction: "CALL" parameters: "FNDMOV"
+NORMAL instruction: "LHLD" parameters: "BESTM"
+NORMAL instruction: "SHLD" parameters: "MLPTRJ"
+NORMAL instruction: "LDA" parameters: "SCORE+1"
+NORMAL instruction: "CPI" parameters: "1"
+NORMAL instruction: "JRNZ" parameters: "CP0C"
+NORMAL instruction: "MVI" parameters: "C", "1"
+NORMAL instruction: "CALL" parameters: "FCDMAT"
+NORMAL label: "CP0C" instruction: "CALL" parameters: "MOVE"
+NORMAL instruction: "CALL" parameters: "EXECMV"
+NORMAL instruction: "MOV" parameters: "A", "B"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JRNZ" parameters: "CP10"
+NORMAL instruction: "MOV" parameters: "D", "E"
+NORMAL instruction: "CALL" parameters: "BITASN"
+NORMAL instruction: "SHLD" parameters: "MVEMSG_2"
+NORMAL instruction: "MOV" parameters: "D", "C"
+NORMAL instruction: "CALL" parameters: "BITASN"
+NORMAL instruction: "SHLD" parameters: "MVEMSG"
+NORMAL instruction: "PRTBLK" parameters: "MVEMSG", "5"
+NORMAL instruction: "JMPR" parameters: "CP1C"
+NORMAL label: "CP10" instruction: "BIT" parameters: "1", "B"
+NORMAL instruction: "JRZ" parameters: "rel020"
+NORMAL instruction: "PRTBLK" parameters: "O.O", "5"
+NORMAL instruction: "JMPR" parameters: "CP1C"
+NORMAL label: "rel020" instruction: "BIT" parameters: "2", "B"
+NORMAL instruction: "JRZ" parameters: "rel021"
+NORMAL instruction: "PRTBLK" parameters: "O.O.O", "5"
+NORMAL instruction: "JMPR" parameters: "CP1C"
+NORMAL label: "rel021" instruction: "PRTBLK" parameters: "P.PEP", "5"
+NORMAL label: "CP1C" instruction: "LDA" parameters: "COLOR"
+NORMAL instruction: "MOV" parameters: "B", "A"
+NORMAL instruction: "XRI" parameters: "80H"
+NORMAL instruction: "STA" parameters: "COLOR"
+NORMAL instruction: "CALL" parameters: "INCHK"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "MOV" parameters: "A", "B"
+NORMAL instruction: "STA" parameters: "COLOR"
+NORMAL instruction: "JRZ" parameters: "CP24"
+NORMAL instruction: "CARRET"
+NORMAL instruction: "LDA" parameters: "SCORE+1"
+NORMAL instruction: "CPI" parameters: "0FFH"
+NORMAL instruction: "CNZ" parameters: "TBCPMV"
+NORMAL instruction: "PRTBLK" parameters: "CKMSG", "5"
+NORMAL instruction: "LXI" parameters: "H", "LINECT"
+NORMAL instruction: "INR" parameters: "M"
+NORMAL label: "CP24" instruction: "LDA" parameters: "SCORE+1"
+NORMAL instruction: "CPI" parameters: "0FFH"
+NORMAL instruction: "RNZ"
+NORMAL instruction: "MVI" parameters: "C", "0"
+NORMAL instruction: "CALL" parameters: "FCDMAT"
+NORMAL instruction: "RET"
+NORMAL label: "BITASN" instruction: "SUB" parameters: "A"
+NORMAL instruction: "MVI" parameters: "E", "10"
+NORMAL instruction: "CALL" parameters: "DIVIDE"
+NORMAL instruction: "DCR" parameters: "D"
+NORMAL instruction: "ADI" parameters: "60H"
+NORMAL instruction: "MOV" parameters: "L", "A"
+NORMAL instruction: "MOV" parameters: "A", "D"
+NORMAL instruction: "ADI" parameters: "30H"
+NORMAL instruction: "MOV" parameters: "H", "A"
+NORMAL instruction: "RET"
+NORMAL label: "ASNTBI" instruction: "MOV" parameters: "A", "L"
+NORMAL instruction: "SUI" parameters: "30H"
+NORMAL instruction: "CPI" parameters: "1"
+NORMAL instruction: "JM" parameters: "AT04"
+NORMAL instruction: "CPI" parameters: "9"
+NORMAL instruction: "JRNC" parameters: "AT04"
+NORMAL instruction: "INR" parameters: "A"
+NORMAL instruction: "MOV" parameters: "D", "A"
+NORMAL instruction: "MVI" parameters: "E", "10"
+NORMAL instruction: "CALL" parameters: "MLTPLY"
+NORMAL instruction: "MOV" parameters: "A", "H"
+NORMAL instruction: "SUI" parameters: "40H"
+NORMAL instruction: "CPI" parameters: "1"
+NORMAL instruction: "JM" parameters: "AT04"
+NORMAL instruction: "CPI" parameters: "9"
+NORMAL instruction: "JRNC" parameters: "AT04"
+NORMAL instruction: "ADD" parameters: "D"
+NORMAL instruction: "MVI" parameters: "B", "0"
+NORMAL instruction: "RET"
+NORMAL label: "AT04" instruction: "MOV" parameters: "B", "A"
+NORMAL instruction: "RET"
+NORMAL label: "VALMOV" instruction: "LHLD" parameters: "MLPTRJ"
+NORMAL instruction: "PUSH" parameters: "H"
+NORMAL instruction: "LDA" parameters: "KOLOR"
+NORMAL instruction: "XRI" parameters: "80H"
+NORMAL instruction: "STA" parameters: "COLOR"
+NORMAL instruction: "LXI" parameters: "H", "PLYIX-2"
+NORMAL instruction: "SHLD" parameters: "MLPTRI"
+NORMAL instruction: "LXI" parameters: "H", "MLIST+1024"
+NORMAL instruction: "SHLD" parameters: "MLNXT"
+NORMAL instruction: "CALL" parameters: "GENMOV"
+NORMAL instruction: "LXI" parameters: "X", "MLIST+1024"
+NORMAL label: "VA5" instruction: "LDA" parameters: "MVEMSG"
+NORMAL instruction: "CMP" parameters: "MLFRP(X)"
+NORMAL instruction: "JRNZ" parameters: "VA6"
+NORMAL instruction: "LDA" parameters: "MVEMSG+1"
+NORMAL instruction: "CMP" parameters: "MLTOP(X)"
+NORMAL instruction: "JRZ" parameters: "VA7"
+NORMAL label: "VA6" instruction: "MOV" parameters: "E", "MLPTR(X)"
+NORMAL instruction: "MOV" parameters: "D", "MLPTR+1(X)"
+NORMAL instruction: "XRA" parameters: "A"
+NORMAL instruction: "CMP" parameters: "D"
+NORMAL instruction: "JRZ" parameters: "VA10"
+NORMAL instruction: "PUSH" parameters: "D"
+NORMAL instruction: "POP" parameters: "X"
+NORMAL instruction: "JMPR" parameters: "VA5"
+NORMAL label: "VA7" instruction: "SIXD" parameters: "MLPTRJ"
+NORMAL instruction: "CALL" parameters: "MOVE"
+NORMAL instruction: "CALL" parameters: "INCHK"
+NORMAL instruction: "ANA" parameters: "A"
+NORMAL instruction: "JRNZ" parameters: "VA9"
+NORMAL label: "VA8" instruction: "POP" parameters: "H"
+NORMAL instruction: "RET"
+NORMAL label: "VA9" instruction: "CALL" parameters: "UNMOVE"
+NORMAL label: "VA10" instruction: "MVI" parameters: "A", "1"
+NORMAL instruction: "POP" parameters: "H"
+NORMAL instruction: "SHLD" parameters: "MLPTRJ"
+NORMAL instruction: "RET"
+NORMAL label: "ROYALT" instruction: "LXI" parameters: "H", "POSK"
+NORMAL instruction: "MVI" parameters: "B", "4"
+NORMAL label: "back06" instruction: "MVI" parameters: "M", "0"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "DJNZ" parameters: "back06"
+NORMAL instruction: "MVI" parameters: "A", "21"
+NORMAL label: "RY04" instruction: "STA" parameters: "M1"
+NORMAL instruction: "LXI" parameters: "H", "POSK"
+NORMAL instruction: "LIXD" parameters: "M1"
+NORMAL instruction: "MOV" parameters: "A", "BOARD(X)"
+NORMAL instruction: "BIT" parameters: "7", "A"
+NORMAL instruction: "JRZ" parameters: "rel023"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL label: "rel023" instruction: "ANI" parameters: "7"
+NORMAL instruction: "CPI" parameters: "KING"
+NORMAL instruction: "JRZ" parameters: "RY08"
+NORMAL instruction: "CPI" parameters: "QUEEN"
+NORMAL instruction: "JRNZ" parameters: "RY0C"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL instruction: "INX" parameters: "H"
+NORMAL label: "RY08" instruction: "LDA" parameters: "M1"
+NORMAL instruction: "MOV" parameters: "M", "A"
+NORMAL label: "RY0C" instruction: "LDA" parameters: "M1"
+NORMAL instruction: "INR" parameters: "A"
+NORMAL instruction: "CPI" parameters: "99"
+NORMAL instruction: "JRNZ" parameters: "RY04"
+NORMAL instruction: "RET"
+NORMAL label: "CONVRT" instruction: "PUSH" parameters: "B"
+NORMAL instruction: "PUSH" parameters: "D"
+NORMAL instruction: "PUSH" parameters: "PSW"
+NORMAL instruction: "LDA" parameters: "BRDPOS"
+NORMAL instruction: "MOV" parameters: "D", "A"
+NORMAL instruction: "SUB" parameters: "A"
+NORMAL instruction: "MVI" parameters: "E", "10"
+NORMAL instruction: "CALL" parameters: "DIVIDE"
+NORMAL instruction: "DCR" parameters: "D"
+NORMAL instruction: "DCR" parameters: "A"
+NORMAL instruction: "MOV" parameters: "C", "D"
+NORMAL instruction: "MVI" parameters: "D", "6"
+NORMAL instruction: "MOV" parameters: "E", "A"
+NORMAL instruction: "CALL" parameters: "MLTPLY"
+NORMAL instruction: "MOV" parameters: "A", "D"
+NORMAL instruction: "ADI" parameters: "10H"
+NORMAL instruction: "MOV" parameters: "L", "A"
+NORMAL instruction: "MVI" parameters: "A", "8"
+NORMAL instruction: "SUB" parameters: "C"
+NORMAL instruction: "ADI" parameters: "0C0H"
+NORMAL instruction: "MOV" parameters: "H", "A"
+NORMAL instruction: "POP" parameters: "PSW"
+NORMAL instruction: "POP" parameters: "D"
+NORMAL instruction: "POP" parameters: "B"
+NORMAL instruction: "RET"
+NORMAL label: "DIVIDE" instruction: "PUSH" parameters: "B"
+NORMAL instruction: "MVI" parameters: "B", "8"
+NORMAL label: "DD04" instruction: "SLAR" parameters: "D"
+NORMAL instruction: "RAL"
+NORMAL instruction: "SUB" parameters: "E"
+NORMAL instruction: "JM" parameters: "rel024"
+NORMAL instruction: "INR" parameters: "D"
+NORMAL instruction: "JMPR" parameters: "rel024"
+NORMAL instruction: "ADD" parameters: "E"
+NORMAL label: "rel024" instruction: "DJNZ" parameters: "DD04"
+NORMAL instruction: "POP" parameters: "B"
+NORMAL instruction: "RET"
+NORMAL label: "MLTPLY" instruction: "PUSH" parameters: "B"
+NORMAL instruction: "SUB" parameters: "A"
+NORMAL instruction: "MVI" parameters: "B", "8"
+NORMAL label: "ML04" instruction: "BIT" parameters: "0", "D"
+NORMAL instruction: "JRZ" parameters: "rel025"
+NORMAL instruction: "ADD" parameters: "E"
+NORMAL label: "rel025" instruction: "SRAR" parameters: "A"
+NORMAL instruction: "RARR" parameters: "D"
+NORMAL instruction: "DJNZ" parameters: "ML04"
+NORMAL instruction: "POP" parameters: "B"
+NORMAL instruction: "RET"
+NORMAL label: "EXECMV" instruction: "PUSH" parameters: "X"
+NORMAL instruction: "PUSH" parameters: "PSW"
+NORMAL instruction: "LIXD" parameters: "MLPTRJ"
+NORMAL instruction: "MOV" parameters: "C", "MLFRP(X)"
+NORMAL instruction: "MOV" parameters: "E", "MLTOP(X)"
+NORMAL instruction: "CALL" parameters: "MAKEMV"
+NORMAL instruction: "MOV" parameters: "D", "MLFLG(X)"
+NORMAL instruction: "MVI" parameters: "B", "0"
+NORMAL instruction: "BIT" parameters: "6", "D"
+NORMAL instruction: "JRZ" parameters: "EX14"
+NORMAL instruction: "LXI" parameters: "D", "6"
+NORMAL instruction: "DADX" parameters: "D"
+NORMAL instruction: "MOV" parameters: "C", "MLFRP(X)"
+NORMAL instruction: "MOV" parameters: "E", "MLTOP(X)"
+NORMAL instruction: "MOV" parameters: "A", "E"
+NORMAL instruction: "CMP" parameters: "C"
+NORMAL instruction: "JRNZ" parameters: "EX04"
+NORMAL instruction: "INR" parameters: "B"
+NORMAL instruction: "JMPR" parameters: "EX10"
+NORMAL label: "EX04" instruction: "CPI" parameters: "1AH"
+NORMAL instruction: "JRNZ" parameters: "EX08"
+NORMAL instruction: "SET" parameters: "1", "B"
+NORMAL instruction: "JMPR" parameters: "EX10"
+NORMAL label: "EX08" instruction: "CPI" parameters: "60H"
+NORMAL instruction: "JRNZ" parameters: "EX0C"
+NORMAL instruction: "SET" parameters: "1", "B"
+NORMAL instruction: "JMPR" parameters: "EX10"
+NORMAL label: "EX0C" instruction: "SET" parameters: "2", "B"
+NORMAL label: "EX10" instruction: "CALL" parameters: "MAKEMV"
+NORMAL label: "EX14" instruction: "POP" parameters: "PSW"
+NORMAL instruction: "POP" parameters: "X"
+NORMAL instruction: "RET"
+NORMAL label: "MAKEMV" instruction: "PUSH" parameters: "PSW"
+NORMAL instruction: "PUSH" parameters: "B"
+NORMAL instruction: "PUSH" parameters: "D"
+NORMAL instruction: "PUSH" parameters: "H"
+NORMAL instruction: "MOV" parameters: "A", "C"
+NORMAL instruction: "STA" parameters: "BRDPOS"
+NORMAL instruction: "CALL" parameters: "CONVRT"
+NORMAL instruction: "MVI" parameters: "B", "10"
+NORMAL instruction: "CALL" parameters: "BLNKER"
+NORMAL instruction: "MOV" parameters: "A", "M"
+NORMAL instruction: "INR" parameters: "L"
+NORMAL instruction: "MVI" parameters: "D", "0"
+NORMAL label: "MM04" instruction: "MVI" parameters: "B", "4"
+NORMAL label: "MM08" instruction: "MOV" parameters: "M", "A"
+NORMAL instruction: "INR" parameters: "L"
+NORMAL instruction: "DJNZ" parameters: "MM08"
+NORMAL instruction: "MOV" parameters: "C", "A"
+NORMAL instruction: "MOV" parameters: "A", "L"
+NORMAL instruction: "ADI" parameters: "3CH"
+NORMAL instruction: "MOV" parameters: "L", "A"
+NORMAL instruction: "MOV" parameters: "A", "C"
+NORMAL instruction: "INR" parameters: "D"
+NORMAL instruction: "BIT" parameters: "2", "D"
+NORMAL instruction: "JRZ" parameters: "MM04"
+NORMAL instruction: "MOV" parameters: "A", "E"
+NORMAL instruction: "STA" parameters: "BRDPOS"
+NORMAL instruction: "CALL" parameters: "CONVRT"
+NORMAL instruction: "MVI" parameters: "B", "10"
+NORMAL instruction: "CALL" parameters: "INSPCE"
+NORMAL instruction: "CALL" parameters: "BLNKER"
+NORMAL instruction: "POP" parameters: "H"
+NORMAL instruction: "POP" parameters: "D"
+NORMAL instruction: "POP" parameters: "B"
+NORMAL instruction: "POP" parameters: "PSW"
+NORMAL instruction: "RET"
+NORMAL instruction: ".END"
+
+LABELS
+
+ADJPTR
+ADMOVE
+AM10
+ANALYS
+ANBDPS
+AS19
+AS20
+AS25
+ASCEND
+ASNTBI
+AT04
+AT10
+AT12
+AT13
+AT14
+AT14A
+AT14B
+AT15
+AT16
+AT20
+AT21
+AT25
+AT30
+AT31
+AT32
+AT5
+ATKLST
+ATKSAV
+ATTACK
+BC0
+BESTM
+BITASN
+BLNKER
+BM5
+BM9
+BMOVES
+BOARDA
+BOOK
+BRDC
+BRDPOS
+CA10
+CA15
+CA20
+CA5
+CASTLE
+CHARTR
+CKFLG
+COLOR
+CONVRT
+CP0C
+CP10
+CP1C
+CP24
+CPTRMV
+DD04
+DIRECT
+DIVIDE
+DSPBRD
+ENPSNT
+EV10
+EV5
+EVAL
+EX04
+EX08
+EX0C
+EX10
+EX14
+EXECMV
+FCDMAT
+FM15
+FM18
+FM19
+FM25
+FM30
+FM35
+FM36
+FM37
+FM40
+FM5
+FNDMOV
+GENMOV
+GM10
+GM5
+IB2
+INCHK
+INCHK1
+INDX1
+INDX2
+INITBD
+INSPCE
+KOLOR
+LIM10
+LIMIT
+LINECT
+M1
+M2
+M3
+M4
+MAKEMV
+MATED
+MATEF
+ML04
+MLEND
+MLIST
+MLLST
+MLNXT
+MLPTRI
+MLPTRJ
+MLTPLY
+MM04
+MM08
+MOVE
+MOVENO
+MP10
+MP15
+MP20
+MP25
+MP26
+MP30
+MP31
+MP35
+MP36
+MP37
+MP5
+MPIECE
+MTRL
+MV0
+MV1
+MV10
+MV15
+MV20
+MV21
+MV22
+MV30
+MV40
+MV5
+MVEMSG
+MVEMSG_2
+NEXTAD
+NPINS
+NPLY
+NX6
+P1
+P2
+P3
+PA1
+PA2
+PATH
+PC1
+PC3
+PC5
+PF1
+PF10
+PF15
+PF19
+PF2
+PF20
+PF25
+PF26
+PF27
+PF5
+PGIFND
+PINFND
+PLISTA
+PLYIX
+PLYMAX
+PMATE
+PNCK
+POINTS
+POSK
+POSQ
+PT20
+PT23
+PT25
+PT25A
+PT5
+PT6A
+PT6AA
+PT6B
+PT6C
+PT6D
+PT6X
+PTSCK
+PTSL
+PTSW1
+PTSW2
+ROYALT
+RY04
+RY08
+RY0C
+SCORE
+SCRIX
+SORTM
+SR10
+SR15
+SR25
+SR30
+SR5
+START
+T1
+T2
+T3
+TBASE
+TBCPCL
+TBCPMV
+TBPLCL
+TBPLMV
+UM1
+UM10
+UM15
+UM16
+UM20
+UM21
+UM22
+UM30
+UM40
+UM5
+UM6
+UNMOVE
+VA10
+VA5
+VA6
+VA7
+VA8
+VA9
+VALM
+VALMOV
+XC10
+XC15
+XC18
+XC19
+XCHNG
+Z80_EXAF
+Z80_EXX
+Z80_LDAR
+Z80_RLD
+Z80_RRD
+back01
+back02
+back03
+back04
+back05
+back06
+rel001
+rel002
+rel003
+rel004
+rel005
+rel006
+rel007
+rel008
+rel009
+rel010
+rel011
+rel012
+rel013
+rel014
+rel015
+rel016
+rel017
+rel018
+rel019
+rel020
+rel021
+rel023
+rel024
+rel025
+rel026
+
+EQUATES
+
+BACT:  ATKLST+7
+BISHOP:  3
+BLACK:  80H
+BOARD:  34h
+BPAWN:  BLACK+PAWN
+DCOUNT:  1fh
+DPOINT:  18h
+KING:  6
+KNIGHT:  2
+MLFLG:  4
+MLFRP:  2
+MLPTR:  0
+MLTOP:  3
+MLVAL:  5
+PAWN:  1
+PIECES:  2ch
+PLIST:  0c7h
+PLISTD:  PLIST+10
+PVALUE:  25h
+QUEEN:  5
+ROOK:  4
+WACT:  ATKLST
+WHITE:  0
+
+INSTRUCTIONS
+
+.BLKB
+ > 1
+ > 100h
+ > 120
+ > 2048
+ > 8
+.BYTE
+ > +09, +11, -11, -09
+ > +10, +10, +11, +09
+ > +10, -10, +01, -01
+ > +21, +12, -08, -19
+ > -1
+ > -10, -10, -11, -09
+ > -21, -12, +08, +19
+ > 0
+ > 1, 3, 3, 5, 9, 10
+ > 14, 94
+ > 2
+ > 20, 16, 8, 0, 4, 0, 0
+ > 24, 95
+ > 34, 54, 10H
+ > 35, 55, 10H
+ > 4, 2, 3, 5, 6, 3, 2, 4
+ > 4, 4, 8, 4, 4, 8, 8
+ > 84, 64, 10H
+ > 85, 65, 10H
+.CODE
+ >
+.DATA
+ >
+.END
+ >
+.LOC
+ > START+0
+ > START+3F0H
+.WORD
+ > 0
+ > 0, 0, 0, 0, 0, 0
+ > 0, 0, 0, 0, 0, 0, 0
+ > 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+ > MLIST
+ > PLYIX
+ > TBASE
+ADD
+ > A
+ > B
+ > C
+ > D
+ > E
+ > M
+ADI
+ > 0C0H
+ > 10
+ > 10H
+ > 2
+ > 30H
+ > 3CH
+ > 60H
+ > 80H
+ANA
+ > A
+ANI
+ > 0F0H
+ > 0FH
+ > 7
+ > 7FH
+ > 87H
+ > 8FH
+BIT
+ > 0, A
+ > 0, C
+ > 0, D
+ > 0, E
+ > 1, B
+ > 2, B
+ > 2, D
+ > 3, A
+ > 3, M
+ > 4, D
+ > 4, M
+ > 4, MLFLG(X)
+ > 5, D
+ > 6, D
+ > 7, A
+ > 7, B
+ > 7, D
+ > 7, E
+ > 7, M
+CALL
+ > ADJPTR
+ > ADMOVE
+ > ASCEND
+ > ATKSAV
+ > ATTACK
+ > BITASN
+ > BLNKER
+ > CONVRT
+ > DIVIDE
+ > ENPSNT
+ > EVAL
+ > EXECMV
+ > FCDMAT
+ > FNDMOV
+ > GENMOV
+ > INCHK
+ > INCHK1
+ > INSPCE
+ > LIMIT
+ > MAKEMV
+ > MLTPLY
+ > MOVE
+ > NEXTAD
+ > PATH
+ > PINFND
+ > POINTS
+ > UNMOVE
+ > XCHNG
+CARRET
+ >
+CC
+ > SORTM
+CCIR
+ >
+CMP
+ > B
+ > C
+ > D
+ > E
+ > L
+ > M
+ > MLFRP(X)
+ > MLTOP(X)
+ > MLVAL(X)
+CNZ
+ > PNCK
+ > TBCPMV
+CPI
+ > -1
+ > 0FFH
+ > 1
+ > 10
+ > 13
+ > 15
+ > 1AH
+ > 2
+ > 22
+ > 27
+ > 29
+ > 3
+ > 34
+ > 35
+ > 5
+ > 60H
+ > 61
+ > 69
+ > 7
+ > 9
+ > 91
+ > 92
+ > 99
+ > BISHOP
+ > BPAWN
+ > KING
+ > KNIGHT
+ > PAWN
+ > PAWN+1
+ > QUEEN
+ > ROOK
+CZ
+ > BOOK
+ > CASTLE
+ > MPIECE
+DAD
+ > B
+ > D
+DADX
+ > D
+DCR
+ > A
+ > B
+ > D
+ > M
+DCX
+ > H
+DJNZ
+ > AT5
+ > DD04
+ > IB2
+ > ML04
+ > MM08
+ > MP5
+ > PF27
+ > back01
+ > back02
+ > back04
+ > back05
+ > back06
+DSBC
+ > D
+EXAF
+ >
+EXX
+ >
+INR
+ > A
+ > B
+ > C
+ > D
+ > L
+ > M
+INX
+ > D
+ > H
+ > X
+ > Y
+JC
+ > FM15
+JM
+ > AT04
+ > rel024
+JMP
+ > AT10
+ > AT13
+ > AT14
+ > CA5
+ > EV10
+ > FM15
+ > FM19
+ > FM36
+ > FM37
+ > FM5
+ > MP15
+ > MV1
+ > MV21
+ > MV5
+ > PF1
+ > PF2
+ > PF20
+ > PF5
+ > PT23
+ > PT6C
+ > PT6D
+ > PT6X
+ > SR15
+ > SR5
+ > UM1
+ > UM21
+ > UM5
+ > UM6
+ > XC10
+JMPR
+ > AS20
+ > AS25
+ > AT30
+ > CA15
+ > CP1C
+ > EX10
+ > MP31
+ > VA5
+ > rel024
+JNZ
+ > FM15
+ > GM5
+ > PF25
+ > PT5
+JP
+ > PF25
+ > rel003
+JPE
+ > PC1
+JRC
+ > AM10
+ > AT12
+ > AT21
+ > AT25
+ > FM18
+ > FM40
+ > MP20
+ > MP35
+ > PF10
+ > PT23
+ > PT6A
+ > PT6B
+ > PT6X
+ > rel011
+JRNC
+ > AT04
+ > AT10
+ > AT12
+ > MP10
+ > MP15
+ > MP25
+ > MP26
+ > MP31
+ > MP37
+ > SR30
+ > XC19
+JRNZ
+ > AT12
+ > AT15
+ > AT16
+ > BM5
+ > CA10
+ > CA20
+ > CP0C
+ > CP10
+ > EX04
+ > EX08
+ > EX0C
+ > FM30
+ > FM35
+ > MP15
+ > MV15
+ > MV40
+ > PC5
+ > PF20
+ > PT20
+ > PT23
+ > PT6X
+ > RY04
+ > RY0C
+ > UM15
+ > UM16
+ > UM40
+ > VA6
+ > VA9
+ > XC15
+ > rel001
+ > rel004
+ > rel016
+ > rel018
+JRZ
+ > AS19
+ > AS20
+ > AT14A
+ > AT14B
+ > AT20
+ > AT30
+ > AT31
+ > AT32
+ > BM9
+ > CA15
+ > CP24
+ > EV5
+ > EX14
+ > FM15
+ > FM25
+ > FM35
+ > FM36
+ > FM40
+ > GM10
+ > MM04
+ > MP10
+ > MP15
+ > MP30
+ > MP36
+ > MV10
+ > MV20
+ > MV21
+ > MV22
+ > MV30
+ > NX6
+ > PA1
+ > PA2
+ > PC3
+ > PF15
+ > PF5
+ > PT23
+ > PT25A
+ > PT6A
+ > PT6AA
+ > PT6D
+ > PT6X
+ > RY08
+ > SR25
+ > UM10
+ > UM20
+ > UM21
+ > UM22
+ > UM30
+ > VA10
+ > VA7
+ > XC18
+ > back03
+ > rel002
+ > rel005
+ > rel006
+ > rel007
+ > rel008
+ > rel009
+ > rel010
+ > rel012
+ > rel013
+ > rel014
+ > rel015
+ > rel017
+ > rel019
+ > rel020
+ > rel021
+ > rel023
+ > rel025
+ > rel026
+JZ
+ > AT12
+ > FM15
+ > LIM10
+ > PF19
+ > PF25
+ > PF26
+ > PT25
+LBCD
+ > MLPTRI
+ > MLPTRJ
+LDA
+ > BRDC
+ > BRDPOS
+ > CKFLG
+ > COLOR
+ > KOLOR
+ > M1
+ > M2
+ > M3
+ > M4
+ > MATEF
+ > MOVENO
+ > MTRL
+ > MVEMSG
+ > MVEMSG+1
+ > NPINS
+ > NPLY
+ > P1
+ > P2
+ > P3
+ > PLYMAX
+ > PTSCK
+ > PTSL
+ > PTSW1
+ > PTSW2
+ > SCORE+1
+ > T1
+ > T2
+ > VALM
+ > WACT
+LDAR
+ >
+LDAX
+ > D
+LDED
+ > MLNXT
+LHLD
+ > BESTM
+ > MLLST
+ > MLPTRI
+ > MLPTRJ
+ > SCRIX
+LIXD
+ > M1
+ > M2
+ > M3
+ > M4
+ > MLPTRJ
+ > NPINS
+ > T2
+ > T3
+LIYD
+ > INDX2
+ > M1
+ > M2
+ > T1
+LXI
+ > B, 0
+ > B, 01FCH
+ > B, 0FF03H
+ > D, -6
+ > D, 0
+ > D, 6
+ > D, 8
+ > D, BACT
+ > D, POSK
+ > H, 0
+ > H, ATKLST
+ > H, BACT
+ > H, BC0
+ > H, BESTM
+ > H, BMOVES-2
+ > H, BOARDA
+ > H, BRDC
+ > H, COLOR
+ > H, LINECT
+ > H, M1
+ > H, M2
+ > H, MATEF
+ > H, MLEND
+ > H, MLIST
+ > H, MLIST+1024
+ > H, MOVENO
+ > H, MTRL
+ > H, MV0
+ > H, NPINS
+ > H, NPLY
+ > H, P1
+ > H, P2
+ > H, PLISTA
+ > H, PLYIX-2
+ > H, PLYMAX
+ > H, PMATE
+ > H, POSK
+ > H, POSQ
+ > H, PTSL
+ > H, PTSW1
+ > H, PTSW2
+ > H, SCORE
+ > H, SCORE+1
+ > H, T1
+ > H, WACT
+ > X, BOARDA
+ > X, MLIST+1024
+ > X, POSK
+MOV
+ > 21(X), A
+ > 91(X), A
+ > A, -8(X)
+ > A, 9(X)
+ > A, B
+ > A, BOARD(X)
+ > A, C
+ > A, D
+ > A, DPOINT(Y)
+ > A, E
+ > A, H
+ > A, L
+ > A, M
+ > A, MLFRP(X)
+ > A, MLTOP(X)
+ > A, MLVAL(X)
+ > A, PVALUE(X)
+ > B, A
+ > B, C
+ > B, D
+ > B, DCOUNT(Y)
+ > B, L
+ > B, M
+ > BOARD(X), A
+ > BOARD(Y), E
+ > C, A
+ > C, D
+ > C, DIRECT(Y)
+ > C, M
+ > C, MLFRP(X)
+ > D, A
+ > D, C
+ > D, E
+ > D, M
+ > D, MLFLG(X)
+ > D, MLPTR+1(X)
+ > D, PVALUE(X)
+ > E, A
+ > E, BOARD(X)
+ > E, M
+ > E, MLPTR(X)
+ > E, MLTOP(X)
+ > H, A
+ > H, B
+ > L, A
+ > L, C
+ > M, A
+ > M, B
+ > M, C
+ > M, D
+ > M, E
+ > MLVAL(X), A
+ > PLIST(X), A
+ > PLISTD(X), C
+MVI
+ > 0(X), 25
+ > 1(X), 95
+ > 2(X), 24
+ > 3(X), 94
+ > 31(X), PAWN
+ > 41(X), 0
+ > 51(X), 0
+ > 61(X), 0
+ > 71(X), 0
+ > 81(X), BPAWN
+ > A, +2
+ > A, +6
+ > A, -2
+ > A, -6
+ > A, 0FFH
+ > A, 1
+ > A, 2
+ > A, 21
+ > A, 3
+ > A, 30
+ > A, 6
+ > A, 7
+ > A, 8
+ > A, 80H
+ > B, 0
+ > B, 10
+ > B, 120
+ > B, 14
+ > B, 16
+ > B, 4
+ > B, 8
+ > BOARD(X), 0
+ > C, 0
+ > C, 1
+ > C, 7
+ > D, 0
+ > D, 6
+ > E, 0
+ > E, 10
+ > E, QUEEN
+ > M, -1
+ > M, 0
+ > M, 40H
+ > M, 7
+NEG
+ >
+POP
+ > B
+ > D
+ > H
+ > PSW
+ > X
+ > Y
+PRTBLK
+ > CKMSG, 5
+ > MVEMSG, 5
+ > O.O, 5
+ > O.O.O, 5
+ > P.PEP, 5
+PUSH
+ > B
+ > D
+ > H
+ > PSW
+ > X
+ > Y
+RAL
+ >
+RARR
+ > D
+RC
+ >
+RES
+ > 2, E
+ > 3, E
+ > 4, E
+RET
+ >
+RLD
+ >
+RNC
+ >
+RNZ
+ >
+RRD
+ >
+RZ
+ >
+SBCD
+ > MLPTRJ
+SDED
+ > MLLST
+ > MLNXT
+ > MLPTRJ
+SET
+ > 0, E
+ > 0, M
+ > 1, B
+ > 2, B
+ > 2, E
+ > 3, E
+ > 4, E
+ > 4, M
+ > 5, D
+ > 5, M
+ > 6, D
+ > 6, M
+ > 7, A
+ > 7, D
+SHLD
+ > BESTM
+ > MLLST
+ > MLNXT
+ > MLPTRI
+ > MLPTRJ
+ > MVEMSG
+ > MVEMSG_2
+ > SCRIX
+SIXD
+ > MLPTRJ
+SLAR
+ > D
+SRAR
+ > A
+SRLR
+ > A
+STA
+ > BC0
+ > BRDC
+ > BRDPOS
+ > CKFLG
+ > COLOR
+ > INDX2
+ > M1
+ > M2
+ > M3
+ > M4
+ > MATEF
+ > MTRL
+ > MV0
+ > NPINS
+ > NPLY
+ > P1
+ > P2
+ > P3
+ > PMATE
+ > PTSCK
+ > PTSL
+ > PTSW1
+ > PTSW2
+ > T1
+ > T2
+ > T3
+ > VALM
+SUB
+ > A
+ > B
+ > C
+ > E
+ > M
+SUI
+ > 30H
+ > 40H
+XCHG
+ >
+XRA
+ > A
+ > M
+XRI
+ > 80H
