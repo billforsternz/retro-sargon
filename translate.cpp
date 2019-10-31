@@ -48,15 +48,21 @@ bool is_mem8( const std::string &parm, std::string &out )
     int len = parm.length();
     if( util::suffix(parm,"(X)" ))
     {
-        out = "[si+" + parm.substr(0,len-3) + "]";
+        if( parm[0] == '-' )
+            out = "byte ptr [esi-" + parm.substr(1,len-4) + "]";
+        else
+            out = "byte ptr [esi+" + parm.substr(0,len-3) + "]";
     }
     else if( util::suffix(parm,"(Y)" ))
     {
-        out = "[di+" + parm.substr(0,len-3) + "]";
+        if( parm[0] == '-' )
+            out = "byte ptr [edi-" + parm.substr(1,len-4) + "]";
+        else
+            out = "byte ptr [edi+" + parm.substr(0,len-3) + "]";
     }
     else if( isascii(parm[0]) && isalpha(parm[0]) )
     {
-        out = "["+ parm +"]";
+        out = "byte ptr ["+ parm +"]";
     }
     else
     {
@@ -73,7 +79,11 @@ bool is_mem16( const std::string &parm, std::string &out )
 
 bool is_imm16( const std::string &parm, std::string &out, const std::set<std::string> labels )
 {
-    auto it = labels.find(parm);
+    std::string temp = parm;
+    size_t offset = temp.find_first_of("+-");
+    if( offset != std::string::npos )
+        temp = temp.substr(0,offset);
+    auto it = labels.find(temp);
     if( it == labels.end() )
         out = parm;
     else
@@ -99,7 +109,7 @@ bool is_reg8( const std::string &parm, std::string &out )
     else if( parm == "L" )
         out = "bl";
     else if( parm == "M" )
-        out = "[bx]";
+        out = "byte ptr [ebx]";
     else
         ret = false;
     return ret;
@@ -109,15 +119,15 @@ bool is_reg16( const std::string &parm, std::string &out )
 {
     bool ret = true;
     if( parm == "H" )
-        out = "bx";
+        out = "ebx";
     else if( parm == "B" )
-        out = "cx";
+        out = "ecx";
     else if( parm == "D" )
-        out = "dx";
+        out = "edx";
     else if( parm == "X" )
-        out = "si";
+        out = "esi";
     else if( parm == "Y" )
-        out = "di";
+        out = "edi";
     else
         ret = false;
     return ret;
@@ -210,7 +220,14 @@ void translate(
         util::putline( out, "	include listing.inc" );
         util::putline( out, "	.model	flat" );
         util::putline( out, "" );
-        util::putline( out, "INCLUDELIB OLDNAMES" );
+        util::putline( out, "CCIR   MACRO ;todo" );
+        util::putline( out, "       ENDM" );
+        util::putline( out, "PRTBLK MACRO name, len ;todo" );
+        util::putline( out, "       ENDM" );
+        util::putline( out, "CARRET MACRO ;todo" );
+        util::putline( out, "       ENDM" );
+        // util::putline( out, "INCLUDELIB OLDNAMES" );
+        util::putline( out, "" );
     }
     util::putline(out,";" + line);
     if( label != "" )
@@ -443,7 +460,7 @@ void translate(
                 if( parm == "PSW" )
                     xlat = "lahf\n\tPUSH eax";
                 else if( is_reg16(parm,out) )
-                    xlat = util::sprintf( "PUSH e%s", out.c_str() );
+                    xlat = util::sprintf( "PUSH %s", out.c_str() );
                 else
                 {
                     printf( "Error: Illegal push parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
@@ -458,7 +475,7 @@ void translate(
                 if( parm == "PSW" )
                     xlat = "POP eax\n\tsahf";
                 else if( is_reg16(parm,out) )
-                    xlat = util::sprintf( "POP e%s", out.c_str() );
+                    xlat = util::sprintf( "POP %s", out.c_str() );
                 else
                 {
                     printf( "Error: Illegal pop parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
@@ -717,9 +734,9 @@ static void init()
     xlat1["XRI"] = "XOR al,%s";
     xlat2["XRI"] = imm8;
 
-    // CMP reg8 -> CMP al,reg8
+    // CMP reg8_mem8 -> CMP al,reg8_mem8
     xlat1["CMP"] = "CMP al,%s";
-    xlat2["CMP"] = reg8;
+    xlat2["CMP"] = reg8_mem8;
 
     // CPI imm8 -> CMP al, imm8
     xlat1["CPI"] = "CMP al,%s";
@@ -737,20 +754,20 @@ static void init()
     // 16 bit arithmetic
     //
 
-    // DAD reg16 -> LAHF; ADD bx,reg16; SAHF        //CY (only) should be affected, but our emulation preserves flags
-    xlat1["DAD"] = "LAHF\n\tADD bx,%s\n\tSAHF";
+    // DAD reg16 -> LAHF; ADD ebx,reg16; SAHF        //CY (only) should be affected, but our emulation preserves flags
+    xlat1["DAD"] = "LAHF\n\tADD ebx,%s\n\tSAHF";
     xlat2["DAD"] = reg16;
 
-    // DADX reg16 -> LAHF; ADD si,reg16; SAHF       //CY (only) should be affected, but our emulation preserves flags
-    xlat1["DADX"] = "LAHF\n\tADD si,%s\n\tSAHF";
+    // DADX reg16 -> LAHF; ADD esi,reg16; SAHF       //CY (only) should be affected, but our emulation preserves flags
+    xlat1["DADX"] = "LAHF\n\tADD esi,%s\n\tSAHF";
     xlat2["DADX"] = reg16;
 
-    // DADY reg16 -> LAHF; ADD di,reg16; SAHF;      //CY (only) should be affected, but our emulation preserves flags
-    xlat1["DADY"] = "LAHF\n\tADD di,%s\n\tSAHF";    // not actually used in codebase
+    // DADY reg16 -> LAHF; ADD edi,reg16; SAHF;      //CY (only) should be affected, but our emulation preserves flags
+    xlat1["DADY"] = "LAHF\n\tADD edi,%s\n\tSAHF";    // not actually used in codebase
     xlat2["DADY"] = reg16;
 
-    // DSBC reg16 -> SBB bx,reg16
-    xlat1["DSBC"] = "SBB bx,%s";
+    // DSBC reg16 -> SBB ebx,reg16
+    xlat1["DSBC"] = "SBB ebx,%s";
     xlat2["DSBC"] = reg16;
 
     // INX reg16 -> LAHF; INC reg16; SAHF;      ## INC reg16; Z80 flags unaffected, X86 INC preserve CY only
@@ -865,8 +882,8 @@ static void init()
     xlat1["JC"] = "JC %s";
     xlat2["JC"] = echo;
 
-    // JM addr -> JM addr  (jump sign negative)
-    xlat1["JM"] = "JM %s";
+    // JM addr -> JS addr  (jump if sign bit true = most sig bit true = negative)
+    xlat1["JM"] = "JS %s";
     xlat2["JM"] = echo;
 
     // JMP addr -> JMP addr
@@ -918,27 +935,27 @@ static void init()
     xlat2["LDA"] = mem8;
 
     // LDAX reg16 -> MOV al,[reg16]
-    xlat1["LDAX"] = "MOV al,%s";
+    xlat1["LDAX"] = "MOV al,[%s]";
     xlat2["LDAX"] = reg16;
 
-    // LHLD mem16 -> MOV bx,[mem16]
-    xlat1["LHLD"] = "MOV bx,%s";
+    // LHLD mem16 -> MOV ebx,[mem16]
+    xlat1["LHLD"] = "MOV ebx,%s";
     xlat2["LHLD"] = mem16;
 
-    // LBCD mem16 -> MOV cx,[mem16]
-    xlat1["LBCD"] = "MOV cx,%s";
+    // LBCD mem16 -> MOV ecx,[mem16]
+    xlat1["LBCD"] = "MOV ecx,%s";
     xlat2["LBCD"] = mem16;
 
-    // LDED mem16 -> MOV dx,[mem16]
-    xlat1["LDED"] = "MOV dx,%s";
+    // LDED mem16 -> MOV edx,[mem16]
+    xlat1["LDED"] = "MOV edx,%s";
     xlat2["LDED"] = mem16;
 
-    // LIXD mem16 -> MOV si,[mem16]
-    xlat1["LIXD"] = "MOV si,%s";
+    // LIXD mem16 -> MOV esi,[mem16]
+    xlat1["LIXD"] = "MOV esi,%s";
     xlat2["LIXD"] = mem16;
 
-    // LIYD mem16 -> MOV di,[mem16]
-    xlat1["LIYD"] = "MOV di,%s";
+    // LIYD mem16 -> MOV edi,[mem16]
+    xlat1["LIYD"] = "MOV edi,%s";
     xlat2["LIYD"] = mem16;
 
     // LXI reg16, imm16 -> MOV reg16, imm16 (if imm16 is a label precede it with offset)
@@ -953,20 +970,20 @@ static void init()
     xlat1["STA"]  = "MOV %s,al";
     xlat2["STA"]  = mem8;
 
-    // SHLD mem16 -> mov [mem16],bx
-    xlat1["SHLD"] = "MOV %s,bx";
+    // SHLD mem16 -> mov [mem16],ebx
+    xlat1["SHLD"] = "MOV %s,ebx";
     xlat2["SHLD"] = mem16;
 
-    // SBCD mem16 -> MOV [mem16],cx
-    xlat1["SBCD"] = "MOV %s,cx";
+    // SBCD mem16 -> MOV [mem16],ecx
+    xlat1["SBCD"] = "MOV %s,ecx";
     xlat2["SBCD"] = mem16;
 
-    // SDED mem16 -> mov [mem16],dx
-    xlat1["SDED"] = "MOV %s,dx";
+    // SDED mem16 -> mov [mem16],edx
+    xlat1["SDED"] = "MOV %s,edx";
     xlat2["SDED"] = mem16;
 
-    // SIXD mem16 -> mov [mem16],si
-    xlat1["SIXD"] = "MOV %s,si";
+    // SIXD mem16 -> mov [mem16],esi
+    xlat1["SIXD"] = "MOV %s,esi";
     xlat2["SIXD"] = mem16;
 
     //
@@ -977,8 +994,8 @@ static void init()
     xlat1["NEG"] = "NEG al";
     xlat2["NEG"] = none;
 
-    // XCHG -> XCHG bx,dx
-    xlat1["XCHG"] = "XCHG bx,dx";
+    // XCHG -> XCHG ebx,edx
+    xlat1["XCHG"] = "XCHG ebx,edx";
     xlat2["XCHG"] = none;
 
     // EXAF -> macro/call
@@ -994,13 +1011,23 @@ static void init()
     xlat2["LDAR"] = none;
 
     //
+    // Macros
+    //
+    xlat1["CCIR"] = "CCIR";
+    xlat2["CCIR"] = none;
+    xlat1["CARRET"] = "CARRET";
+    xlat2["CARRET"] = none;
+    xlat1["PRTBLK"] = "PRTBLK %s";
+    xlat2["PRTBLK"] = echo;
+
+    //
     // Directives
     //
     xlat1[".BLKB"] = "DB %s DUP (?)";
     xlat2[".BLKB"] = echo;
     xlat1[".BYTE"] = "DB %s";
     xlat2[".BYTE"] = echo;
-    xlat1[".WORD"] = "DW %s";
+    xlat1[".WORD"] = "DD %s";
     xlat2[".WORD"] = echo;
     xlat1[".LOC"] = "ORG %s";
     xlat2[".LOC"] = echo;

@@ -99,16 +99,8 @@ NORMAL label: "Z80_EXX" instruction: "RET"
 NORMAL label: "Z80_RLD" instruction: "RET"
 NORMAL label: "Z80_RRD" instruction: "RET"
 NORMAL label: "Z80_LDAR" instruction: "RET"
-NORMAL label: "CHARTR" instruction: "RET"
-NORMAL label: "PGIFND" instruction: "RET"
-NORMAL label: "MATED" instruction: "RET"
-NORMAL label: "ANALYS" instruction: "RET"
 NORMAL label: "FCDMAT" instruction: "RET"
-NORMAL label: "TBPLCL" instruction: "RET"
-NORMAL label: "TBCPCL" instruction: "RET"
-NORMAL label: "TBPLMV" instruction: "RET"
 NORMAL label: "TBCPMV" instruction: "RET"
-NORMAL label: "DSPBRD" instruction: "RET"
 NORMAL label: "INSPCE" instruction: "RET"
 NORMAL label: "BLNKER" instruction: "RET"
 NORMAL label: "INITBD" instruction: "MVI" parameters: "B", "120"
@@ -1552,7 +1544,6 @@ LABELS
 ADJPTR
 ADMOVE
 AM10
-ANALYS
 ANBDPS
 AS19
 AS20
@@ -1594,7 +1585,6 @@ CA15
 CA20
 CA5
 CASTLE
-CHARTR
 CKFLG
 COLOR
 CONVRT
@@ -1606,7 +1596,6 @@ CPTRMV
 DD04
 DIRECT
 DIVIDE
-DSPBRD
 ENPSNT
 EV10
 EV5
@@ -1648,7 +1637,6 @@ M2
 M3
 M4
 MAKEMV
-MATED
 MATEF
 ML04
 MLEND
@@ -1710,7 +1698,6 @@ PF25
 PF26
 PF27
 PF5
-PGIFND
 PINFND
 PLISTA
 PLYIX
@@ -1752,10 +1739,7 @@ T1
 T2
 T3
 TBASE
-TBCPCL
 TBCPMV
-TBPLCL
-TBPLMV
 UM1
 UM10
 UM15

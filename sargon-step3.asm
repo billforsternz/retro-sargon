@@ -417,7 +417,6 @@ IB2:    MOV     A,-8(X)         ; Fill non-border squares
         MVI     2(X),24
         MVI     3(X),94
         RET
-        .END
 
 ;X p29
 ;**********************************************************
@@ -469,6 +468,7 @@ PA1:    MVI     A,2     ; Set same color flag
         RET             ; Return
 PA2:    MVI     A,3     ; Set off board flag
         RET             ; Return
+        .END
 
 ;X p30
 ;*****************************************************************

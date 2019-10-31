@@ -30,7 +30,7 @@ int main( int argc, const char *argv[] )
 {
     util::tests();
 #if 1
-    convert("sargon-step3.asm","sargon-step3.txt");
+    convert("sargon-step4.asm","sargon-step4.txt");
 #else
     bool ok = (argc==3);
     if( !ok )
