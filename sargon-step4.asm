@@ -475,11 +475,11 @@ IB2:    MOV     A,-8(X)         ; Fill non-border squares
 ;**********************************************************
 PATH:   LXI     H,M2    ; Get previous position
         MOV     A,M
-        ADD     C       ; Add diection constant
+        ADD     C       ; Add direction constant
         MOV     M,A     ; Save new position
         LIXD    M2      ; Load board index
         MOV     A,BOARD(X)      ; Get contents of board
-        CPI     -1      ; In boarder area ?
+        CPI     -1      ; In border area ?
         JRZ     PA2     ; Yes - jump
         STA     P2      ; Save piece
         ANI     7       ; Clear flags

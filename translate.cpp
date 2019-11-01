@@ -217,7 +217,6 @@ void translate(
         once = false;
         util::putline( out, "	.686P" );
         util::putline( out, "	.XMM");
-        util::putline( out, "	include listing.inc" );
         util::putline( out, "	.model	flat" );
         util::putline( out, "" );
         util::putline( out, "CCIR   MACRO ;todo" );

@@ -14,8 +14,13 @@
 
 static void convert( std::string fin, std::string fout );
 
+struct shim_parameters
+{
+    unsigned char *board;
+};
+
 extern "C" {
-    int base_function();
+    int shim_function( shim_parameters *parm );
 }
 
 extern void translate(
@@ -29,9 +34,20 @@ extern void translate(
 int main( int argc, const char *argv[] )
 {
     util::tests();
-#if 1
+    shim_parameters sh;
+    shim_function( &sh );
+    const unsigned char *p = sh.board;
+    printf( "Board layout\n" );
+    for( int i=0; i<12; i++ )
+    {
+        for( int j=0; j<10; j++ )
+            printf( "%02x%c", *p++, j+1<10?' ':'\n' );
+    }
+
+#if 0
     convert("sargon-step4.asm","sargon-step4.txt");
-#else
+#endif
+#if 0
     bool ok = (argc==3);
     if( !ok )
     {
@@ -47,7 +63,7 @@ int main( int argc, const char *argv[] )
     return 0;
 }
 
-enum statement_typ {empty, discard, illegal, comment_only, directive, equate, normal};
+enum statement_typ {empty, discard, illegal, comment_only, comment_only_indented, directive, equate, normal};
 
 struct statement
 {
@@ -140,9 +156,9 @@ static void convert( std::string fin, std::string fout )
                 stmt.comment = line.substr(offset+1);
                 line = line.substr(0,offset);
                 util::rtrim(line);
-                if( offset == 0 || line.length()==0 )
+                if( offset==0 || line.length()==0 )
                 {
-                    stmt.typ = comment_only;
+                    stmt.typ = offset==0 ? comment_only : comment_only_indented;
                     done = true;
                 }
             }
@@ -236,7 +252,9 @@ static void convert( std::string fin, std::string fout )
         switch(stmt.typ)
         {
             case empty:
-                line_out = "EMPTY"; done=true; break;
+                line_out = "EMPTY"; done=true;
+                util::putline( asm_out, original_line );
+                break;
             case discard:
                 line_out = "DISCARD"; done=true; break;
             case illegal:
@@ -245,8 +263,10 @@ static void convert( std::string fin, std::string fout )
                 done = true;
                 break;
             case comment_only:
-                line_out = "COMMENT_ONLY> ";
+            case comment_only_indented:
+                line_out = stmt.typ==comment_only_indented ? "COMMENT_ONLY> " : "COMMENT_ONLY_INDENTED> ";
                 line_out += stmt.comment;
+                util::putline( asm_out, original_line );
                 done = true;
                 break;
             case directive:             // looks like "directives" are simply unindented normal instructions
