@@ -11,7 +11,7 @@
 #include <set>
 #include <algorithm>
 #include "util.h"
-
+#include "translate.h"
 
 enum ParameterPattern
 {
@@ -31,15 +31,21 @@ enum ParameterPattern
     reg8_mem8,
     reg8_mem8_reg8_mem8,
     reg8_mem8_imm8,
-    reg8_imm8,
     reg16_imm16,
     none
 };
 
-static std::map<const std::string,const char *> xlat1;
-static std::map<const std::string,ParameterPattern> xlat2;
-static void init();
-static std::string detabify( const std::string &s );
+static int skip_counter=1;
+
+struct MnemonicConversion
+{
+    const char *x86;
+    const char *z80;
+    const char *hybrid;
+    ParameterPattern pp;
+};
+
+static std::map<std::string,MnemonicConversion> xlat;
 
 
 bool is_mem8( const std::string &parm, std::string &out )
@@ -77,7 +83,7 @@ bool is_mem16( const std::string &parm, std::string &out )
     return true;
 }
 
-bool is_imm16( const std::string &parm, std::string &out, const std::set<std::string> labels )
+bool is_imm16( const std::string &parm, std::string &out, const std::set<std::string> &labels )
 {
     std::string temp = parm;
     size_t offset = temp.find_first_of("+-");
@@ -196,449 +202,699 @@ bool is_n_clr( const std::string &parm, std::string &out )
     return ret;
 }
 
-static std::set<std::string> labels;
-void translate(
-    std::ofstream &out,
-    const std::string &line,
-    const std::string &label,
-    const std::string &equate, 
-    const std::string &instruction,
-    const std::vector<std::string> &parameters )
+bool is_mem8_z80( const std::string &parm, std::string &out, bool hybrid )
 {
-    static int skip_counter=1;
-    static bool data_mode=true;
-    static bool once=true;
-    static bool kill_switch;
-    if( kill_switch )
-        return;
-    if( once )
+    bool ret = true;
+    int len = parm.length();
+    if( util::suffix(parm,"(X)" ))
     {
-        init();
-        once = false;
-        util::putline( out, "	.686P" );
-        util::putline( out, "	.XMM");
-        util::putline( out, "	.model	flat" );
-        util::putline( out, "" );
-        util::putline( out, "CCIR   MACRO ;todo" );
-        util::putline( out, "       ENDM" );
-        util::putline( out, "PRTBLK MACRO name, len ;todo" );
-        util::putline( out, "       ENDM" );
-        util::putline( out, "CARRET MACRO ;todo" );
-        util::putline( out, "       ENDM" );
-        // util::putline( out, "INCLUDELIB OLDNAMES" );
-        util::putline( out, "" );
+        if( parm[0] == '-' )
+            out = (hybrid?"(si-":"(ix-") + parm.substr(1,len-4) + ")";
+        else
+            out = (hybrid?"(si+":"(ix+") + parm.substr(0,len-3) + ")";
     }
-    util::putline(out,";" + line);
-    if( label != "" )
-        labels.insert(label);
-    std::string line_out;
-    if( equate != "" )
+    else if( util::suffix(parm,"(Y)" ))
     {
-        line_out = equate;
-        line_out += "\tEQU";
-        bool first = true;
-        for( std::string s: parameters )
-        {
-            if(first && s[0]=='.')
-                s[0]='?';
-            line_out += first ? "\t" : ", ";
-            first = false;
-            line_out += s;
-        }
-        if( first )
-        {
-            printf( "Error: No EQU parameters, line=[%s]\n", line.c_str() );
-        }
+        if( parm[0] == '-' )
+            out = (hybrid?"(di-":"(iy-") + parm.substr(1,len-4) + ")";
+        else
+            out = (hybrid?"(di+":"(iy+") + parm.substr(0,len-3) + ")";
     }
-    else if( label != "" && instruction=="" )
+    else if( isascii(parm[0]) && isalpha(parm[0]) )
     {
-        line_out = label;
-        line_out += (data_mode?"\tEQU $":":");
+        out = "("+ parm +")";
     }
-    else if( instruction==".DATA" || instruction==".CODE" || instruction==".END" ) // My own invented directives
+    else
     {
-        data_mode = (instruction==".DATA");
-        if( instruction == ".DATA" )
-        {
-            line_out =
-                "_DATA\tSEGMENT";
-        }
-        else if( instruction == ".CODE" )
-        {
-            line_out =
-                "_DATA\tENDS\n_TEXT\tSEGMENT";
-        }
-        else if( instruction == ".END" )
-        {
-            line_out =
-                "_TEXT\tENDS\nEND";
-            kill_switch = true;
-        }
+        ret = false;
     }
-    else 
-    {
-        if( label != "" )
-        {
-            line_out = label;
-            line_out += (data_mode?"":":");
-        }
-        line_out += "\t";
-        auto it1 = xlat1.find(instruction.c_str());
-        if( it1 == xlat1.end() )
-        {
-            printf( "Error: Unknown instruction %s, line=[%s]\n", instruction.c_str(), line.c_str() );
-            return;
-        }
-        const char *format = it1->second;
-        auto it2 = xlat2.find(instruction.c_str());
-        if( it2 == xlat2.end() )
-        {
-            printf( "Error: Unknown instruction %s, line=[%s]\n", instruction.c_str(), line.c_str() );
-            return;
-        }
-        ParameterPattern pp = it2->second;
-        std::string parameters_listed;
-        bool first = true;
-        for( const std::string s: parameters )
-        {
-            parameters_listed += first ? "" : ", ";
-            first = false;
-            parameters_listed += s;
-        }
-        std::string xlat(format);
-        xlat += "\t";
-        xlat += parameters_listed;
-        xlat += " (not yet)";
-        if( pp!=none && pp!=jump_around && parameters.size()<1 )
-        {
-            printf( "Error: Expect at least one parameter, instruction=[%s], line=[%s]\n", instruction.c_str(), line.c_str() );
-            return;
-        }
-        switch(pp)
-        {
-            default:
-            {
-                printf( "Error: Unknown parameter pattern, instruction=[%s], line=[%s]\n", instruction.c_str(), line.c_str() );
-                return;
-            }
-            case echo:
-            {
-                xlat = util::sprintf( format, parameters_listed.c_str() );
-                break;
-            }
-            case imm8:
-            {
-                std::string parm = parameters[0];
-                std::string out;
-                if( is_imm8(parm,out) )
-                    xlat = util::sprintf( format, out.c_str() );
-                else
-                {
-                    printf( "Error: Illegal imm8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                break;
-            }
-            case jump_addr_around:
-            {
-                std::string temp = util::sprintf( "skip%d", skip_counter++ );
-                xlat = util::sprintf( format, temp.c_str(), parameters[0].c_str(), temp.c_str() );
-                break;
-            }
-            case jump_around:
-            {
-                std::string temp = util::sprintf( "skip%d", skip_counter++ );
-                xlat = util::sprintf( format, temp.c_str(), temp.c_str() );
-                break;
-            }
-            case mem8:
-            {
-                std::string parm = parameters[0];
-                std::string out;
-                if( is_mem8(parm,out) )
-                    xlat = util::sprintf( format, out.c_str() );
-                else
-                {
-                    printf( "Error: Illegal mem8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                break;
-            }
-            case mem16:
-            {
-                std::string parm = parameters[0];
-                std::string out;
-                if( is_mem16(parm,out) )
-                    xlat = util::sprintf( format, out.c_str() );
-                else
-                {
-                    printf( "Error: Illegal mem16 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                break;
-            }
-            case set_n_reg8_mem8:
-            {
-                if( parameters.size() < 2 )
-                {
-                    printf( "Error: Need two parameters, line=[%s]\n", line.c_str() );
-                    return;
-                }
-                std::string parm = parameters[0];
-                std::string out1;
-                if( !is_n_set(parm,out1) )
-                {
-                    printf( "Error: Unknown n parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                parm = parameters[1];
-                std::string out2;
-                if( is_reg8_mem8(parm,out2) )
-                    xlat = util::sprintf( format, out2.c_str(), out1.c_str() );     // note reverse order
-                else
-                {
-                    printf( "Error: Illegal reg8_mem8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                break;
-            }
-            case set_n_reg8:
-            {
-                if( parameters.size() < 2 )
-                {
-                    printf( "Error: Need two parameters, line=[%s]\n", line.c_str() );
-                    return;
-                }
-                std::string parm = parameters[0];
-                std::string out1;
-                if( !is_n_set(parm,out1) )
-                {
-                    printf( "Error: Unknown n parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                parm = parameters[1];
-                std::string out2;
-                if( is_reg8(parm,out2) )
-                    xlat = util::sprintf( format, out2.c_str(), out1.c_str() );     // note reverse order
-                else
-                {
-                    printf( "Error: Illegal reg8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                break;
-            }
-            case clr_n_reg8:
-            {
-                if( parameters.size() < 2 )
-                {
-                    printf( "Error: Need two parameters, line=[%s]\n", line.c_str() );
-                    return;
-                }
-                std::string parm = parameters[0];
-                std::string out1;
-                if( !is_n_clr(parm,out1) )
-                {
-                    printf( "Error: Unknown n parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                parm = parameters[1];
-                std::string out2;
-                if( is_reg8(parm,out2) )
-                    xlat = util::sprintf( format, out2.c_str(), out1.c_str() );     // note reverse order
-                else
-                {
-                    printf( "Error: Illegal reg8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                break;
-            }
-            case push_parameter:
-            {
-                std::string parm = parameters[0];
-                std::string out;
-                if( parm == "PSW" )
-                    xlat = "lahf\n\tPUSH eax";
-                else if( is_reg16(parm,out) )
-                    xlat = util::sprintf( "PUSH %s", out.c_str() );
-                else
-                {
-                    printf( "Error: Illegal push parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                break;
-            }
-            case pop_parameter:
-            {
-                std::string parm = parameters[0];
-                std::string out;
-                if( parm == "PSW" )
-                    xlat = "POP eax\n\tsahf";
-                else if( is_reg16(parm,out) )
-                    xlat = util::sprintf( "POP %s", out.c_str() );
-                else
-                {
-                    printf( "Error: Illegal pop parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                break;
-            }
-            case reg8:
-            {
-                std::string parm = parameters[0];
-                std::string out;
-                if( is_reg8(parm,out) )
-                    xlat = util::sprintf( format, out.c_str() );
-                else
-                {
-                    printf( "Error: Unknown reg8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                break;
-            }
-            case reg16:
-            {
-                std::string parm = parameters[0];
-                std::string out;
-                if( is_reg16(parm,out) )
-                    xlat = util::sprintf( format, out.c_str() );
-                else
-                {
-                    printf( "Error: Unknown reg16 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                break;
-            }
-            case reg8_mem8:
-            {
-                std::string parm = parameters[0];
-                std::string out;
-                if( is_reg8_mem8(parm,out) )
-                    xlat = util::sprintf( format, out.c_str() );
-                else
-                {
-                    printf( "Error: Unknown reg8_mem8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                break;
-            }
-            case reg8_mem8_reg8_mem8:
-            {
-                if( parameters.size() < 2 )
-                {
-                    printf( "Error: Need two parameters, line=[%s]\n", line.c_str() );
-                    return;
-                }
-                std::string parm = parameters[0];
-                std::string out1;
-                if( !is_reg8_mem8(parm,out1) )
-                {
-                    printf( "Error: Unknown reg8_mem8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                parm = parameters[1];
-                std::string out2;
-                if( is_reg8_mem8(parm,out2) )
-                    xlat = util::sprintf( format, out1.c_str(), out2.c_str() );
-                else
-                {
-                    printf( "Error: Unknown reg8_mem8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                break;
-            }
-            case reg8_mem8_imm8:
-            {
-                if( parameters.size() < 2 )
-                {
-                    printf( "Error: Need two parameters, line=[%s]\n", line.c_str() );
-                    return;
-                }
-                std::string parm = parameters[0];
-                std::string out1;
-                if( !is_reg8_mem8(parm,out1) )
-                {
-                    printf( "Error: Unknown reg8_mem8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                parm = parameters[1];
-                std::string out2;
-                if( is_imm8(parm,out2) )
-                    xlat = util::sprintf( format, out1.c_str(), out2.c_str() );
-                else
-                {
-                    printf( "Error: Unknown imm8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                break;
-            }
-            case reg8_imm8:
-            {
-                if( parameters.size() < 2 )
-                {
-                    printf( "Error: Need two parameters, line=[%s]\n", line.c_str() );
-                    return;
-                }
-                std::string parm = parameters[0];
-                std::string out1;
-                if( !is_reg8(parm,out1) )
-                {
-                    printf( "Error: Unknown reg8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                parm = parameters[1];
-                std::string out2;
-                if( is_imm8(parm,out2) )
-                    xlat = util::sprintf( format, out1.c_str(), out2.c_str() );
-                else
-                {
-                    printf( "Error: Illegal imm8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                break;
-            }
-            case reg16_imm16:
-            {
-                if( parameters.size() < 2 )
-                {
-                    printf( "Error: Need two parameters, line=[%s]\n", line.c_str() );
-                    return;
-                }
-                std::string parm = parameters[0];
-                std::string out1;
-                if( !is_reg16(parm,out1) )
-                {
-                    printf( "Error: Unknown reg16 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                parm = parameters[1];
-                std::string out2;
-                if( is_imm16(parm,out2,labels) )
-                    xlat = util::sprintf( format, out1.c_str(), out2.c_str() );
-                else
-                {
-                    printf( "Error: Illegal imm16 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
-                    return;
-                }
-                break;
-            }
-            case none:
-            {
-                xlat = std::string(format);
-                break;
-            }
-        }
-        line_out += xlat;
-    }
-    std::string s = detabify(line_out);
-    util::putline(out,s);
+    return ret;
 }
 
-static std::string detabify( const std::string &s )
+bool is_mem16_z80( const std::string &parm, std::string &out )
+{
+    out = "("+ parm +")";
+    return true;
+}
+
+bool is_imm16_z80( const std::string &parm, std::string &out )
+{
+    out = parm;
+    return true;
+}
+
+bool is_reg8_z80( const std::string &parm, std::string &out, bool hybrid )
+{
+    bool ret = true;
+    if( parm == "A" )
+        out = hybrid ? "al" : "a";
+    else if( parm == "B" )
+        out = hybrid ? "ch" : "b";
+    else if( parm == "C" )
+        out = hybrid ? "cl" : "c";
+    else if( parm == "D" )
+        out = hybrid ? "dh" : "d";
+    else if( parm == "E" )
+        out = hybrid ? "dl" : "e";
+    else if( parm == "H" )
+        out = hybrid ? "bh" : "h";
+    else if( parm == "L" )
+        out = hybrid ? "bl" : "l";
+    else if( parm == "M" )
+        out = hybrid ? "(bx)" : "(hl)";
+    else
+        ret = false;
+    return ret;
+}
+
+bool is_reg16_z80( const std::string &parm, std::string &out, bool hybrid )
+{
+    bool ret = true;
+    if( parm == "H" )
+        out = hybrid ? "bx" : "hl";
+    else if( parm == "B" )
+        out = hybrid ? "cx" : "bc";
+    else if( parm == "D" )
+        out = hybrid ? "dx" : "de";
+    else if( parm == "X" )
+        out = hybrid ? "si" : "ix";
+    else if( parm == "Y" )
+        out = hybrid ? "di" : "iy";
+    else
+        ret = false;
+    return ret;
+}
+
+bool is_reg8_mem8_z80( const std::string &parm, std::string &out, bool hybrid )
+{
+    bool ret = true;
+    if( !is_reg8_z80(parm,out,hybrid) )
+        ret = is_mem8_z80(parm,out,hybrid);
+    return ret;
+}
+
+bool is_imm8_z80( const std::string &parm, std::string &out )
+{
+    bool ret = true;
+    out = parm; // don't actually check anything at least for now
+    return ret;
+}
+
+
+void xlat_registers_to_hybrid( std::string &s )
+{
+    util::replace_all( s, "a,", "al," );
+    util::replace_all( s, "b,", "ch," );
+    util::replace_all( s, "c,", "cl," );
+    util::replace_all( s, "d,", "dh," );
+    util::replace_all( s, "e,", "dl," );
+    util::replace_all( s, "h,", "bh," );
+    util::replace_all( s, "l,", "bl," );
+}
+
+// Return true if translated    
+bool translate_z80( const std::string &line, const std::string &instruction, const std::vector<std::string> &parameters, bool hybrid, std::string &z80_out )
+{
+    z80_out = "";
+    auto it1 = xlat.find(instruction.c_str());
+    if( it1 == xlat.end() )
+    {
+        printf( "Error: Unknown instruction %s, line=[%s]\n", instruction.c_str(), line.c_str() );
+        return false;
+    }
+
+    MnemonicConversion &mc = it1->second;
+    const char *format = (hybrid && mc.hybrid) ? mc.hybrid : mc.z80;
+    ParameterPattern pp = mc.pp;
+    std::string parameters_listed;
+    bool first = true;
+    for( const std::string s: parameters )
+    {
+        parameters_listed += first ? "" : ",";
+        first = false;
+        parameters_listed += s;
+    }
+    if( pp!=none && pp!=jump_around && parameters.size()<1 )
+    {
+        printf( "Error: Expect at least one parameter, instruction=[%s], line=[%s]\n", instruction.c_str(), line.c_str() );
+        return false;
+    }
+    switch( pp )
+    {
+        default:
+        {
+            printf( "Error: Unknown parameter pattern, instruction=[%s], line=[%s]\n", instruction.c_str(), line.c_str() );
+            return false;
+        }
+        case jump_around:   // z80 doesn't need to jump around
+        case none:
+        {
+            z80_out = std::string(format);
+            break;
+        }
+        case jump_addr_around:   // z80 doesn't need to jump around
+        case echo:
+        {
+            z80_out = util::sprintf( format, parameters_listed.c_str() );
+            break;
+        }
+        case imm8:
+        {
+            std::string parm = parameters[0];
+            std::string out;
+            if( is_imm8_z80(parm,out) )
+                z80_out = util::sprintf( format, out.c_str() );
+            else
+            {
+                printf( "Error: Illegal imm8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case mem8:
+        {
+            std::string parm = parameters[0];
+            std::string out;
+            if( is_mem8_z80(parm,out,hybrid) )
+                z80_out = util::sprintf( format, out.c_str() );
+            else
+            {
+                printf( "Error: Illegal mem8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case mem16:
+        {
+            std::string parm = parameters[0];
+            std::string out;
+            if( is_mem16_z80(parm,out) )
+                z80_out = util::sprintf( format, out.c_str() );
+            else
+            {
+                printf( "Error: Illegal mem16 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case set_n_reg8_mem8:
+        case clr_n_reg8:
+        case set_n_reg8:
+        {
+            if( parameters.size() < 2 )
+            {
+                printf( "Error: Need two parameters, line=[%s]\n", line.c_str() );
+                return false;
+            }
+            std::string parm = parameters[1];
+            std::string out;
+            if( is_reg8_mem8_z80(parm,out,hybrid) )
+                z80_out = util::sprintf( format, parameters[0].c_str(), out.c_str() );
+            else if( is_reg8_z80(parm,out,hybrid) )
+                z80_out = util::sprintf( format, parameters[0].c_str(), out.c_str() );
+            else
+                printf( "Error: Illegal second parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+            break;
+        }
+        case push_parameter:
+        {
+            std::string parm = parameters[0];
+            std::string out;
+            if( parm == "PSW" )
+                z80_out = "PUSH\taf";
+            else if( is_reg16_z80(parm,out,hybrid) )
+                z80_out = util::sprintf( "PUSH\t%s", out.c_str() );
+            else
+            {
+                printf( "Error: Illegal push parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case pop_parameter:
+        {
+            std::string parm = parameters[0];
+            std::string out;
+            if( parm == "PSW" )
+                z80_out = "POP\taf";
+            else if( is_reg16_z80(parm,out,hybrid) )
+                z80_out = util::sprintf( "POP\t%s", out.c_str() );
+            else
+            {
+                printf( "Error: Illegal pop parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case reg8:
+        {
+            std::string parm = parameters[0];
+            std::string out;
+            if( is_reg8_z80(parm,out,hybrid) )
+                z80_out = util::sprintf( format, out.c_str() );
+            else
+            {
+                printf( "Error: Unknown reg8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case reg16:
+        {
+            std::string parm = parameters[0];
+            std::string out;
+            if( is_reg16_z80(parm,out,hybrid) )
+                z80_out = util::sprintf( format, out.c_str() );
+            else
+            {
+                printf( "Error: Unknown reg16 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case reg8_mem8:
+        {
+            std::string parm = parameters[0];
+            std::string out;
+            if( is_reg8_mem8_z80(parm,out,hybrid) )
+                z80_out = util::sprintf( format, out.c_str() );
+            else
+            {
+                printf( "Error: Unknown reg8_mem8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case reg8_mem8_reg8_mem8:
+        {
+            if( parameters.size() < 2 )
+            {
+                printf( "Error: Need two parameters, line=[%s]\n", line.c_str() );
+                return false;
+            }
+            std::string parm = parameters[0];
+            std::string out1;
+            if( !is_reg8_mem8_z80(parm,out1,hybrid) )
+            {
+                printf( "Error: Unknown reg8_mem8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            parm = parameters[1];
+            std::string out2;
+            if( is_reg8_mem8_z80(parm,out2,hybrid) )
+                z80_out = util::sprintf( format, out1.c_str(), out2.c_str() );
+            else
+            {
+                printf( "Error: Unknown reg8_mem8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case reg8_mem8_imm8:
+        {
+            if( parameters.size() < 2 )
+            {
+                printf( "Error: Need two parameters, line=[%s]\n", line.c_str() );
+                return false;
+            }
+            std::string parm = parameters[0];
+            std::string out1;
+            if( !is_reg8_mem8_z80(parm,out1,hybrid) )
+            {
+                printf( "Error: Unknown reg8_mem8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            parm = parameters[1];
+            std::string out2;
+            if( is_imm8_z80(parm,out2) )
+                z80_out = util::sprintf( format, out1.c_str(), out2.c_str() );
+            else
+            {
+                printf( "Error: Unknown imm8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case reg16_imm16:
+        {
+            if( parameters.size() < 2 )
+            {
+                printf( "Error: Need two parameters, line=[%s]\n", line.c_str() );
+                return false;
+            }
+            std::string parm = parameters[0];
+            std::string out1;
+            if( !is_reg16_z80(parm,out1,hybrid) )
+            {
+                printf( "Error: Unknown reg16 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            parm = parameters[1];
+            std::string out2;
+            if( is_imm16_z80(parm,out2) )
+                z80_out = util::sprintf( format, out1.c_str(), out2.c_str() );
+            else
+            {
+                printf( "Error: Illegal imm16 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+    }
+    return true;
+}
+
+// Return true if translated    
+bool translate_x86( const std::string &line, const std::string &instruction, const std::vector<std::string> &parameters, std::set<std::string> &labels, std::string &x86_out )
+{
+    auto it1 = xlat.find(instruction.c_str());
+    x86_out = "";
+    if( it1 == xlat.end() )
+    {
+        printf( "Error: Unknown instruction %s, line=[%s]\n", instruction.c_str(), line.c_str() );
+        return false;
+    }
+    MnemonicConversion &mc = it1->second;
+    const char *format  = mc.x86;
+    ParameterPattern pp = mc.pp;
+    std::string parameters_listed;
+    bool first = true;
+    for( const std::string s: parameters )
+    {
+        parameters_listed += first ? "" : ",";
+        first = false;
+        parameters_listed += s;
+    }
+    if( pp!=none && pp!=jump_around && parameters.size()<1 )
+    {
+        printf( "Error: Expect at least one parameter, instruction=[%s], line=[%s]\n", instruction.c_str(), line.c_str() );
+        return false;
+    }
+    switch( pp )
+    {
+        default:
+        {
+            printf( "Error: Unknown parameter pattern, instruction=[%s], line=[%s]\n", instruction.c_str(), line.c_str() );
+            return false;
+        }
+        case none:
+        {
+            x86_out = std::string(format);
+            break;
+        }
+        case echo:
+        {
+            x86_out = util::sprintf( format, parameters_listed.c_str() );
+            break;
+        }
+        case imm8:
+        {
+            std::string parm = parameters[0];
+            std::string out;
+            if( is_imm8(parm,out) )
+                x86_out = util::sprintf( format, out.c_str() );
+            else
+            {
+                printf( "Error: Illegal imm8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case jump_addr_around:
+        {
+            std::string temp = util::sprintf( "skip%d", skip_counter++ );
+            x86_out = util::sprintf( format, temp.c_str(), parameters[0].c_str(), temp.c_str() );
+            break;
+        }
+        case jump_around:
+        {
+            std::string temp = util::sprintf( "skip%d", skip_counter++ );
+            x86_out = util::sprintf( format, temp.c_str(), temp.c_str() );
+            break;
+        }
+        case mem8:
+        {
+            std::string parm = parameters[0];
+            std::string out;
+            if( is_mem8(parm,out) )
+                x86_out = util::sprintf( format, out.c_str() );
+            else
+            {
+                printf( "Error: Illegal mem8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case mem16:
+        {
+            std::string parm = parameters[0];
+            std::string out;
+            if( is_mem16(parm,out) )
+                x86_out = util::sprintf( format, out.c_str() );
+            else
+            {
+                printf( "Error: Illegal mem16 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case set_n_reg8_mem8:
+        {
+            if( parameters.size() < 2 )
+            {
+                printf( "Error: Need two parameters, line=[%s]\n", line.c_str() );
+                return false;
+            }
+            std::string parm = parameters[0];
+            std::string out1;
+            if( !is_n_set(parm,out1) )
+            {
+                printf( "Error: Unknown n parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            parm = parameters[1];
+            std::string out2;
+            if( is_reg8_mem8(parm,out2) )
+                x86_out = util::sprintf( format, out2.c_str(), out1.c_str() );     // note reverse order
+            else
+            {
+                printf( "Error: Illegal reg8_mem8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case set_n_reg8:
+        {
+            if( parameters.size() < 2 )
+            {
+                printf( "Error: Need two parameters, line=[%s]\n", line.c_str() );
+                return false;
+            }
+            std::string parm = parameters[0];
+            std::string out1;
+            if( !is_n_set(parm,out1) )
+            {
+                printf( "Error: Unknown n parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            parm = parameters[1];
+            std::string out2;
+            if( is_reg8(parm,out2) )
+                x86_out = util::sprintf( format, out2.c_str(), out1.c_str() );     // note reverse order
+            else
+            {
+                printf( "Error: Illegal reg8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case clr_n_reg8:
+        {
+            if( parameters.size() < 2 )
+            {
+                printf( "Error: Need two parameters, line=[%s]\n", line.c_str() );
+                return false;
+            }
+            std::string parm = parameters[0];
+            std::string out1;
+            if( !is_n_clr(parm,out1) )
+            {
+                printf( "Error: Unknown n parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            parm = parameters[1];
+            std::string out2;
+            if( is_reg8(parm,out2) )
+                x86_out = util::sprintf( format, out2.c_str(), out1.c_str() );     // note reverse order
+            else
+            {
+                printf( "Error: Illegal reg8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case push_parameter:
+        {
+            std::string parm = parameters[0];
+            std::string out;
+            if( parm == "PSW" )
+                x86_out = "lahf\n\tPUSH eax";
+            else if( is_reg16(parm,out) )
+                x86_out = util::sprintf( "PUSH %s", out.c_str() );
+            else
+            {
+                printf( "Error: Illegal push parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case pop_parameter:
+        {
+            std::string parm = parameters[0];
+            std::string out;
+            if( parm == "PSW" )
+                x86_out = "POP eax\n\tsahf";
+            else if( is_reg16(parm,out) )
+                x86_out = util::sprintf( "POP %s", out.c_str() );
+            else
+            {
+                printf( "Error: Illegal pop parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case reg8:
+        {
+            std::string parm = parameters[0];
+            std::string out;
+            if( is_reg8(parm,out) )
+                x86_out = util::sprintf( format, out.c_str() );
+            else
+            {
+                printf( "Error: Unknown reg8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case reg16:
+        {
+            std::string parm = parameters[0];
+            std::string out;
+            if( is_reg16(parm,out) )
+            {
+                std::string s(format);
+                if( s.find_first_of("%") != s.find_last_of("%") )
+                    x86_out = util::sprintf( format, out.c_str(), out.c_str() );
+                else
+                    x86_out = util::sprintf( format, out.c_str() );
+            }
+            else
+            {
+                printf( "Error: Unknown reg16 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case reg8_mem8:
+        {
+            std::string parm = parameters[0];
+            std::string out;
+            if( is_reg8_mem8(parm,out) )
+                x86_out = util::sprintf( format, out.c_str() );
+            else
+            {
+                printf( "Error: Unknown reg8_mem8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case reg8_mem8_reg8_mem8:
+        {
+            if( parameters.size() < 2 )
+            {
+                printf( "Error: Need two parameters, line=[%s]\n", line.c_str() );
+                return false;
+            }
+            std::string parm = parameters[0];
+            std::string out1;
+            if( !is_reg8_mem8(parm,out1) )
+            {
+                printf( "Error: Unknown reg8_mem8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            parm = parameters[1];
+            std::string out2;
+            if( is_reg8_mem8(parm,out2) )
+                x86_out = util::sprintf( format, out1.c_str(), out2.c_str() );
+            else
+            {
+                printf( "Error: Unknown reg8_mem8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case reg8_mem8_imm8:
+        {
+            if( parameters.size() < 2 )
+            {
+                printf( "Error: Need two parameters, line=[%s]\n", line.c_str() );
+                return false;
+            }
+            std::string parm = parameters[0];
+            std::string out1;
+            if( !is_reg8_mem8(parm,out1) )
+            {
+                printf( "Error: Unknown reg8_mem8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            parm = parameters[1];
+            std::string out2;
+            if( is_imm8(parm,out2) )
+                x86_out = util::sprintf( format, out1.c_str(), out2.c_str() );
+            else
+            {
+                printf( "Error: Unknown imm8 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+        case reg16_imm16:
+        {
+            if( parameters.size() < 2 )
+            {
+                printf( "Error: Need two parameters, line=[%s]\n", line.c_str() );
+                return false;
+            }
+            std::string parm = parameters[0];
+            std::string out1;
+            if( !is_reg16(parm,out1) )
+            {
+                printf( "Error: Unknown reg16 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            parm = parameters[1];
+            std::string out2;
+            if( is_imm16(parm,out2,labels) )
+                x86_out = util::sprintf( format, out1.c_str(), out2.c_str() );
+            else
+            {
+                printf( "Error: Illegal imm16 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            break;
+        }
+    }
+    return true;
+}
+
+std::string detabify( const std::string &s )
 {
     std::string ret;
     int idx=0;
-    for( char c: s )
+    int len = s.length();
+    for( int i=0; i<len; i++ )
     {
+        char c = s[i];
         if( c == '\n' )
         {
             ret += c;
@@ -646,12 +902,16 @@ static std::string detabify( const std::string &s )
         }
         else if( c == '\t' )
         {
+            int comment_column = ( i+1<len && s[i+1]==';' ) ? 40 : 0;
             int tab_stops[] = {9,17,25,33,41,49,100};
-            for( int i=0; i<sizeof(tab_stops)/sizeof(tab_stops[0]); i++ )
+            for( int j=0; j<sizeof(tab_stops)/sizeof(tab_stops[0]); j++ )
             {
-                if( idx < tab_stops[i] )
+                if( comment_column>0 || idx<tab_stops[j] )
                 {
-                    while( idx < tab_stops[i] )
+                    int col = comment_column>0 ? comment_column : tab_stops[j];
+                    if( idx >= col )
+                        col = idx+1;
+                    while( idx < col )
                     {
                         ret += ' ';
                         idx++;
@@ -669,366 +929,288 @@ static std::string detabify( const std::string &s )
     return ret;
 }
 
-static void init()
+
+void translate_init()
 {
     //
     // 8 bit register move
     //
 
     // MOV reg8_mem8, reg8_mem8 -> MOV reg8_mem8, reg8_mem8
-    xlat1["MOV"] = "MOV %s,%s";
-    xlat2["MOV"] = reg8_mem8_reg8_mem8;
+    xlat["MOV"] = { "MOV\t%s,%s",  "LD\t%s,%s", NULL, reg8_mem8_reg8_mem8 };
 
-    // MVI reg8_mem8, imm8 -> MOV reg8_mem8, imm8
-    xlat1["MVI"] = "MOV %s,%s";
-    xlat2["MVI"] = reg8_mem8_imm8;
+    // MVI NULL, reg8_mem8, imm8 -> MOV NULL, reg8_mem8, imm8
+    xlat["MVI"] = { "MOV\t%s,%s", "LD\t%s,%s", NULL, reg8_mem8_imm8 };
 
     //
     // Push and pop
     //
 
-    // PUSH reg16 -> PUSH reg32
+    // PUSH NULL, reg16 -> PUSH reg32
     // PUSH PSW -> LAHF; PUSH AX
-    xlat1["PUSH"] = "%s";
-    xlat2["PUSH"] = push_parameter;
+    xlat["PUSH"] = { "%s", "%s", NULL, push_parameter };
 
-    // POP reg16 -> POP reg32
+    // POP NULL, reg16 -> POP reg32
     // POP PSW -> POP AX; SAHF
-    xlat1["POP"] = "%s";
-    xlat2["POP"] = pop_parameter;
+    xlat["POP"] = { "%s", "%s", NULL, pop_parameter };
 
     //
     // 8 bit arithmetic and logic
     //
 
     // ADD reg8_mem8 -> ADD al,reg8_mem8
-    xlat1["ADD"] = "ADD al,%s";
-    xlat2["ADD"] = reg8_mem8;
+    xlat["ADD"] = { "ADD\tal,%s",  "ADD\ta,%s",  "ADD\tal,%s", reg8_mem8 };
 
     // ADI imm8 -> ADD al,imm8
-    xlat1["ADI"] = "ADD al,%s";
-    xlat2["ADI"] = imm8;
+    xlat["ADI"] = { "ADD\tal,%s", "ADD\ta,%s", "ADD\tal,%s", imm8 };
 
-    // ANA reg8_mem8 -> AND al,reg8_mem8
-    xlat1["ANA"] = "AND al,%s";
-    xlat2["ANA"] = reg8_mem8;
+    // ANA NULL, reg8_mem8 -> AND al,reg8_mem8
+    xlat["ANA"] = { "AND\tal,%s", "AND\ta,%s", "AND\tal,%s", reg8_mem8 };
 
     // ANI imm8 -> AND al,imm8
-    xlat1["ANI"] = "AND al,%s";
-    xlat2["ANI"] = imm8;
+    xlat["ANI"] = { "AND\tal,%s", "AND\ta,%s", "AND\tal,%s", imm8 };
 
-    // SUB reg8_mem8 -> SUB al,reg8_mem8
-    xlat1["SUB"] = "SUB al,%s";
-    xlat2["SUB"] = reg8_mem8;
+    // SUB NULL, reg8_mem8 -> SUB al,reg8_mem8
+    xlat["SUB"] = { "SUB\tal,%s",  "SUB\ta,%s", "SUB\tal,%s", reg8_mem8 };
 
     // SUI imm8 -> SUB al,imm8
-    xlat1["SUI"] = "SUB al,%s";
-    xlat2["SUI"] = imm8;
+    xlat["SUI"] = { "SUB\tal,%s", "SUB\ta,%s", "SUB\tal,%s", imm8 };
 
-    // XRA  reg8_mem8 -> XOR al,reg8_mem8
-    xlat1["XRA"] = "XOR al,%s";
-    xlat2["XRA"] = reg8_mem8;
+    // XRA  NULL, reg8_mem8 -> XOR al,reg8_mem8
+    xlat["XRA"] = { "XOR\tal,%s", "XOR\ta,%s", "XOR\tal,%s", reg8_mem8 };
 
     // XRI imm8 -> XOR al,imm8
-    xlat1["XRI"] = "XOR al,%s";
-    xlat2["XRI"] = imm8;
+    xlat["XRI"] = { "XOR\tal,%s", "XOR\ta,%s", "XOR\tal,%s", imm8 };
 
-    // CMP reg8_mem8 -> CMP al,reg8_mem8
-    xlat1["CMP"] = "CMP al,%s";
-    xlat2["CMP"] = reg8_mem8;
+    // CMP NULL, reg8_mem8 -> CMP al,reg8_mem8
+    xlat["CMP"] = { "CMP\tal,%s", "CMP\ta,%s", "CMP\tal,%s", reg8_mem8 };
 
     // CPI imm8 -> CMP al, imm8
-    xlat1["CPI"] = "CMP al,%s";
-    xlat2["CPI"] = imm8;
+    xlat["CPI"] = { "CMP\tal,%s", "CMP\ta,%s", "CMP\tal,%s", imm8 };
 
-    // DCR reg8 -> DEC reg8
-    xlat1["DCR"] = "DEC %s";
-    xlat2["DCR"] = reg8;
+    // DCR NULL, reg8 -> DEC NULL, reg8
+    xlat["DCR"] = { "DEC\t%s", "DEC\t%s", NULL, reg8 };
 
-    // INR reg8 -> INC reg8
-    xlat1["INR"] = "INC %s";
-    xlat2["INR"] = reg8;
+    // INR NULL, reg8 -> INC NULL, reg8
+    xlat["INR"] = { "INC\t%s", "INC\t%s", NULL, reg8 };
 
     //
     // 16 bit arithmetic
     //
 
-    // DAD reg16 -> LAHF; ADD ebx,reg16; SAHF        //CY (only) should be affected, but our emulation preserves flags
-    xlat1["DAD"] = "LAHF\n\tADD ebx,%s\n\tSAHF";
-    xlat2["DAD"] = reg16;
+    // DAD NULL, reg16 -> LAHF; ADD ebx,reg16; SAHF        //CY (only) should be affected, but our emulation preserves flags
+    xlat["DAD"] = { "LEA\tebx,[ebx+%s]",  "ADD\thl,%s", "ADD\tbx,%s", reg16 };
 
-    // DADX reg16 -> LAHF; ADD esi,reg16; SAHF       //CY (only) should be affected, but our emulation preserves flags
-    xlat1["DADX"] = "LAHF\n\tADD esi,%s\n\tSAHF";
-    xlat2["DADX"] = reg16;
+    // DADX NULL, reg16 -> LAHF; ADD esi,reg16; SAHF       //CY (only) should be affected, but our emulation preserves flags
+    xlat["DADX"] = { "LEA\tesi,[esi+%s]", "ADD\tix,%s", "ADD\tsi,%s", reg16 };
 
-    // DADY reg16 -> LAHF; ADD edi,reg16; SAHF;      //CY (only) should be affected, but our emulation preserves flags
-    xlat1["DADY"] = "LAHF\n\tADD edi,%s\n\tSAHF";    // not actually used in codebase
-    xlat2["DADY"] = reg16;
+    // DADY NULL, reg16 -> LAHF; ADD edi,reg16; SAHF;      //CY (only) should be affected, but our emulation preserves flags
+    xlat["DADY"] = { "LEA\tedi,[edi+%s]",  "ADD\tiy,%s", "ADD\tdi,%s", reg16 };  // not actually used in codebas
 
-    // DSBC reg16 -> SBB ebx,reg16
-    xlat1["DSBC"] = "SBB ebx,%s";
-    xlat2["DSBC"] = reg16;
+    // DSBC NULL, reg16 -> SBB ebx,reg16
+    xlat["DSBC"] = { "SBB\tebx,%s",  "SBC\thl,%s",  "SBC\tbx,%s", reg16 };
 
-    // INX reg16 -> LAHF; INC reg16; SAHF;      ## INC reg16; Z80 flags unaffected, X86 INC preserve CY only
-    xlat1["INX"] = "LAHF\n\tINC %s\n\tSAHF";
-    xlat2["INX"] = reg16;
+    // INX NULL, reg16 -> LAHF; INC reg16; SAHF;      ## INC NULL, reg16; Z80 flags unaffected, X86 INC preserve CY only
+    xlat["INX"] = { "LEA\t%s,[%s+1]",  "INC\t%s", NULL, reg16 };
 
-    // DCX reg16 -> LAHF; DEC reg16; SAHF;      ## DEC reg16; Z80 flags unaffected, X86 DEC preserve CY only
-    xlat1["DCX"] = "LAHF\n\tDEC %s\n\tSAHF";
-    xlat2["DCX"] = reg16;
+    // DCX NULL, reg16 -> LAHF; DEC reg16; SAHF;      ## DEC NULL, reg16; Z80 flags unaffected, X86 DEC preserve CY only
+    xlat["DCX"] = { "LEA\t%s,[%s-1]", "DEC\t%s", NULL, reg16 };
 
     //
     // Bit test, set, clear
     //
 
-    // BIT n,reg8_mem8 -> MOV ah,reg8_mem8; AND ah,mask(n) # but damages other flags
-    xlat1["BIT"] = "MOV ah,%s\n\tAND ah,%s";
-    xlat2["BIT"] = set_n_reg8_mem8;
+    // BIT n,reg8_mem8 -> TEST reg8_mem8,mask(n) # but damages other flags
+    xlat["BIT"] = { "TEST\t%s,%s", "BIT\t%s,%s", NULL, set_n_reg8_mem8 };
 
     // SET n,reg8 -> LAHF; OR reg8,mask[n]; SAHF
-    xlat1["SET"] = "LAHF\n\tOR %s,%s\n\tSAHF";
-    xlat2["SET"] = set_n_reg8;
+    xlat["SET"] = { "LAHF\n\tOR\t%s,%s\n\tSAHF", "SET\t%s,%s", NULL, set_n_reg8 };
 
     // RES n,reg8 -> LAHF; AND reg8,not mask[n]; SAHF
-    xlat1["RES"] = "LAHF\n\tAND %s,%s\n\tSAHF";
-    xlat2["RES"] = clr_n_reg8;
+    xlat["RES"] = { "LAHF\n\tAND\t%s,%s\n\tSAHF", "RES\t%s,%s", NULL, clr_n_reg8 };
 
     //
     // Rotate and Shift
     //
 
     // RAL -> RCL al,1             # rotate left through CY
-    xlat1["RAL"] = "RCL al,1";
-    xlat2["RAL"] = none;
+    xlat["RAL"] = { "RCL\tal,1",  "RLA", NULL, none };
 
-    // RARR reg8 -> RCR reg, 1     # rotate right through CY
-    xlat1["RARR"] = "RCR %s, 1";
-    xlat2["RARR"] = reg8;
+    // RARR NULL, reg8 -> RCR reg, 1     # rotate right through CY
+    xlat["RARR"] = { "RCR\t%s,1", "RR\t%s", NULL, reg8 };
 
     // RLD -> macro or call; 12 bits of low AL and byte [BX] rotated 4 bits left (!!)
-    xlat1["RLD"] = "CALL Z80_RLD";
-    xlat2["RLD"] = none;
+    xlat["RLD"] = { "Z80_RLD", "RLD", NULL, none };
 
     // RRD -> macro or call; 12 bits of low AL and byte [BX] rotated 4 bits right (!!)
-    xlat1["RRD"] = "CALL Z80_RRD";
-    xlat2["RRD"] = none;
+    xlat["RRD"] = { "Z80_RRD", "RRD", NULL, none };
 
-    // SLAR reg8 -> SHL reg8,1     # left shift into CY, bit 0 zeroed (arithmetic and logical are the same)
-    xlat1["SLAR"] = "SHL %s,1";
-    xlat2["SLAR"] = reg8;
+    // SLAR NULL, reg8 -> SHL reg8,1     # left shift into CY, bit 0 zeroed (arithmetic and logical are the same)
+    xlat["SLAR"] = { "SHL\t%s,1", "SLA\t%s", NULL, reg8 };
 
-    // SRAR reg8 -> SAR reg8,1     # arithmetic right shift into CY, bit 7 preserved
-    xlat1["SRAR"] = "SAR %s,1";
-    xlat2["SRAR"] = reg8;
+    // SRAR NULL, reg8 -> SAR reg8,1     # arithmetic right shift into CY, bit 7 preserved
+    xlat["SRAR"] = { "SAR\t%s,1", "SRA\t%s", NULL, reg8 };
 
-    // SRLR reg8 -> SHR reg8,1     # logical right shift into CY, bit 7 zeroed
-    xlat1["SRLR"] = "SHR %s,1";
-    xlat2["SRLR"] = reg8;
+    // SRLR NULL, reg8 -> SHR reg8,1     # logical right shift into CY, bit 7 zeroed
+    xlat["SRLR"] = { "SHR\t%s,1", "SRL\t%s", NULL, reg8 };
 
     //
     // Calls
     //
 
     // CALL addr -> CALL addr
-    xlat1["CALL"] = "CALL %s";
-    xlat2["CALL"] = echo;
+    xlat["CALL"] = { "CALL\t%s", "CALL\t%s", NULL, echo };
 
     // CC addr -> JNC temp; CALL addr; temp:
-    xlat1["CC"] = "JNC %s\n\tCALL %s\n%s:";
-    xlat2["CC"] = jump_addr_around;
+    xlat["CC"] = { "JNC\t%s\n\tCALL\t%s\n%s:", "CALL\tC,%s", NULL, jump_addr_around };
 
     // CNZ addr -> JZ temp; CALL addr; temp:
-    xlat1["CNZ"] = "JZ %s\n\tCALL %s\n%s:";
-    xlat2["CNZ"] = jump_addr_around;
+    xlat["CNZ"] = { "JZ\t%s\n\tCALL\t%s\n%s:", "CALL\tNZ,%s", NULL, jump_addr_around };
 
     // CZ addr -> JNZ temp; CALL addr; temp:
-    xlat1["CZ"] = "JNZ %s\n\tCALL %s\n%s:";
-    xlat2["CZ"] = jump_addr_around;
+    xlat["CZ"] = { "JNZ\t%s\n\tCALL\t%s\n%s:", "CALL\tZ,%s", NULL, jump_addr_around };
 
     //
     // Returns
     //
 
     // RET -> RET
-    xlat1["RET"] = "RET";
-    xlat2["RET"] = none;
+    xlat["RET"] = { "RET", "RET", NULL, none };
 
     // RC -> JNC temp; RET; temp:
-    xlat1["RC"] = "JNC %s\n\tRET\n%s:";
-    xlat2["RC"] = jump_around;
+    xlat["RC"] = { "JNC\t%s\n\tRET\n%s:", "RET\tC", NULL, jump_around };
 
     // RNC -> JC temp; RET; temp:
-    xlat1["RNC"] = "JC %s\n\tRET\n%s:";
-    xlat2["RNC"] = jump_around;
+    xlat["RNC"] = { "JC\t%s\n\tRET\n%s:", "RET\tNC", NULL, jump_around };
 
     // RNZ -> JZ temp; RET; temp:
-    xlat1["RNZ"] = "JZ %s\n\tRET\n%s:";
-    xlat2["RNZ"] = jump_around;
+    xlat["RNZ"] = { "JZ\t%s\n\tRET\n%s:", "RET\tNZ", NULL, jump_around };
 
     // RZ -> JNZ temp; RET; temp:
-    xlat1["RZ"] = "JNZ %s\n\tRET\n%s:";
-    xlat2["RZ"] = jump_around;
+    xlat["RZ"] = { "JNZ\t%s\n\tRET\n%s:", "RET\tZ", NULL, jump_around };
 
     //
     // Jumps
     //
 
     // DJNZ addr -> LAHF; DEC ch; JNZ addr; SAHF; ## flags affected at addr (sadly not much to be done)
-    xlat1["DJNZ"] = "LAHF\n\tDEC ch\n\tJNZ %s\n\tSAHF";
-    xlat2["DJNZ"] = echo;
+    xlat["DJNZ"] = { "LAHF\n\tDEC ch\n\tJNZ\t%s\n\tSAHF", "DJNZ\t%s", NULL, echo };
 
     // JC addr -> JC addr
-    xlat1["JC"] = "JC %s";
-    xlat2["JC"] = echo;
+    xlat["JC"] = { "JC\t%s", "JMP\tC,%s", NULL, echo };
 
     // JM addr -> JS addr  (jump if sign bit true = most sig bit true = negative)
-    xlat1["JM"] = "JS %s";
-    xlat2["JM"] = echo;
+    xlat["JM"] = { "JS\t%s", "JMP\tM,%s", NULL, echo };
 
     // JMP addr -> JMP addr
-    xlat1["JMP"] = "JMP %s";
-    xlat2["JMP"] = echo;
+    xlat["JMP"] = { "JMP\t%s", "JMP\t%s", NULL, echo };
 
     // JMPR addr -> JMP addr (avoid relative jumps unless we get into mega optimisation)
-    xlat1["JMPR"] = "JMP %s";
-    xlat2["JMPR"] = echo;
+    xlat["JMPR"] = { "JMP\t%s", "JR\t%s", NULL, echo };
 
     // JNZ addr -> JNZ addr
-    xlat1["JNZ"] = "JNZ %s";
-    xlat2["JNZ"] = echo;
+    xlat["JNZ"] = { "JNZ\t%s", "JMP\tNZ,%s", NULL, echo };
 
     // JP addr -> JP addr  (jump sign positive)
-    xlat1["JP"] = "JP %s";
-    xlat2["JP"] = echo;
+    xlat["JP"] = { "JP\t%s", "JMP\tP,%s", NULL, echo };
 
     // JPE addr -> JPE addr  (jump parity even - check this one, parity bit not 100% compatible) 
-    xlat1["JPE"] = "JPE %s";
-    xlat2["JPE"] = echo;
+    xlat["JPE"] = { "JPE\t%s",  "JMP\tPE,%s", NULL, echo };
 
     // JRC addr -> JC addr (avoid relative jumps unless we get into mega optimisation)
-    xlat1["JRC"] = "JC %s";
-    xlat2["JRC"] = echo;
+    xlat["JRC"] = { "JC\t%s", "JR\tC,%s", NULL, echo };
 
     // JRNC addr -> JNC addr
-    xlat1["JRNC"] = "JNC %s";
-    xlat2["JRNC"] = echo;
+    xlat["JRNC"] = { "JNC\t%s", "JR\tNC,%s", NULL, echo };
 
     // JRNZ addr -> JNZ addr
-    xlat1["JRNZ"] = "JNZ %s";
-    xlat2["JRNZ"] = echo;
+    xlat["JRNZ"] = { "JNZ\t%s", "JR\tNZ,%s", NULL, echo };
 
     // JRZ addr -> JZ addr
-    xlat1["JRZ"] = "JZ %s";
-    xlat2["JRZ"] = echo;
+    xlat["JRZ"] = { "JZ\t%s", "JR\tZ,%s", NULL, echo };
 
     // JZ addr -> JZ addr
-    xlat1["JZ"] = "JZ %s";
-    xlat2["JZ"] = echo;
+    xlat["JZ"] = { "JZ\t%s", "JMP\tZ,%s", NULL, echo };
 
     //
     // Load memory -> register
     //
 
     // LDA mem8 -> MOV AL,mem8
-    xlat1["LDA"] = "MOV AL,%s";
-    xlat2["LDA"] = mem8;
+    xlat["LDA"] = { "MOV\tal,%s", "LD\ta,%s", "LD\tal,%s", mem8 };
 
     // LDAX reg16 -> MOV al,[reg16]
-    xlat1["LDAX"] = "MOV al,[%s]";
-    xlat2["LDAX"] = reg16;
+    xlat["LDAX"] = { "MOV\tal,[%s]", "LD\ta,(%s)", "LD\tal,(%s)", reg16 };
 
     // LHLD mem16 -> MOV ebx,[mem16]
-    xlat1["LHLD"] = "MOV ebx,%s";
-    xlat2["LHLD"] = mem16;
+    xlat["LHLD"] = { "MOV\tebx,%s", "LD\thl,%s", "LD\tbx,%s", mem16 };
 
     // LBCD mem16 -> MOV ecx,[mem16]
-    xlat1["LBCD"] = "MOV ecx,%s";
-    xlat2["LBCD"] = mem16;
+    xlat["LBCD"] = { "MOV\tecx,%s",  "LD\tbc,%s", "LD\tcx,%s", mem16 };
 
     // LDED mem16 -> MOV edx,[mem16]
-    xlat1["LDED"] = "MOV edx,%s";
-    xlat2["LDED"] = mem16;
+    xlat["LDED"] = { "MOV\tedx,%s", "LD\tde,%s", "LD\tdx,%s", mem16 };
 
     // LIXD mem16 -> MOV esi,[mem16]
-    xlat1["LIXD"] = "MOV esi,%s";
-    xlat2["LIXD"] = mem16;
+    xlat["LIXD"] = { "MOV\tesi,%s", "LD\tix,%s", "LD\tsi,%s", mem16 };
 
     // LIYD mem16 -> MOV edi,[mem16]
-    xlat1["LIYD"] = "MOV edi,%s";
-    xlat2["LIYD"] = mem16;
+    xlat["LIYD"] = { "MOV\tedi,%s", "LD\tiy,%s", "LD\tdi,%s", mem16 };
 
     // LXI reg16, imm16 -> MOV reg16, imm16 (if imm16 is a label precede it with offset)
-    xlat1["LXI"] = "MOV %s,%s";
-    xlat2["LXI"] = reg16_imm16;
+    xlat["LXI"] = { "MOV\t%s,%s", "LD\t%s,%s", NULL, reg16_imm16 };
 
     //
     // Store register -> memory
     //
 
     // STA mem8 -> MOV [mem8],al
-    xlat1["STA"]  = "MOV %s,al";
-    xlat2["STA"]  = mem8;
+    xlat["STA"]  = { "MOV\t%s,al", "LD\t%s,a", "LD\t%s,al", mem8 };
 
     // SHLD mem16 -> mov [mem16],ebx
-    xlat1["SHLD"] = "MOV %s,ebx";
-    xlat2["SHLD"] = mem16;
+    xlat["SHLD"] = { "MOV\t%s,ebx", "LD\t%s,hl",  "LD\t%s,bx", mem16 };
 
     // SBCD mem16 -> MOV [mem16],ecx
-    xlat1["SBCD"] = "MOV %s,ecx";
-    xlat2["SBCD"] = mem16;
+    xlat["SBCD"] = { "MOV\t%s,ecx", "LD\t%s,bc", "LD\t%s,cx", mem16 };
 
     // SDED mem16 -> mov [mem16],edx
-    xlat1["SDED"] = "MOV %s,edx";
-    xlat2["SDED"] = mem16;
+    xlat["SDED"] = { "MOV\t%s,edx", "LD\t%s,de", "LD\t%s,dx", mem16 };
 
     // SIXD mem16 -> mov [mem16],esi
-    xlat1["SIXD"] = "MOV %s,esi";
-    xlat2["SIXD"] = mem16;
+    xlat["SIXD"] = { "MOV\t%s,esi", "LD\t%s,ix", "LD\t%s,si", mem16 };
 
     //
     // Miscellaneous
     //
 
     // NEG -> NEG al
-    xlat1["NEG"] = "NEG al";
-    xlat2["NEG"] = none;
+    xlat["NEG"] = { "NEG\tal",  "NEG", NULL, none };
 
     // XCHG -> XCHG ebx,edx
-    xlat1["XCHG"] = "XCHG ebx,edx";
-    xlat2["XCHG"] = none;
+    xlat["XCHG"] = { "XCHG\tebx,edx", "EX\tde,hl", "EX\tdx,bx", none };
 
     // EXAF -> macro/call
-    xlat1["EXAF"] = "CALL Z80_EXAF";
-    xlat2["EXAF"] = none;
+    xlat["EXAF"] = { "Z80_EXAF", "EXAF", NULL, none };
 
     // EXX -> macro/call
-    xlat1["EXX"] = "CALL Z80_EXX";
-    xlat2["EXX"] = none;
+    xlat["EXX"] = { "Z80_EXX", "EXX", NULL, none };
 
-    // LDAR -> Load A with incrementing R (RAM refresh) register ????
-    xlat1["LDAR"] = "CALL Z80_LDAR";
-    xlat2["LDAR"] = none;
+    // LDAR -> Load A with incrementing R (RAM refresh) register (to get a random number)
+    xlat["LDAR"] = { "Z80_LDAR", "LDAR", NULL, none };
 
     //
     // Macros
     //
-    xlat1["CCIR"] = "CCIR";
-    xlat2["CCIR"] = none;
-    xlat1["CARRET"] = "CARRET";
-    xlat2["CARRET"] = none;
-    xlat1["PRTBLK"] = "PRTBLK %s";
-    xlat2["PRTBLK"] = echo;
+    xlat["CCIR"] = { "CCIR", "CCIR", NULL, none };
+    xlat["CARRET"] = { "CARRET", "CARRET", NULL, none };
+    xlat["PRTBLK"] = { "PRTBLK\t%s", "PRTBLK\t%s", NULL, echo };
 
     //
     // Directives
     //
-    xlat1[".BLKB"] = "DB %s DUP (?)";
-    xlat2[".BLKB"] = echo;
-    xlat1[".BYTE"] = "DB %s";
-    xlat2[".BYTE"] = echo;
-    xlat1[".WORD"] = "DD %s";
-    xlat2[".WORD"] = echo;
-    xlat1[".LOC"] = "ORG %s";
-    xlat2[".LOC"] = echo;
+    xlat[".BLKB"] = { "DB\t%s DUP (?)", "DS\t%s", NULL, echo };
+    xlat[".BYTE"] = { "DB\t%s", "DB\t%s", NULL, echo };
+    xlat[".WORD"] = { "DD\t%s", "DW\t%s", NULL, echo };
+    xlat[".LOC"]  = { ";ORG\t%s", "ORG\t%s", NULL, echo };
 }
 

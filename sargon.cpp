@@ -11,6 +11,7 @@
 #include <set>
 #include <algorithm>
 #include "util.h"
+#include "translate.h"
 
 static void convert( std::string fin, std::string fout );
 
@@ -23,17 +24,10 @@ extern "C" {
     int shim_function( shim_parameters *parm );
 }
 
-extern void translate(
-    std::ofstream &asm_out,
-    const std::string &line,
-    const std::string &label,
-    const std::string &equate, 
-    const std::string &instruction,
-    const std::vector<std::string> &parameters );
-
 int main( int argc, const char *argv[] )
 {
     util::tests();
+#if 0
     shim_parameters sh;
     shim_function( &sh );
     const unsigned char *p = sh.board;
@@ -43,10 +37,12 @@ int main( int argc, const char *argv[] )
         for( int j=0; j<10; j++ )
             printf( "%02x%c", *p++, j+1<10?' ':'\n' );
     }
-
-#if 0
-    convert("sargon-step4.asm","sargon-step4.txt");
 #endif
+
+#if 1
+    convert("sargon-step5.asm","sargon-step5.txt");
+#endif
+
 #if 0
     bool ok = (argc==3);
     if( !ok )
@@ -97,7 +93,7 @@ static void convert( std::string fin, std::string fout )
         printf( "Error; Cannot open file %s for writing\n", fout.c_str() );
         return;
     }
-    const char *x86_asm_filename = "mutated.asm";
+    const char *x86_asm_filename = "output-step5.asm";
     std::ofstream asm_out(x86_asm_filename);
     if( !asm_out )
     {
@@ -107,24 +103,26 @@ static void convert( std::string fin, std::string fout )
     std::set<std::string> labels;
     std::map< std::string, std::vector<std::string> > equates;
     std::map< std::string, std::set<std::vector<std::string>> > instructions;
-    bool skip=false;
+    bool data_mode = true;
+    bool suspended = false;
+    translate_init();
+
+    // Each source line can optionally be transformed to Z80 mnemonics (or hybrid Z80 plus X86 registers mnemonics)
+    enum { transform_none, transform_z80, transform_hybrid } transform_switch = transform_hybrid;
+
+    // After optional transformation, the original line can be kept, discarded or commented out
+    enum { original_keep, original_comment_out, original_discard } original_switch = original_comment_out;
+
+    // Generated equivalent code can optionally be generated, in various flavours
+    enum { generate_x86, generate_z80, generate_hybrid, generate_none } generate_switch = generate_x86;
+
     for(;;)
     {
         std::string line;
         if( !std::getline(in,line) )
             break;
-        if( line.length()>=5 && line.substr(0,5)=="#if 0" )
-            skip = true;
-        bool skip_endif=false;
-        if( line.length()>=6 && line.substr(0,6)=="#endif" )
-        {
-            skip = false;
-            skip_endif = true;
-        }
-        if( skip || skip_endif )
-            continue;
-        util::replace_all(line,"\t"," ");
         std::string original_line = line;
+        util::replace_all(line,"\t"," ");
         statement stmt;
         stmt.typ = normal;
         stmt.label = "";
@@ -247,13 +245,13 @@ static void convert( std::string fin, std::string fout )
             }
         }
 
+        // Reduce to a few simple types of line
         std::string line_out="";
         done = false;
         switch(stmt.typ)
         {
             case empty:
                 line_out = "EMPTY"; done=true;
-                util::putline( asm_out, original_line );
                 break;
             case discard:
                 line_out = "DISCARD"; done=true; break;
@@ -266,7 +264,6 @@ static void convert( std::string fin, std::string fout )
             case comment_only_indented:
                 line_out = stmt.typ==comment_only_indented ? "COMMENT_ONLY> " : "COMMENT_ONLY_INDENTED> ";
                 line_out += stmt.comment;
-                util::putline( asm_out, original_line );
                 done = true;
                 break;
             case directive:             // looks like "directives" are simply unindented normal instructions
@@ -282,9 +279,10 @@ static void convert( std::string fin, std::string fout )
             case equate:
                 line_out = "EQUATE"; break;
         }
+
+        // Line by line reporting
         if( !done )
         {
-            translate( asm_out, original_line, stmt.label, stmt.equate, stmt.instruction, stmt.parameters );
             if( stmt.label != "" )
             {
                 labels.insert(stmt.label);
@@ -316,7 +314,7 @@ static void convert( std::string fin, std::string fout )
             bool first=true;
             for( std::string parm: stmt.parameters )
             {
-                line_out += first ? " parameters: " : ", ";
+                line_out += first ? " parameters: " : ",";
                 line_out += "\"";
                 line_out += parm;
                 line_out += "\"";
@@ -325,7 +323,237 @@ static void convert( std::string fin, std::string fout )
         }
         if( !done )
             util::putline(out,line_out);
+
+        // Generate assembly language output
+        switch( stmt.typ )
+        {
+            case empty:
+            case comment_only:
+            case comment_only_indented:
+                original_line = detabify(original_line);
+                util::putline( asm_out, original_line );
+                break;
+        }
+        if( stmt.typ!=normal && stmt.typ!=equate )
+            continue;
+
+        // My invented directives
+        bool handled=false;
+        if( stmt.label=="" )
+        {
+            if( stmt.instruction == ".BEGIN" )
+            {
+                util::putline( asm_out, detabify("\t.686P") );
+                util::putline( asm_out, detabify("\t.XMM") );
+                util::putline( asm_out, detabify("\t.model\tflat") );
+                util::putline( asm_out, detabify("") );
+                util::putline( asm_out, detabify("CCIR\tMACRO\t;todo") );
+                util::putline( asm_out, detabify("\tENDM") );
+                util::putline( asm_out, detabify("PRTBLK\tMACRO\tname,len\t;todo") );
+                util::putline( asm_out, detabify("\tENDM") );
+                util::putline( asm_out, detabify("CARRET\tMACRO\t;todo") );
+                util::putline( asm_out, detabify("\tENDM") );
+                util::putline( asm_out, detabify("") );
+                util::putline( asm_out, detabify("Z80_EXAF\tMACRO") );
+                util::putline( asm_out, detabify("\tlahf") );
+                util::putline( asm_out, detabify("\txchg\teax,shadow_eax") );
+                util::putline( asm_out, detabify("\tsahf") );
+                util::putline( asm_out, detabify("\tENDM") );
+                util::putline( asm_out, detabify("") );
+                util::putline( asm_out, detabify("Z80_EXX\tMACRO") );
+                util::putline( asm_out, detabify("\txchg\tebx,shadow_ebx") );
+                util::putline( asm_out, detabify("\txchg\tecx,shadow_ecx") );
+                util::putline( asm_out, detabify("\txchg\tedx,shadow_edx") );
+                util::putline( asm_out, detabify("\tENDM") );
+                util::putline( asm_out, detabify("") );
+                util::putline( asm_out, detabify("Z80_RLD\tMACRO\t;a=kx (hl)=yz -> a=ky (hl)=zx") );
+                util::putline( asm_out, detabify("\tmov\tah,byte ptr [ebx]\t;ax=yzkx") );
+                util::putline( asm_out, detabify("\tror\tal,4\t;ax=yzxk") );
+                util::putline( asm_out, detabify("\trol\tax,4\t;ax=zxky") );
+                util::putline( asm_out, detabify("\tmov\tbyte ptr [ebx],ah\t;al=ky [ebx]=zx") );
+                util::putline( asm_out, detabify("\tor\tal,al\t;set z and s flags") );
+                util::putline( asm_out, detabify("\tENDM") );
+                util::putline( asm_out, detabify("") );
+                util::putline( asm_out, detabify("Z80_RRD\tMACRO\t;a=kx (hl)=yz -> a=kz (hl)=xy") );
+                util::putline( asm_out, detabify("\tmov\tah,byte ptr [ebx]\t;ax=yzkx") );
+                util::putline( asm_out, detabify("\tror\tax,4\t;ax=xyzk") );
+                util::putline( asm_out, detabify("\tror\tal,4\t;ax=xykz") );
+                util::putline( asm_out, detabify("\tmov\tbyte ptr [ebx],ah\t;al=kz [ebx]=xy") );
+                util::putline( asm_out, detabify("\tor\tal,al\t;set z and s flags") );
+                util::putline( asm_out, detabify("\tENDM") );
+                util::putline( asm_out, detabify("") );
+                util::putline( asm_out, detabify("Z80_LDAR\tMACRO\t;to get random number") );
+                util::putline( asm_out, detabify("\tpushf\t;maybe there's entropy in stack junk") );
+                util::putline( asm_out, detabify("\tpush\tebx") );
+                util::putline( asm_out, detabify("\tmov\tbx,bp") );
+                util::putline( asm_out, detabify("\tmov\tax,0") );
+                util::putline( asm_out, detabify("\txor\tal,byte ptr [ebx]") );
+                util::putline( asm_out, detabify("\tdec\tbx") );
+                util::putline( asm_out, detabify("\tjz\t$+4") );
+                util::putline( asm_out, detabify("\tdec\tah") );
+                util::putline( asm_out, detabify("\tjnz\t$-10") );
+                util::putline( asm_out, detabify("\tpop\tebx") );
+                util::putline( asm_out, detabify("\tpopf") );
+                util::putline( asm_out, detabify("\tENDM") );
+                util::putline( asm_out, detabify("") );
+                handled = true;         
+            }
+            else if( stmt.instruction == ".SUSPEND" )
+            {
+                suspended = true;
+                handled = true;
+            }
+            else if( stmt.instruction == ".RESUME" )
+            {
+                suspended = false;
+                handled = true;
+            }
+            else if( stmt.instruction == ".DATA" )
+            {
+                data_mode = true;
+                util::putline( asm_out, detabify("_DATA\tSEGMENT") );
+                util::putline( asm_out, "" );
+                handled = true;
+            }
+            else if( stmt.instruction == ".CODE" )
+            {
+                data_mode = false;
+                util::putline( asm_out, "shadow_eax  dd   0" );
+                util::putline( asm_out, "shadow_ebx  dd   0" );
+                util::putline( asm_out, "shadow_ecx  dd   0" );
+                util::putline( asm_out, "shadow_edx  dd   0" );
+                util::putline( asm_out, detabify("_DATA\tENDS\n_TEXT\tSEGMENT") );
+                util::putline( asm_out, "" );
+                handled = true;
+            }
+            else if( stmt.instruction == ".END" )
+            {
+                suspended = true;
+                util::putline( asm_out, detabify("_TEXT\tENDS\nEND") );
+                util::putline( asm_out, "" );
+                handled = true;
+            }
+        }
+        if( handled || suspended )
+            continue;
+
+        // Optionally transform source lines to Z80 mnemonics
+        if( transform_switch!=transform_none )
+        {
+            if( stmt.equate=="" && stmt.instruction!="")
+            {
+                std::string out;
+                bool transformed = translate_z80( original_line, stmt.instruction, stmt.parameters, transform_switch==transform_hybrid, out );
+                if( transformed )
+                {
+                    original_line = stmt.label;
+                    if( stmt.label == "" )
+                        original_line = "\t";
+                    else
+                        original_line += (data_mode?"\t":":\t");
+                    original_line += out;
+                    if( stmt.comment != "" )
+                    {
+                        original_line += "\t;";
+                        original_line += stmt.comment;
+                    }
+                }
+            }
+        }
+        switch( original_switch )
+        {
+            case original_comment_out:
+            {
+                util::putline( asm_out, detabify( ";" + original_line) );
+                break;
+            }
+            case original_keep:
+            {
+                util::putline( asm_out, detabify(original_line) );
+                break;
+            }
+            default:
+            case original_discard:
+                break;
+        }
+
+        // Optionally generate code
+        if( generate_switch != generate_none )
+        {
+            std::string asm_line_out;
+            if( stmt.equate != "" )
+            {
+                asm_line_out = stmt.equate;
+                asm_line_out += "\tEQU";
+                bool first = true;
+                for( std::string s: stmt.parameters )
+                {
+                    if(first && s[0]=='.')
+                        s[0]='?';
+                    asm_line_out += first ? "\t" : ",";
+                    first = false;
+                    asm_line_out += s;
+                }
+                if( first )
+                {
+                    printf( "Error: No EQU parameters, line=[%s]\n", line.c_str() );
+                }
+            }
+            else if( stmt.label != "" && stmt.instruction=="" )
+            {
+                asm_line_out = stmt.label;
+                asm_line_out += (data_mode?"\tEQU $":":");
+            }
+            else if( stmt.instruction!="" )
+            {
+                std::string out;
+                bool generated = false;
+                if( generate_switch == generate_x86 )
+                    generated = translate_x86( original_line, stmt.instruction, stmt.parameters, labels, out );
+                else
+                    generated = translate_z80( original_line, stmt.instruction, stmt.parameters, generate_switch==generate_hybrid, out );
+                if( !generated )
+                    asm_line_out = original_line;
+                else
+                {
+                    asm_line_out = stmt.label;
+                    if( stmt.label == "" )
+                        asm_line_out = "\t";
+                    else
+                        asm_line_out += (data_mode?"\t":":\t");
+                    if( original_switch == original_comment_out )
+                        asm_line_out += out;    // don't worry about comment
+                    else
+                    {
+                        size_t offset = out.find('\n');
+                        if( offset == std::string::npos )
+                        {
+                            asm_line_out += out;
+                            if( stmt.comment != "" )
+                            {
+                                asm_line_out += "\t;";
+                                asm_line_out += stmt.comment;
+                            }
+                        }
+                        else
+                        {
+                            asm_line_out += out.substr(0,offset);
+                            if( stmt.comment != "" )
+                            {
+                                asm_line_out += "\t;";
+                                asm_line_out += stmt.comment;
+                                asm_line_out += out.substr(offset);
+                            }
+                        }
+                    }
+                }
+            }
+            asm_line_out = detabify(asm_line_out);
+            util::putline( asm_out, asm_line_out );
+        }
     }
+
+    // Summary report
     util::putline(out,"\nLABELS\n");
     for( const std::string &s: labels )
     {
@@ -365,14 +593,5 @@ static void convert( std::string fin, std::string fout )
             util::putline(out,s);
         }
     }
-#if 0
-    char buf[100];
-    extern int simple_function( int x );
-    sprintf_s( buf, sizeof(buf), "Force call to skeleton.asm function %d\n", simple_function(34) );
-    util::putline(out,buf);
-    extern int base_function();
-    sprintf_s( buf, sizeof(buf), "Force call to base.asm function %d\n", base_function() );
-    util::putline(out,buf);
-#endif
 }
 
