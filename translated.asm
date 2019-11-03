@@ -553,6 +553,15 @@ _TEXT    SEGMENT
 ; PROGRAM CODE SECTION
 ;**********************************************************
 DISPATCH PROC
+    ;mov edx,4563h
+    ;CALL MLTPLY
+;;   inputs hi=A lo=D, divide by E   (al, dh) divide by dl
+;    output D (dh)
+    ;mov eax,1ah
+    ;mov ebx,404h
+    ;mov ecx,808h
+    ;mov edx,0af63h
+    ;CALL DIVIDE
          cmp al,0
          jz  INITBD
          cmp al,1
@@ -3385,8 +3394,8 @@ BOOK:    POP eax
          MOV     ebx,offset SCORE+1
 ;        LD      (bx),0                 ; Zero out score table
          MOV     byte ptr [ebx],0
-;        LD      bx,BMOVES-2            ; Init best move ptr to book
-         MOV     ebx,offset BMOVES-2
+;        LD      bx,BMOVES-4            ; Init best move ptr to book
+         MOV     ebx,offset BMOVES-4
 ;        LD      (BESTM),bx
          MOV     [BESTM],ebx
 ;        LD      bx,BESTM               ; Initialize address of pointer
@@ -4287,6 +4296,8 @@ CONVRT:  PUSH ecx
 ;X p94
 ;**********************************************************
 ; POSITIVE INTEGER DIVISION
+;   inputs hi=A lo=D, divide by E   (al, dh) divide by dl
+;   output D (dh)
 ;**********************************************************
 ;DIVIDE: PUSH    cx
 DIVIDE:  PUSH ecx
@@ -4298,14 +4309,14 @@ DD04:    SHL     dh,1
          RCL     al,1
 ;        SUB     al,dl
          SUB     al,dl
-;        JMP     M,rel024
-         JS      rel024
+;        JMP     M,rel024b
+         JS      rel024b
 ;        INC     dh
          INC     dh
 ;        JR      rel024
          JMP     rel024
 ;        ADD     al,dl
-         ADD     al,dl
+rel024b: ADD     al,dl
 ;rel024: DJNZ    DD04
 rel024:  LAHF
          DEC ch
@@ -4318,6 +4329,8 @@ rel024:  LAHF
 
 ;**********************************************************
 ; POSITIVE INTEGER MULTIPLICATION
+;   inputs D, E         (dh, dl)
+;   output hi=A lo=D    (al, dh)
 ;**********************************************************
 ;MLTPLY: PUSH    cx
 MLTPLY:  PUSH ecx
@@ -4479,7 +4492,7 @@ EX14:    POP eax
 ;               C, and the "to" position in register E.
 ;**********************************************************
 ;MAKEMV: PUSH    af                     ; Save register
-MAKEMV:  lahf
+MAKEMV:  ret ;lahf
          PUSH eax
 ;        PUSH    cx
          PUSH ecx
@@ -4566,6 +4579,8 @@ _shim_function PROC
     push    edi
     mov     ebx,[ebp+8]
     mov     dword ptr [ebx],offset BOARDA
+
+
 
 ;   SUB     A               ; Code of White is zero
     sub al,al
