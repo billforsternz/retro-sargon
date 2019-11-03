@@ -27,7 +27,7 @@ extern "C" {
 int main( int argc, const char *argv[] )
 {
     util::tests();
-#if 0
+#if 1
     shim_parameters sh;
     shim_function( &sh );
     const unsigned char *p = sh.board;
@@ -39,7 +39,7 @@ int main( int argc, const char *argv[] )
     }
 #endif
 
-#if 1
+#if 0
     convert("sargon-step5.asm","sargon-step5.txt");
 #endif
 
@@ -385,13 +385,13 @@ static void convert( std::string fin, std::string fout )
                 util::putline( asm_out, detabify("Z80_LDAR\tMACRO\t;to get random number") );
                 util::putline( asm_out, detabify("\tpushf\t;maybe there's entropy in stack junk") );
                 util::putline( asm_out, detabify("\tpush\tebx") );
-                util::putline( asm_out, detabify("\tmov\tbx,bp") );
+                util::putline( asm_out, detabify("\tmov\tebx,ebp") );
                 util::putline( asm_out, detabify("\tmov\tax,0") );
                 util::putline( asm_out, detabify("\txor\tal,byte ptr [ebx]") );
-                util::putline( asm_out, detabify("\tdec\tbx") );
-                util::putline( asm_out, detabify("\tjz\t$+4") );
+                util::putline( asm_out, detabify("\tdec\tebx") );
+                util::putline( asm_out, detabify("\tjz\t$+6") );
                 util::putline( asm_out, detabify("\tdec\tah") );
-                util::putline( asm_out, detabify("\tjnz\t$-10") );
+                util::putline( asm_out, detabify("\tjnz\t$-7") );
                 util::putline( asm_out, detabify("\tpop\tebx") );
                 util::putline( asm_out, detabify("\tpopf") );
                 util::putline( asm_out, detabify("\tENDM") );
