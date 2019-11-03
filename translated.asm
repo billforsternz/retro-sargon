@@ -8,59 +8,10 @@
 ; reproduced without the prior written permission.
 ;**********************************************************
 
-         .686P
-         .XMM
-         .model  flat
-
-CCIR     MACRO                          ;todo
-         ENDM
-PRTBLK   MACRO   name,len               ;todo
-         ENDM
-CARRET   MACRO                          ;todo
-         ENDM
-
-Z80_EXAF MACRO
-         lahf
-         xchg    eax,shadow_eax
-         sahf
-         ENDM
-
-Z80_EXX  MACRO
-         xchg    ebx,shadow_ebx
-         xchg    ecx,shadow_ecx
-         xchg    edx,shadow_edx
-         ENDM
-
-Z80_RLD  MACRO                          ;a=kx (hl)=yz -> a=ky (hl)=zx
-         mov     ah,byte ptr [ebx]      ;ax=yzkx
-         ror     al,4                   ;ax=yzxk
-         rol     ax,4                   ;ax=zxky
-         mov     byte ptr [ebx],ah      ;al=ky [ebx]=zx
-         or      al,al                  ;set z and s flags
-         ENDM
-
-Z80_RRD  MACRO                          ;a=kx (hl)=yz -> a=kz (hl)=xy
-         mov     ah,byte ptr [ebx]      ;ax=yzkx
-         ror     ax,4                   ;ax=xyzk
-         ror     al,4                   ;ax=xykz
-         mov     byte ptr [ebx],ah      ;al=kz [ebx]=xy
-         or      al,al                  ;set z and s flags
-         ENDM
-
-Z80_LDAR MACRO                          ;to get random number
-         pushf                          ;maybe there's entropy in stack junk
-         push    ebx
-         mov     ebx,ebp
-         mov     ax,0
-         xor     al,byte ptr [ebx]
-         dec     ebx
-         jz      $+6
-         dec     ah
-         jnz     $-7
-         pop     ebx
-         popf
-         ENDM
-
+        .686P
+        .XMM
+        .model  flat
+_DATA    SEGMENT
         
 ;**********************************************************
 ; EQUATES
@@ -87,8 +38,6 @@ BPAWN    EQU     BLACK+PAWN
 ;**********************************************************
 ; TABLES SECTION
 ;**********************************************************
-_DATA    SEGMENT
-
 ;START   DS      100h
 START    DB      100h DUP (?)
 ;TBASE:
@@ -529,53 +478,107 @@ LINECT   DB      0
 MLIST    DB      2048 DUP (?)
 ;MLEND   DW      0
 MLEND    DD      0
+PTRSIZ  EQU     4
+MOVSIZ  EQU     8
 ;MLPTR   =       0
 MLPTR    EQU     0
-;MLFRP   =       4
-MLFRP    EQU     4
-;MLTOP   =       5
-MLTOP    EQU     5
-;MLFLG   =       6
-MLFLG    EQU     6
-;MLVAL   =       7
-MLVAL    EQU     7
-;        DS      8
+;MLFRP   =       PTRSIZ
+MLFRP    EQU     PTRSIZ
+;MLTOP   =       PTRSIZ+1
+MLTOP    EQU     PTRSIZ+1
+;MLFLG   =       PTRSIZ+2
+MLFLG    EQU     PTRSIZ+2
+;MLVAL   =       PTRSIZ+3
+MLVAL    EQU     PTRSIZ+3
+;        DS      100
          DB      100 DUP (?)
-
+        
 shadow_eax  dd   0
 shadow_ebx  dd   0
 shadow_ecx  dd   0
 shadow_edx  dd   0
 _DATA    ENDS
-_TEXT    SEGMENT
-
+        
 ;**********************************************************
 ; PROGRAM CODE SECTION
 ;**********************************************************
-DISPATCH PROC
-    ;mov edx,4563h
-    ;CALL MLTPLY
-;;   inputs hi=A lo=D, divide by E   (al, dh) divide by dl
-;    output D (dh)
-    ;mov eax,1ah
-    ;mov ebx,404h
-    ;mov ecx,808h
-    ;mov edx,0af63h
-    ;CALL DIVIDE
+_TEXT   SEGMENT        
+;
+; Miscellaneous stubs
+;
+FCDMAT:  RET
+TBCPMV:  RET
+INSPCE:  RET
+BLNKER:  RET
+CCIR     MACRO                          ;todo
+         ENDM
+PRTBLK   MACRO   name,len               ;todo
+         ENDM
+CARRET   MACRO                          ;todo
+         ENDM
+
+;
+; Z80 Opcode emulation
+;         
+         
+Z80_EXAF MACRO
+         lahf
+         xchg    eax,shadow_eax
+         sahf
+         ENDM
+
+Z80_EXX  MACRO
+         xchg    ebx,shadow_ebx
+         xchg    ecx,shadow_ecx
+         xchg    edx,shadow_edx
+         ENDM
+
+Z80_RLD  MACRO                          ;a=kx (hl)=yz -> a=ky (hl)=zx
+         mov     ah,byte ptr [ebx]      ;ax=yzkx
+         ror     al,4                   ;ax=yzxk
+         rol     ax,4                   ;ax=zxky
+         mov     byte ptr [ebx],ah      ;al=ky [ebx]=zx
+         or      al,al                  ;set z and s flags
+         ENDM
+
+Z80_RRD  MACRO                          ;a=kx (hl)=yz -> a=kz (hl)=xy
+         mov     ah,byte ptr [ebx]      ;ax=yzkx
+         ror     ax,4                   ;ax=xyzk
+         ror     al,4                   ;ax=xykz
+         mov     byte ptr [ebx],ah      ;al=kz [ebx]=xy
+         or      al,al                  ;set z and s flags
+         ENDM
+
+Z80_LDAR MACRO                          ;to get random number
+         pushf                          ;maybe there's entropy in stack junk
+         push    ebx
+         mov     ebx,ebp
+         mov     ax,0
+         xor     al,byte ptr [ebx]
+         dec     ebx
+         jz      $+6
+         dec     ah
+         jnz     $-7
+         pop     ebx
+         popf
+         ENDM
+
+;Wrap all code in a PROC to get source debugging
+SARGON   PROC
+
+         ;Experiments
+         ;mov edx,4563h
+         ;CALL MLTPLY    ;-> 45h * 63h = 1aafh in al,dh
+         ;mov al,1ah
+         ;mov edx,0af63h
+         ;CALL DIVIDE    ;-> 1aafh / 63h = 45h in dh, 0 remainder in al
+    
+         ;Implement a kind of system call API, at least for now
          cmp al,0
          jz  INITBD
          cmp al,1
          jz  CPTRMV
          ret
-         
-;FCDMAT: RET
-FCDMAT:  RET
-;TBCPMV: RET
-TBCPMV:  RET
-;INSPCE: RET
-INSPCE:  RET
-;BLNKER: RET
-BLNKER:  RET
         
 ;**********************************************************
 ; BOARD SETUP ROUTINE
@@ -1027,16 +1030,13 @@ skip7:
 ;*****************************************************************
 ;ADJPTR: LD      bx,(MLLST)             ; Get list pointer
 ADJPTR:  MOV     ebx,[MLLST]
-;        LD      dx,-8                  ; Size of a move entry
-         MOV     edx,-8
+;        LD      dx,-MOVSIZ             ; Size of a move entry
+         MOV     edx,-MOVSIZ
 ;        ADD     bx,dx                  ; Back up list pointer
          LEA     ebx,[ebx+edx]
 ;        LD      (MLLST),bx             ; Save list pointer
          MOV     [MLLST],ebx
-;        LD      (bx),0                 ; Zero out link, first byte
-;        INC     bx                     ; Next byte
-;        LD      (bx),0                 ; Zero out link, second byte
-         mov     dword ptr [ebx],0
+        mov     dword ptr [ebx],0   ;Zero out link ptr
 ;        RET                            ; Return
          RET
 
@@ -1208,10 +1208,7 @@ ADMOVE:  MOV     edx,[MLNXT]
          MOV     ebx,[MLLST]
 ;        LD      (MLLST),dx             ; Savn next as previous
          MOV     [MLLST],edx
-;        LD      (bx),dl                ; Store link address
-;        INC     bx
-;        LD      (bx),dh
-         MOV     dword ptr [ebx],edx
+         MOV     dword ptr [ebx],edx    ; Store link address
 ;        LD      bx,P1                  ; Address of moved piece
          MOV     ebx,offset P1
 ;        BIT     3,(bx)                 ; Has it moved before ?
@@ -1226,12 +1223,8 @@ ADMOVE:  MOV     edx,[MLNXT]
          SAHF
 ;rel004: EX      dx,bx                  ; Address of move area
 rel004:  XCHG    ebx,edx
-;        LD      (bx),0                 ; Store zero in link address
-;        INC     bx
-;        LD      (bx),0
-;        INC     bx
-         MOV     dword ptr [ebx],0
-         LEA     ebx,[ebx+4]
+        MOV     dword ptr [ebx],0   ; Store zero in link address
+        LEA     ebx,[ebx+4]
 ;        LD      al,(M1)                ; Store "from" move position
          MOV     al,byte ptr [M1]
 ;        LD      (bx),al
@@ -2590,9 +2583,7 @@ skip20:
 ;**********************************************************
 ;MOVE:   LD      bx,(MLPTRJ)            ; Load move list pointer
 MOVE:    MOV     ebx,[MLPTRJ]
-;        INC     bx                     ; Increment past link bytes
-;        INC     bx
-         LEA     ebx,[ebx+4]
+         LEA     ebx,[ebx+4]    ; Increment past link bytes
 ;MV1:    LD      al,(bx)                ; "From" position
 MV1:     MOV     al,byte ptr [ebx]
 ;        LD      (M1),al                ; Save
@@ -2727,8 +2718,9 @@ MV40:    MOV     ebx,[MLPTRJ]
 ;UNMOVE: LD      bx,(MLPTRJ)            ; Load move list pointer
 UNMOVE:  MOV     ebx,[MLPTRJ]
 ;        INC     bx                     ; Increment past link bytes
+         LEA     ebx,[ebx+1]
 ;        INC     bx
-         LEA     ebx,[ebx+4]
+         LEA     ebx,[ebx+1]
 ;UM1:    LD      al,(bx)                ; Get "from" position
 UM1:     MOV     al,byte ptr [ebx]
 ;        LD      (M1),al                ; Save
@@ -2870,20 +2862,10 @@ UM40:    MOV     ebx,[MLPTRJ]
 SORTM:   MOV     ecx,[MLPTRI]
 ;        LD      dx,0                   ; Initialize working pointers
          MOV     edx,0
-;SR5:    LD      bh,ch
-;        LD      bl,cl
-SR5:     MOV     ebx,ecx
-;        LD      cl,(bx)                ; Link to next move
-;        INC     bx
-;        LD      ch,(bx)
-         MOV     ecx,dword ptr [ebx]
-;        LD      (bx),dh                ; Store to link in list
-;        DEC     bx
-;        LD      (bx),dl
-         MOV     dword ptr [ebx],edx
-;        XOR     al,al                  ; End of list ?
-;        CMP     al,ch
-         CMP     ecx,0
+SR5:    MOV     ebx,ecx
+        MOV     ecx,dword ptr [ebx]     ; Link to next move
+        MOV     dword ptr [ebx],edx     ; Store to link in list
+        CMP     ecx,0                   ; End of list ?
 ;        RET     Z                      ; Yes - return
          JNZ     skip23
          RET
@@ -2896,13 +2878,8 @@ SR10:    MOV     [MLPTRJ],ecx
          MOV     ebx,[MLPTRI]
 ;        LD      cx,(MLPTRJ)            ; Restore list pointer
          MOV     ecx,[MLPTRJ]
-;SR15:   LD      dl,(bx)                ; Next move for compare
-;        INC     bx
-;        LD      dh,(bx)
-SR15:    MOV     edx,dword ptr [ebx]
-;        XOR     al,al                  ; At end of list ?
-;        CMP     al,dh
-         CMP     edx,0
+SR15:   MOV     edx,dword ptr [ebx]     ; Next move for compare
+        CMP     edx,0                   ; At end of list ?
 ;        JR      Z,SR25                 ; Yes - jump
          JZ      SR25
 ;        PUSH    dx                     ; Transfer move pointer
@@ -2915,10 +2892,7 @@ SR15:    MOV     edx,dword ptr [ebx]
          CMP     al,byte ptr [esi+MLVAL]
 ;        JR      NC,SR30                ; No - jump
          JNC     SR30
-;SR25:   LD      (bx),ch                ; Link new move into list
-;        DEC     bx
-;        LD      (bx),cl
-SR25:    MOV     dword ptr [ebx],ecx
+SR25:   MOV     dword ptr [ebx],ecx ; Link new move into list
 ;        JMP     SR5                    ; Jump
          JMP     SR5
 ;SR30:   EX      dx,bx                  ; Swap pointers
@@ -3394,8 +3368,8 @@ BOOK:    POP eax
          MOV     ebx,offset SCORE+1
 ;        LD      (bx),0                 ; Zero out score table
          MOV     byte ptr [ebx],0
-;        LD      bx,BMOVES-4            ; Init best move ptr to book
-         MOV     ebx,offset BMOVES-4
+;        LD      bx,BMOVES-PTRSIZ       ; Init best move ptr to book
+         MOV     ebx,offset BMOVES-PTRSIZ
 ;        LD      (BESTM),bx
          MOV     [BESTM],ebx
 ;        LD      bx,BESTM               ; Initialize address of pointer
@@ -4297,7 +4271,7 @@ CONVRT:  PUSH ecx
 ;**********************************************************
 ; POSITIVE INTEGER DIVISION
 ;   inputs hi=A lo=D, divide by E   (al, dh) divide by dl
-;   output D (dh)
+;   output D (dh) remainder in A (al)
 ;**********************************************************
 ;DIVIDE: PUSH    cx
 DIVIDE:  PUSH ecx
@@ -4309,14 +4283,14 @@ DD04:    SHL     dh,1
          RCL     al,1
 ;        SUB     al,dl
          SUB     al,dl
-;        JMP     M,rel024b
-         JS      rel024b
+;        JMP     M,rel027
+         JS      rel027
 ;        INC     dh
          INC     dh
 ;        JR      rel024
          JMP     rel024
-;        ADD     al,dl
-rel024b: ADD     al,dl
+;rel027: ADD     al,dl
+rel027:  ADD     al,dl
 ;rel024: DJNZ    DD04
 rel024:  LAHF
          DEC ch
@@ -4422,8 +4396,8 @@ EXECMV:  PUSH esi
          TEST    dh,40h
 ;        JR      Z,EX14                 ; No - jump
          JZ      EX14
-;        LD      dx,8                   ; Move list entry width
-         MOV     edx,8
+;        LD      dx,MOVSIZ              ; Move list entry width
+         MOV     edx,MOVSIZ
 ;        ADD     si,dx                  ; Increment MLPTRJ
          LEA     esi,[esi+edx]
 ;        LD      cl,(si+MLFRP)          ; Second "from" position
@@ -4491,83 +4465,9 @@ EX14:    POP eax
 ; ARGUMENTS: -- The "from" position is passed in register
 ;               C, and the "to" position in register E.
 ;**********************************************************
-;MAKEMV: PUSH    af                     ; Save register
-MAKEMV:  ret ;lahf
-         PUSH eax
-;        PUSH    cx
-         PUSH ecx
-;        PUSH    dx
-         PUSH edx
-;        PUSH    bx
-         PUSH ebx
-;        LD      al,cl                  ; "From" position
-         MOV     al,cl
-;        LD      (BRDPOS),al            ; Set up parameter
-         MOV     byte ptr [BRDPOS],al
-;        CALL    CONVRT                 ; Getting Norm address in HL
-         CALL    CONVRT
-;        LD      ch,10                  ; Blink parameter
-         MOV     ch,10
-;        CALL    BLNKER                 ; Blink "from" square
-         CALL    BLNKER
-;        LD      al,(bx)                ; Bring in Norm 1plock
-         MOV     al,byte ptr [ebx]
-;        INC     bl                     ; First change block
-         INC     bl
-;        LD      dh,0                   ; Bar counter
-         MOV     dh,0
-;MM04:   LD      ch,4                   ; Block counter
-MM04:    MOV     ch,4
-;MM08:   LD      (bx),al                ; Insert blank block
-MM08:    MOV     byte ptr [ebx],al
-;        INC     bl                     ; Next change block
-         INC     bl
-;        DJNZ    MM08                   ; Done ? No - jump
-         LAHF
-         DEC ch
-         JNZ     MM08
-         SAHF
-;        LD      cl,al                  ; Saving norm block
-         MOV     cl,al
-;        LD      al,bl                  ; Bar increment
-         MOV     al,bl
-;        ADD     al,3CH
-         ADD     al,3CH
-;        LD      bl,al
-         MOV     bl,al
-;        LD      al,cl                  ; Restore Norm block
-         MOV     al,cl
-;        INC     dh
-         INC     dh
-;        BIT     2,dh                   ; Done ?
-         TEST    dh,4
-;        JR      Z,MM04                 ; No - jump
-         JZ      MM04
-;        LD      al,dl                  ; Get "to" position
-         MOV     al,dl
-;        LD      (BRDPOS),al            ; Set up parameter
-         MOV     byte ptr [BRDPOS],al
-;        CALL    CONVRT                 ; Getting Norm address in HL
-         CALL    CONVRT
-;        LD      ch,10                  ; Blink parameter
-         MOV     ch,10
-;        CALL    INSPCE                 ; Inserts the piece
-         CALL    INSPCE
-;        CALL    BLNKER                 ; Blinks "to" square
-         CALL    BLNKER
-;        POP     bx                     ; Restore registers
-         POP ebx
-;        POP     dx
-         POP edx
-;        POP     cx
-         POP ecx
-;        POP     af
-         POP eax
-         sahf
-;        RET                            ; Return
-         RET
-DISPATCH ENDP
+MAKEMV: RET             ; Stubbed out for now
 
+SARGON  ENDP
 ;
 ; SHIM from C code
 ;
@@ -4593,14 +4493,14 @@ _shim_function PROC
     mov byte ptr [PLYMAX],1
     mov al,0
 ;   CALL    INITBD          ; Initialize board array
-    call    DISPATCH
+    call    SARGON
 ;   MVI     A,1             ; Move number is 1 at at start
     mov al,1
 ;   STA     MOVENO          ; Save
     mov byte ptr [MOVENO],al
 ;   CALL    CPTRMV          ; Make and write computers move
     mov al,1
-    call    DISPATCH
+    call    SARGON
     pop     edi
     pop     esi
     pop     ebp
@@ -4610,13 +4510,4 @@ _shim_function ENDP
 _TEXT    ENDS
 END
 
-
-;        .END    DRIVER  ;X Define Program Entry Point
-;X*********************************************************
-;X*********************************************************
-;X*********************************************************
-;X*********************************************************
-;X*********************************************************
-;X*********************************************************
-;X*********************************************************
-;X*********************************************************
+        

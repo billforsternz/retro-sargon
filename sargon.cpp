@@ -13,7 +13,7 @@
 #include "util.h"
 #include "translate.h"
 
-static void convert( std::string fin, std::string fout );
+static void convert( std::string fin, std::string asm_fout,  std::string report_fout );
 
 struct shim_parameters
 {
@@ -40,21 +40,21 @@ int main( int argc, const char *argv[] )
 #endif
 
 #if 0
-    convert("sargon-step5.asm","sargon-step5.txt");
+    convert("sargon-step5.asm","output-step5a.asm", "report-step5.txt");
 #endif
 
 #if 0
-    bool ok = (argc==3);
+    bool ok = (argc==4);
     if( !ok )
     {
         printf(
-            "Read and understand sargon source code\n"
+            "Read, understand, convert sargon source code\n"
             "Usage:\n"
-            " convert sargon.asm output.txt\n"
+            " convert sargon.asm sargon-out.asm report.txt\n"
         );
         return -1;
     }
-    convert(argv[1],argv[2]);
+    convert(argv[1],argv[2],argv[3]);
 #endif
     return 0;
 }
@@ -79,7 +79,7 @@ struct name_plus_parameters
     std::set<std::vector<std::string>> parameters;
 };
 
-static void convert( std::string fin, std::string fout )
+static void convert( std::string fin, std::string asm_fout , std::string report_fout )
 {
     std::ifstream in(fin);
     if( !in )
@@ -87,24 +87,22 @@ static void convert( std::string fin, std::string fout )
         printf( "Error; Cannot open file %s for reading\n", fin.c_str() );
         return;
     }
-    std::ofstream out(fout);
+    std::ofstream out(report_fout);
     if( !out )
     {
-        printf( "Error; Cannot open file %s for writing\n", fout.c_str() );
+        printf( "Error; Cannot open file %s for writing\n", report_fout.c_str() );
         return;
     }
-    const char *x86_asm_filename = "output-step5.asm";
-    std::ofstream asm_out(x86_asm_filename);
+    std::ofstream asm_out(asm_fout);
     if( !asm_out )
     {
-        printf( "Error; Cannot open file %s for writing\n", x86_asm_filename );
+        printf( "Error; Cannot open file %s for writing\n", asm_fout.c_str() );
         return;
     }
     std::set<std::string> labels;
     std::map< std::string, std::vector<std::string> > equates;
     std::map< std::string, std::set<std::vector<std::string>> > instructions;
     bool data_mode = true;
-    bool suspended = false;
     translate_init();
 
     // Each source line can optionally be transformed to Z80 mnemonics (or hybrid Z80 plus X86 registers mnemonics)
@@ -115,6 +113,9 @@ static void convert( std::string fin, std::string fout )
 
     // Generated equivalent code can optionally be generated, in various flavours
     enum { generate_x86, generate_z80, generate_hybrid, generate_none } generate_switch = generate_x86;
+
+    // .IF controls let us switch between three modes (currently)
+    enum { mode_normal, mode_pass_thru, mode_suspended } mode = mode_normal;
 
     for(;;)
     {
@@ -281,7 +282,7 @@ static void convert( std::string fin, std::string fout )
         }
 
         // Line by line reporting
-        if( !done )
+        if( !done && mode==mode_normal )
         {
             if( stmt.label != "" )
             {
@@ -321,8 +322,57 @@ static void convert( std::string fin, std::string fout )
                 first = false;
             }
         }
-        if( !done )
+        if( !done && mode==mode_normal )
             util::putline(out,line_out);
+
+        // My invented directives
+        bool handled=false;
+        if( stmt.label=="" )
+        {
+            if( stmt.instruction == ".DATA" )
+            {
+                data_mode = true;
+                handled = true;         
+            }
+            else if( stmt.instruction == ".CODE" )
+            {
+                data_mode = false;
+                handled = true;         
+            }
+            else if( stmt.instruction == ".IF_Z80" )
+            {
+                mode = mode_suspended;
+                handled = true;         
+            }
+            else if( stmt.instruction == ".IF_X86" )
+            {
+                mode = mode_pass_thru;
+                handled = true;         
+            }
+            else if( stmt.instruction == ".ELSE" )
+            {
+                if( mode == mode_suspended )
+                    mode = mode_pass_thru;
+                else if( mode == mode_pass_thru )
+                    mode = mode_suspended;
+                else
+                    printf( "Error, unexpected .ELSE\n" );
+                handled = true;         
+            }
+            else if( stmt.instruction == ".ENDIF" )
+            {
+                if( mode == mode_suspended ||  mode == mode_pass_thru )
+                    mode = mode_normal;
+                else
+                    printf( "Error, unexpected .ENDIF\n" );
+                handled = true;         
+            }
+        }
+        if( mode==mode_pass_thru && !handled )
+        {
+            util::putline( asm_out, original_line );
+            continue;
+        }
 
         // Generate assembly language output
         switch( stmt.typ )
@@ -337,104 +387,7 @@ static void convert( std::string fin, std::string fout )
         if( stmt.typ!=normal && stmt.typ!=equate )
             continue;
 
-        // My invented directives
-        bool handled=false;
-        if( stmt.label=="" )
-        {
-            if( stmt.instruction == ".BEGIN" )
-            {
-                util::putline( asm_out, detabify("\t.686P") );
-                util::putline( asm_out, detabify("\t.XMM") );
-                util::putline( asm_out, detabify("\t.model\tflat") );
-                util::putline( asm_out, detabify("") );
-                util::putline( asm_out, detabify("CCIR\tMACRO\t;todo") );
-                util::putline( asm_out, detabify("\tENDM") );
-                util::putline( asm_out, detabify("PRTBLK\tMACRO\tname,len\t;todo") );
-                util::putline( asm_out, detabify("\tENDM") );
-                util::putline( asm_out, detabify("CARRET\tMACRO\t;todo") );
-                util::putline( asm_out, detabify("\tENDM") );
-                util::putline( asm_out, detabify("") );
-                util::putline( asm_out, detabify("Z80_EXAF\tMACRO") );
-                util::putline( asm_out, detabify("\tlahf") );
-                util::putline( asm_out, detabify("\txchg\teax,shadow_eax") );
-                util::putline( asm_out, detabify("\tsahf") );
-                util::putline( asm_out, detabify("\tENDM") );
-                util::putline( asm_out, detabify("") );
-                util::putline( asm_out, detabify("Z80_EXX\tMACRO") );
-                util::putline( asm_out, detabify("\txchg\tebx,shadow_ebx") );
-                util::putline( asm_out, detabify("\txchg\tecx,shadow_ecx") );
-                util::putline( asm_out, detabify("\txchg\tedx,shadow_edx") );
-                util::putline( asm_out, detabify("\tENDM") );
-                util::putline( asm_out, detabify("") );
-                util::putline( asm_out, detabify("Z80_RLD\tMACRO\t;a=kx (hl)=yz -> a=ky (hl)=zx") );
-                util::putline( asm_out, detabify("\tmov\tah,byte ptr [ebx]\t;ax=yzkx") );
-                util::putline( asm_out, detabify("\tror\tal,4\t;ax=yzxk") );
-                util::putline( asm_out, detabify("\trol\tax,4\t;ax=zxky") );
-                util::putline( asm_out, detabify("\tmov\tbyte ptr [ebx],ah\t;al=ky [ebx]=zx") );
-                util::putline( asm_out, detabify("\tor\tal,al\t;set z and s flags") );
-                util::putline( asm_out, detabify("\tENDM") );
-                util::putline( asm_out, detabify("") );
-                util::putline( asm_out, detabify("Z80_RRD\tMACRO\t;a=kx (hl)=yz -> a=kz (hl)=xy") );
-                util::putline( asm_out, detabify("\tmov\tah,byte ptr [ebx]\t;ax=yzkx") );
-                util::putline( asm_out, detabify("\tror\tax,4\t;ax=xyzk") );
-                util::putline( asm_out, detabify("\tror\tal,4\t;ax=xykz") );
-                util::putline( asm_out, detabify("\tmov\tbyte ptr [ebx],ah\t;al=kz [ebx]=xy") );
-                util::putline( asm_out, detabify("\tor\tal,al\t;set z and s flags") );
-                util::putline( asm_out, detabify("\tENDM") );
-                util::putline( asm_out, detabify("") );
-                util::putline( asm_out, detabify("Z80_LDAR\tMACRO\t;to get random number") );
-                util::putline( asm_out, detabify("\tpushf\t;maybe there's entropy in stack junk") );
-                util::putline( asm_out, detabify("\tpush\tebx") );
-                util::putline( asm_out, detabify("\tmov\tebx,ebp") );
-                util::putline( asm_out, detabify("\tmov\tax,0") );
-                util::putline( asm_out, detabify("\txor\tal,byte ptr [ebx]") );
-                util::putline( asm_out, detabify("\tdec\tebx") );
-                util::putline( asm_out, detabify("\tjz\t$+6") );
-                util::putline( asm_out, detabify("\tdec\tah") );
-                util::putline( asm_out, detabify("\tjnz\t$-7") );
-                util::putline( asm_out, detabify("\tpop\tebx") );
-                util::putline( asm_out, detabify("\tpopf") );
-                util::putline( asm_out, detabify("\tENDM") );
-                util::putline( asm_out, detabify("") );
-                handled = true;         
-            }
-            else if( stmt.instruction == ".SUSPEND" )
-            {
-                suspended = true;
-                handled = true;
-            }
-            else if( stmt.instruction == ".RESUME" )
-            {
-                suspended = false;
-                handled = true;
-            }
-            else if( stmt.instruction == ".DATA" )
-            {
-                data_mode = true;
-                util::putline( asm_out, detabify("_DATA\tSEGMENT") );
-                util::putline( asm_out, "" );
-                handled = true;
-            }
-            else if( stmt.instruction == ".CODE" )
-            {
-                data_mode = false;
-                util::putline( asm_out, "shadow_eax  dd   0" );
-                util::putline( asm_out, "shadow_ebx  dd   0" );
-                util::putline( asm_out, "shadow_ecx  dd   0" );
-                util::putline( asm_out, "shadow_edx  dd   0" );
-                util::putline( asm_out, detabify("_DATA\tENDS\n_TEXT\tSEGMENT") );
-                util::putline( asm_out, "" );
-                handled = true;
-            }
-            else if( stmt.instruction == ".END" )
-            {
-                suspended = true;
-                util::putline( asm_out, detabify("_TEXT\tENDS\nEND") );
-                util::putline( asm_out, "" );
-                handled = true;
-            }
-        }
-        if( handled || suspended )
+        if( handled || mode == mode_suspended  || mode == mode_pass_thru )
             continue;
 
         // Optionally transform source lines to Z80 mnemonics

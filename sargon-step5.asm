@@ -8,7 +8,13 @@
 ; reproduced without the prior written permission.
 ;**********************************************************
 
-        .BEGIN
+        .IF_X86
+        .686P
+        .XMM
+        .model  flat
+_DATA    SEGMENT
+        .ENDIF
+        .DATA
         
 ;**********************************************************
 ; EQUATES
@@ -26,7 +32,6 @@ BPAWN   =       BLACK+PAWN
 ;**********************************************************
 ; TABLES SECTION
 ;**********************************************************
-        .DATA
 START:  .BLKB   100h
 TBASE:
 ;X TBASE must be page aligned, it needs an absolute address
@@ -388,21 +393,111 @@ LINECT: .BYTE   0       ; Current line number
         .LOC    START+3F0H      ;X START+300H
 MLIST:  .BLKB   2048
 MLEND:  .WORD   0
+        .IF_Z80
+PTRSIZ  =       2
+MOVSIZ  =       6
+        .ELSE
+PTRSIZ  EQU     4
+MOVSIZ  EQU     8
+        .ENDIF
 MLPTR   =       0
-MLFRP   =       2
-MLTOP   =       3
-MLFLG   =       4
-MLVAL   =       5
-        .BLKB   8
-
-        .CODE
+MLFRP   =       PTRSIZ
+MLTOP   =       PTRSIZ+1
+MLFLG   =       PTRSIZ+2
+MLVAL   =       PTRSIZ+3
+        .BLKB   100
+        
+        .IF_X86
+shadow_eax  dd   0
+shadow_ebx  dd   0
+shadow_ecx  dd   0
+shadow_edx  dd   0
+_DATA    ENDS
+        .ENDIF
+        
 ;**********************************************************
 ; PROGRAM CODE SECTION
 ;**********************************************************
-FCDMAT: RET
-TBCPMV: RET
-INSPCE: RET
-BLNKER: RET
+        .CODE
+        .IF_X86
+_TEXT   SEGMENT        
+;
+; Miscellaneous stubs
+;
+FCDMAT:  RET
+TBCPMV:  RET
+INSPCE:  RET
+BLNKER:  RET
+CCIR     MACRO                          ;todo
+         ENDM
+PRTBLK   MACRO   name,len               ;todo
+         ENDM
+CARRET   MACRO                          ;todo
+         ENDM
+
+;
+; Z80 Opcode emulation
+;         
+         
+Z80_EXAF MACRO
+         lahf
+         xchg    eax,shadow_eax
+         sahf
+         ENDM
+
+Z80_EXX  MACRO
+         xchg    ebx,shadow_ebx
+         xchg    ecx,shadow_ecx
+         xchg    edx,shadow_edx
+         ENDM
+
+Z80_RLD  MACRO                          ;a=kx (hl)=yz -> a=ky (hl)=zx
+         mov     ah,byte ptr [ebx]      ;ax=yzkx
+         ror     al,4                   ;ax=yzxk
+         rol     ax,4                   ;ax=zxky
+         mov     byte ptr [ebx],ah      ;al=ky [ebx]=zx
+         or      al,al                  ;set z and s flags
+         ENDM
+
+Z80_RRD  MACRO                          ;a=kx (hl)=yz -> a=kz (hl)=xy
+         mov     ah,byte ptr [ebx]      ;ax=yzkx
+         ror     ax,4                   ;ax=xyzk
+         ror     al,4                   ;ax=xykz
+         mov     byte ptr [ebx],ah      ;al=kz [ebx]=xy
+         or      al,al                  ;set z and s flags
+         ENDM
+
+Z80_LDAR MACRO                          ;to get random number
+         pushf                          ;maybe there's entropy in stack junk
+         push    ebx
+         mov     ebx,ebp
+         mov     ax,0
+         xor     al,byte ptr [ebx]
+         dec     ebx
+         jz      $+6
+         dec     ah
+         jnz     $-7
+         pop     ebx
+         popf
+         ENDM
+
+;Wrap all code in a PROC to get source debugging
+SARGON   PROC
+
+         ;Experiments
+         ;mov edx,4563h
+         ;CALL MLTPLY    -> 45h * 63h = 1aafh in al,dh
+         ;mov al,1ah
+         ;mov edx,0af63h
+         ;CALL DIVIDE    -> 1aafh / 63h = 45h in dh, 0 remainder in al
+    
+         ;Implement a kind of system call API, at least for now
+         cmp al,0
+         jz  INITBD
+         cmp al,1
+         jz  CPTRMV
+         ret
+         .ENDIF
         
 ;**********************************************************
 ; BOARD SETUP ROUTINE
@@ -661,12 +756,16 @@ rel003: RNZ             ; No - return
 ; ARGUMENTS: -- None
 ;*****************************************************************
 ADJPTR: LHLD    MLLST   ; Get list pointer
-        LXI     D,-6    ; Size of a move entry
+        LXI     D,-MOVSIZ ; Size of a move entry
         DAD     D       ; Back up list pointer
         SHLD    MLLST   ; Save list pointer
+        .IF_Z80
         MVI     M,0     ; Zero out link, first byte
         INX     H       ; Next byte
         MVI     M,0     ; Zero out link, second byte
+        .ELSE
+        mov     dword ptr [ebx],0   ;Zero out link ptr
+        .ENDIF
         RET             ; Return
 
 ;X p34
@@ -766,19 +865,28 @@ ADMOVE: LDED    MLNXT   ; Addr of next loc in move list
         JRC     AM10    ; Jump if out of space
         LHLD    MLLST   ; Addr of prev. list area
         SDED    MLLST   ; Savn next as previous
+        .IF_Z80
         MOV     M,E     ; Store link address
         INX     H
         MOV     M,D
+        .ELSE
+         MOV     dword ptr [ebx],edx    ; Store link address
+        .ENDIF
         LXI     H,P1    ; Address of moved piece
         BIT     3,M     ; Has it moved before ?
         JRNZ    rel004  ; Yes - jump
         LXI     H,P2    ; Address of move flags
         SET     4,M     ; Set first move flag
 rel004: XCHG            ; Address of move area
+        .IF_Z80
         MVI     M,0     ; Store zero in link address
         INX     H
         MVI     M,0
         INX     H
+        .ELSE
+        MOV     dword ptr [ebx],0   ; Store zero in link address
+        LEA     ebx,[ebx+4]
+        .ENDIF
         LDA     M1      ; Store "from" move position
         MOV     M,A
         INX     H
@@ -1545,8 +1653,12 @@ LIM10:  CMP     B       ; Compare to limit
 ; ARGUMENTS: -- None
 ;**********************************************************
 MOVE:   LHLD    MLPTRJ  ; Load move list pointer
+        .IF_Z80
         INX     H       ; Increment past link bytes
         INX     H
+        .ELSE
+         LEA     ebx,[ebx+4]    ; Increment past link bytes
+        .ENDIF
 MV1:    MOV     A,M     ; "From" position
         STA     M1      ; Save
         INX     H       ; Increment pointer
@@ -1695,6 +1807,7 @@ UM40:   LHLD    MLPTRJ  ; Load move list pointer
 ;***********************************************************
 SORTM:  LBCD    MLPTRI  ; Move list begin pointer
         LXI     D,0     ; Initialize working pointers
+        .IF_Z80
 SR5:    MOV     H,B
         MOV     L,C
         MOV     C,M     ; Link to next move
@@ -1705,25 +1818,40 @@ SR5:    MOV     H,B
         MOV     M,E
         XRA     A       ; End of list ?
         CMP     B
+        .ELSE
+SR5:    MOV     ebx,ecx
+        MOV     ecx,dword ptr [ebx]     ; Link to next move
+        MOV     dword ptr [ebx],edx     ; Store to link in list
+        CMP     ecx,0                   ; End of list ?
+        .ENDIF
         RZ              ; Yes - return
 SR10:   SBCD    MLPTRJ  ; Save list pointer
         CALL    EVAL    ; Evaluate move
         LHLD    MLPTRI  ; Begining of move list
         LBCD    MLPTRJ  ; Restore list pointer
+        .IF_Z80
 SR15:   MOV     E,M     ; Next move for compare
         INX     H
         MOV     D,M
         XRA     A       ; At end of list ?
         CMP     D
+        .ELSE
+SR15:   MOV     edx,dword ptr [ebx]     ; Next move for compare
+        CMP     edx,0                   ; At end of list ?
+        .ENDIF
         JRZ     SR25    ; Yes - jump
         PUSH    D       ; Transfer move pointer
         POP     X
         LDA     VALM    ; Get new move value
         CMP     MLVAL(X)        ; Less than list value ?
         JRNC    SR30    ; No - jump
+        .IF_Z80
 SR25:   MOV     M,B     ; Link new move into list
         DCX     H
         MOV     M,C
+        .ELSE
+SR25:   MOV     dword ptr [ebx],ecx ; Link new move into list
+        .ENDIF
         JMP     SR5     ; Jump
 SR30:   XCHG            ; Swap pointers
         JMP     SR15    ; Jump
@@ -1990,7 +2118,7 @@ rel019: LHLD    SCRIX   ; Load score table index
 BOOK:   POP     PSW             ; Abort return to FNDMOV
         LXI     H,SCORE+1       ; Zero out score
         MVI     M,0             ; Zero out score table
-        LXI     H,BMOVES-2      ; Init best move ptr to book
+        LXI     H,BMOVES-PTRSIZ ; Init best move ptr to book
         SHLD    BESTM
         LXI     H,BESTM         ; Initialize address of pointer
         LDA     KOLOR           ; Get computer's color
@@ -2026,7 +2154,7 @@ BM9:    INR     M               ; (P-Q4)
         INR     M
         RET                     ; Return to CPTRMV
 
-        .SUSPEND
+        .IF_Z80
         
 ;X p66
 ;**********************************************************
@@ -2349,7 +2477,7 @@ IN08:   PRTLIN  PLYDEP,23       ; Request depth of search
         SUI     30H             ; Subtract Ascii constant
         MOV     M,A             ; Set desired depth
         RET                     ; Return
-        .RESUME
+        .ENDIF
 
 ;X p73
 ;**********************************************************
@@ -2428,7 +2556,7 @@ CP24:   LDA     SCORE+1         ; Check again for mates
         CALL    FCDMAT          ; Full checkmate ?
         RET                     ; Return
 
-        .SUSPEND
+        .IF_Z80
 
 ;X p75
 ;**********************************************************
@@ -2559,7 +2687,7 @@ TBCPMV: PRTBLK  SPACE,3
         RZ
         PRTBLK  SPACE,6
         RET
-        .RESUME
+        .ENDIF
 
 
 ;X p78
@@ -2608,7 +2736,7 @@ BITASN: SUB     A               ; Get ready for division
 ;
 ; ARGUMENTS: -- None
 ;*****************************************************************
-        .SUSPEND
+        .IF_Z80
         
 PLYRMV: CALL    CHARTR          ; Accept "from" file letter
         CPI     12H             ; Is it instead a Control-R ?
@@ -2643,7 +2771,7 @@ PL08:   LXI     H,LINECT        ; Address of screen line count
         PRTLIN  INVAL2,9        ; Output "TRY AGAIN"
         CALL    TBPLCL          ; Tab to players column
         JMP     PLYRMV          ; Jump
-        .RESUME
+        .ENDIF
 
 ;X p80
 ;**********************************************************
@@ -2738,7 +2866,7 @@ VA10:   MVI     A,1             ; Set flag for invalid move
         SHLD    MLPTRJ          ; Save move pointer
         RET                     ; Return
 
-        .SUSPEND        
+        .IF_Z80        
 ;X p82
 ;*************************************************************
 ; ACCEPT INPUT CHARACTER
@@ -2981,7 +3109,7 @@ AN1C:   PRTLIN  WSMOVE,17       ; Ask whose move it is
 AN20:   CALL    CPTRMV          ; Get computers move
         CARRET                  ; New line
         JMP     DR0C            ; Jump
-        .RESUME
+        .ENDIF
 
         
 ;X p88
@@ -3026,7 +3154,7 @@ RY0C:   LDA     M1              ; Current position
         JRNZ    RY04            ; No - jump
         RET                     ; Return
 
-        .SUSPEND        
+        .IF_Z80        
 ;X p89
 ;*************************************************************
 ; SET UP EMPTY BOARD
@@ -3203,7 +3331,7 @@ IP2C:   POP     PSW             ; Restore registers
         POP     B
         POP     H
         RET
-        .RESUME
+        .ENDIF
 
 
 ;X p93
@@ -3254,22 +3382,26 @@ CONVRT: PUSH    B       ; Save registers
 ;X p94
 ;**********************************************************
 ; POSITIVE INTEGER DIVISION
+;   inputs hi=A lo=D, divide by E   (al, dh) divide by dl
+;   output D (dh) remainder in A (al)
 ;**********************************************************
 DIVIDE: PUSH    B
         MVI     B,8
 DD04:   SLAR    D
         RAL
         SUB     E
-        JM      rel024
+        JM      rel027
         INR     D
         JMPR    rel024
-        ADD     E
+rel027: ADD     E
 rel024: DJNZ    DD04
         POP     B
         RET
 
 ;**********************************************************
 ; POSITIVE INTEGER MULTIPLICATION
+;   inputs D, E         (dh, dl)
+;   output hi=A lo=D    (al, dh)
 ;**********************************************************
 MLTPLY: PUSH    B
         SUB     A
@@ -3284,7 +3416,7 @@ rel025: SRAR    A
         RET
 
 ;X p95
-        .SUSPEND
+        .IF_Z80
 ;**********************************************************
 ; SQUARE BLINKER
 ;**********************************************************
@@ -3341,7 +3473,7 @@ BL10:   DJNZ    BL10
         POP     B
         POP     PSW
         RET             ; Return
-        .RESUME
+        .ENDIF
 
 
 ;**********************************************************
@@ -3374,7 +3506,7 @@ EXECMV: PUSH    X               ; Save registers
         MVI     B,0
         BIT     6,D             ; Double move ?
         JRZ     EX14            ; No - jump
-        LXI     D,6             ; Move list entry width
+        LXI     D,MOVSIZ        ; Move list entry width
         DADX    D               ; Increment MLPTRJ
         MOV     C,MLFRP(X)      ; Second "from" position
         MOV     E,MLTOP(X)      ; Second "to" position
@@ -3414,6 +3546,9 @@ EX14:   POP     PSW             ; Restore registers
 ; ARGUMENTS: -- The "from" position is passed in register
 ;               C, and the "to" position in register E.
 ;**********************************************************
+        .IF_X86
+MAKEMV: RET             ; Stubbed out for now
+        .ELSE
 MAKEMV: PUSH    PSW     ; Save register
         PUSH    B
         PUSH    D
@@ -3449,14 +3584,51 @@ MM08:   MOV     M,A     ; Insert blank block
         POP     B
         POP     PSW
         RET             ; Return
-        .END
+        .ENDIF
 
-;        .END    DRIVER  ;X Define Program Entry Point
-;X*********************************************************
-;X*********************************************************
-;X*********************************************************
-;X*********************************************************
-;X*********************************************************
-;X*********************************************************
-;X*********************************************************
-;X*********************************************************
+        .IF_X86
+SARGON  ENDP
+;
+; SHIM from C code
+;
+PUBLIC	_shim_function
+_shim_function PROC
+    push    ebp
+    mov     ebp,esp
+    push    esi
+    push    edi
+    mov     ebx,[ebp+8]
+    mov     dword ptr [ebx],offset BOARDA
+
+
+
+;   SUB     A               ; Code of White is zero
+    sub al,al
+;   STA     COLOR           ; White always moves first
+    mov byte ptr [COLOR],al
+;   STA     KOLOR           ; Bring in computer's color
+    mov byte ptr [KOLOR],al
+;   CALL    INTERR          ; Players color/search depth
+;   call    INTERR
+    mov byte ptr [PLYMAX],1
+    mov al,0
+;   CALL    INITBD          ; Initialize board array
+    call    SARGON
+;   MVI     A,1             ; Move number is 1 at at start
+    mov al,1
+;   STA     MOVENO          ; Save
+    mov byte ptr [MOVENO],al
+;   CALL    CPTRMV          ; Make and write computers move
+    mov al,1
+    call    SARGON
+    pop     edi
+    pop     esi
+    pop     ebp
+	ret
+_shim_function ENDP
+
+_TEXT    ENDS
+END
+    .ENDIF
+
+        
