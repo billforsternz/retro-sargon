@@ -40,7 +40,7 @@ int main( int argc, const char *argv[] )
 #endif
 
 #if 0
-    convert("sargon-step5.asm","output-step5a.asm", "report-step5.txt");
+    convert("sargon-step5.asm","output-step5.asm", "report-step5.txt");
 #endif
 
 #if 0
@@ -109,7 +109,7 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
     enum { transform_none, transform_z80, transform_hybrid } transform_switch = transform_hybrid;
 
     // After optional transformation, the original line can be kept, discarded or commented out
-    enum { original_keep, original_comment_out, original_discard } original_switch = original_comment_out;
+    enum { original_keep, original_comment_out, original_discard } original_switch = original_discard;
 
     // Generated equivalent code can optionally be generated, in various flavours
     enum { generate_x86, generate_z80, generate_hybrid, generate_none } generate_switch = generate_x86;
@@ -122,7 +122,7 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
         std::string line;
         if( !std::getline(in,line) )
             break;
-        std::string original_line = line;
+        std::string line_original = line;
         util::replace_all(line,"\t"," ");
         statement stmt;
         stmt.typ = normal;
@@ -258,7 +258,7 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
                 line_out = "DISCARD"; done=true; break;
             case illegal:
                 line_out = "ILLEGAL> ";
-                line_out += original_line;
+                line_out += line_original;
                 done = true;
                 break;
             case comment_only:
@@ -370,7 +370,7 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
         }
         if( mode==mode_pass_thru && !handled )
         {
-            util::putline( asm_out, original_line );
+            util::putline( asm_out, line_original );
             continue;
         }
 
@@ -380,8 +380,8 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
             case empty:
             case comment_only:
             case comment_only_indented:
-                original_line = detabify(original_line);
-                util::putline( asm_out, original_line );
+                line_original = detabify(line_original);
+                util::putline( asm_out, line_original );
                 break;
         }
         if( stmt.typ!=normal && stmt.typ!=equate )
@@ -396,19 +396,19 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
             if( stmt.equate=="" && stmt.instruction!="")
             {
                 std::string out;
-                bool transformed = translate_z80( original_line, stmt.instruction, stmt.parameters, transform_switch==transform_hybrid, out );
+                bool transformed = translate_z80( line_original, stmt.instruction, stmt.parameters, transform_switch==transform_hybrid, out );
                 if( transformed )
                 {
-                    original_line = stmt.label;
+                    line_original = stmt.label;
                     if( stmt.label == "" )
-                        original_line = "\t";
+                        line_original = "\t";
                     else
-                        original_line += (data_mode?"\t":":\t");
-                    original_line += out;
+                        line_original += (data_mode?"\t":":\t");
+                    line_original += out;
                     if( stmt.comment != "" )
                     {
-                        original_line += "\t;";
-                        original_line += stmt.comment;
+                        line_original += "\t;";
+                        line_original += stmt.comment;
                     }
                 }
             }
@@ -417,12 +417,12 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
         {
             case original_comment_out:
             {
-                util::putline( asm_out, detabify( ";" + original_line) );
+                util::putline( asm_out, detabify( ";" + line_original) );
                 break;
             }
             case original_keep:
             {
-                util::putline( asm_out, detabify(original_line) );
+                util::putline( asm_out, detabify(line_original) );
                 break;
             }
             default:
@@ -456,17 +456,22 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
             {
                 asm_line_out = stmt.label;
                 asm_line_out += (data_mode?"\tEQU $":":");
+                if( stmt.comment != "" )
+                {
+                    asm_line_out += "\t;";
+                    asm_line_out += stmt.comment;
+                }
             }
             else if( stmt.instruction!="" )
             {
                 std::string out;
                 bool generated = false;
                 if( generate_switch == generate_x86 )
-                    generated = translate_x86( original_line, stmt.instruction, stmt.parameters, labels, out );
+                    generated = translate_x86( line_original, stmt.instruction, stmt.parameters, labels, out );
                 else
-                    generated = translate_z80( original_line, stmt.instruction, stmt.parameters, generate_switch==generate_hybrid, out );
+                    generated = translate_z80( line_original, stmt.instruction, stmt.parameters, generate_switch==generate_hybrid, out );
                 if( !generated )
-                    asm_line_out = original_line;
+                    asm_line_out = line_original;
                 else
                 {
                     asm_line_out = stmt.label;
@@ -495,8 +500,8 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
                             {
                                 asm_line_out += "\t;";
                                 asm_line_out += stmt.comment;
-                                asm_line_out += out.substr(offset);
                             }
+                            asm_line_out += out.substr(offset);
                         }
                     }
                 }

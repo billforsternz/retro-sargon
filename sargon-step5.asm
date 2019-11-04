@@ -12,7 +12,6 @@
         .686P
         .XMM
         .model  flat
-_DATA    SEGMENT
         .ENDIF
         .DATA
         
@@ -32,6 +31,9 @@ BPAWN   =       BLACK+PAWN
 ;**********************************************************
 ; TABLES SECTION
 ;**********************************************************
+        .IF_X86
+_TABLE   SEGMENT    ALIGN(256)
+        .ENDIF
 START:  .BLKB   100h
 TBASE:
 ;X TBASE must be page aligned, it needs an absolute address
@@ -42,7 +44,8 @@ TBASE:
 ; DIRECT --     Direction Table.  Used to determine the dir-
 ;               ection of movement of each piece.
 ;**********************************************************
-DIRECT: .BYTE   +09,+11,-11,-09
+DIRECT = 0
+        .BYTE   +09,+11,-11,-09
         .BYTE   +10,-10,+01,-01
         .BYTE   -21,-12,+08,+19
         .BYTE   +21,+12,-08,-19
@@ -227,6 +230,10 @@ PLYIX:  .WORD   0,0,0,0,0,0,0,0,0,0
 ; MLNXT --      Pointer to the next available space in the move
 ;               list.
 ;**********************************************************
+        .IF_X86
+_TABLE   ENDS
+_DATA    SEGMENT
+        .ENDIF
         .LOC    START+0
 M1:     .WORD   TBASE
 M2:     .WORD   TBASE
@@ -486,10 +493,10 @@ SARGON   PROC
 
          ;Experiments
          ;mov edx,4563h
-         ;CALL MLTPLY    -> 45h * 63h = 1aafh in al,dh
+         ;CALL MLTPLY    ;-> 45h * 63h = 1aafh in al,dh
          ;mov al,1ah
          ;mov edx,0af63h
-         ;CALL DIVIDE    -> 1aafh / 63h = 45h in dh, 0 remainder in al
+         ;CALL DIVIDE    ;-> 1aafh / 63h = 45h in dh, 0 remainder in al
     
          ;Implement a kind of system call API, at least for now
          cmp al,0
@@ -864,7 +871,7 @@ ADMOVE: LDED    MLNXT   ; Addr of next loc in move list
         DSBC    D       ; Calculate difference
         JRC     AM10    ; Jump if out of space
         LHLD    MLLST   ; Addr of prev. list area
-        SDED    MLLST   ; Savn next as previous
+        SDED    MLLST   ; Save next as previous
         .IF_Z80
         MOV     M,E     ; Store link address
         INX     H
@@ -900,10 +907,10 @@ rel004: XCHG            ; Address of move area
         INX     H
         SHLD    MLNXT   ; Save address for next move
         RET             ; Return
-AM10:   MVI     M,0     ; Abort entry on table ovflow
-        INX     H
-        MVI     M,0
-        DCX     H
+AM10:   ;MVI     M,0     ; Abort entry on table ovflow
+        ;INX     H
+        ;MVI     M,0       ;TODO fix this
+        ;DCX     H
         RET
 
 ;X p37
@@ -924,12 +931,18 @@ GENMOV: CALL    INCHK   ; Test for King in check
         STA     CKFLG   ; Save attack count as flag
         LDED    MLNXT   ; Addr of next avail list space
         LHLD    MLPTRI  ; Ply list pointer index
+        .IF_Z80
         INX     H       ; Increment to next ply
         INX     H
         MOV     M,E     ; Save move list pointer
         INX     H
         MOV     M,D
         INX     H
+        .ELSE
+        LEA     ebx,[ebx+PTRSIZ]       ; Increment to next ply
+        MOV     dword ptr [ebx],edx    ; Save move list pointer
+        LEA     ebx,[ebx+PTRSIZ]       ;
+        .ENDIF
         SHLD    MLPTRI  ; Save new index
         SHLD    MLLST   ; Last pointer for chain init.
         MVI     A,21    ; First position on board
@@ -1700,7 +1713,7 @@ MV20:   LXI     H,POSQ  ; Addr of saved Queen position
 MV21:   BIT     7,E     ; Is Queen white ?
         JRZ     MV22    ; Yes - jump
         INX     H
-MV22:   LDA     M2      ; Get rnewnQueenbpositionen pos
+MV22:   LDA     M2      ; Get new Queen position
         MOV     M,A     ; Save
         JMP     MV5     ; Jump
 MV30:   LXI     H,POSK  ; Get saved King position

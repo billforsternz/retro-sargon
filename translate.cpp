@@ -738,9 +738,9 @@ bool translate_x86( const std::string &line, const std::string &instruction, con
             std::string parm = parameters[0];
             std::string out;
             if( parm == "PSW" )
-                x86_out = "lahf\n\tPUSH eax";
+                x86_out = "lahf\n\tPUSH\teax";
             else if( is_reg16(parm,out) )
-                x86_out = util::sprintf( "PUSH %s", out.c_str() );
+                x86_out = util::sprintf( "PUSH\t%s", out.c_str() );
             else
             {
                 printf( "Error: Illegal push parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
@@ -753,9 +753,9 @@ bool translate_x86( const std::string &line, const std::string &instruction, con
             std::string parm = parameters[0];
             std::string out;
             if( parm == "PSW" )
-                x86_out = "POP eax\n\tsahf";
+                x86_out = "POP\teax\n\tsahf";
             else if( is_reg16(parm,out) )
-                x86_out = util::sprintf( "POP %s", out.c_str() );
+                x86_out = util::sprintf( "POP\t%s", out.c_str() );
             else
             {
                 printf( "Error: Illegal pop parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
