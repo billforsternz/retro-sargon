@@ -34,7 +34,6 @@ BPAWN   =       BLACK+PAWN
         .IF_X86
 _TABLE   SEGMENT    ALIGN(256)
         .ENDIF
-START:  .BLKB   100h
 TBASE:
 ;X TBASE must be page aligned, it needs an absolute address
 ;X of 0XX00H. The CP/M ZASM Assembler has an ORG of 110H.
@@ -144,9 +143,18 @@ BOARDA: .BLKB   120
 ; BACT  --      Black Attack Count. This is the eighth byte of
 ;               the array and does the same for black.
 ;**********************************************************
-WACT    =       ATKLST
-BACT    =       ATKLST+7
-ATKLST: .WORD   0,0,0,0,0,0,0
+        .IF_Z80
+ATKLST  =   .
+        .ELSE
+ATKLST:
+        .ENDIF
+;WACT    =       ATKLST
+;BACT    =       ATKLST+7
+WACT:    .BYTE   0
+         .BYTE   0,0,0,0,0,0
+BACT:    .BYTE   0
+         .BYTE   0,0,0,0,0,0
+
 
 ;**********************************************************
 ; PLIST --      Pinned Piece Array. This is a two part array.
@@ -155,9 +163,10 @@ ATKLST: .WORD   0,0,0,0,0,0,0
 ;               piece to the attacker.
 ;**********************************************************
 ;PLIST   =       .-TBASE-1
-PLIST  = 0c7h
-PLISTD  =       PLIST+10
-PLISTA: .WORD   0,0,0,0,0,0,0,0,0,0
+PLISTA_IDX   =       0b9h
+PLISTD_IDX   =       PLISTA_IDX+10
+PLISTA:  .BYTE   0,0,0,0,0,0,0,0,0,0
+PLISTD:  .BYTE   0,0,0,0,0,0,0,0,0,0
 
 ;**********************************************************
 ; POSK  --      Position of Kings. A two byte area, the first
@@ -435,8 +444,6 @@ FCDMAT:  RET
 TBCPMV:  RET
 INSPCE:  RET
 BLNKER:  RET
-CCIR     MACRO                          ;todo
-         ENDM
 PRTBLK   MACRO   name,len               ;todo
          ENDM
 CARRET   MACRO                          ;todo
@@ -486,6 +493,15 @@ Z80_LDAR MACRO                          ;to get random number
          jnz     $-7
          pop     ebx
          popf
+         ENDM
+
+Z80_CPIR MACRO
+         dec     cx                 ;Counter decrements regardless
+         cmp     al,byte ptr [ebx]  ;Compare
+         lea     ebx,[ebx+1]        ;Address increments regardless (flags unaltered)
+         jz      $+7                ;End with Z set = found
+         jcxz    $+5                ;End with Z not set = not found
+         jmp     $-12               ;Else loop back
          ENDM
 
 ;Wrap all code in a PROC to get source debugging
@@ -1330,10 +1346,10 @@ rel008: MOV     A,M     ; Number of defenders
 PF20:   LXI     H,NPINS ; Address of pinned piece count
         INR     M       ; Increment
         LIXD    NPINS   ; Load pin list index
-        MOV     PLISTD(X),C     ; Save direction of pin
+        MOV     PLISTD_IDX(X),C     ; Save direction of pin
 ;X p46
         LDA     M4      ; Position of pinned piece
-        MOV     PLIST(X),A      ; Save in list
+        MOV     PLISTA_IDX(X),A      ; Save in list
 PF25:   INX     Y       ; Increment direction index
         DJNZ    PF27    ; Done ? No - Jump
 PF26:   INX     D       ; Incr King/Queen pos index
@@ -1919,16 +1935,16 @@ EV10:   CALL    UNMOVE  ; Restore board array
 ;
 ; ARGUMENTS: -- None
 ;**********************************************************
-FNDMOV: LDA     MOVENO  ; Currnet move number
+FNDMOV: LDA     MOVENO  ; Current move number
         CPI     1       ; First move ?
         CZ      BOOK    ; Yes - execute book opening
-        XRA     A       ; Initialize ply number to zer
+        XRA     A       ; Initialize ply number to zero
         STA     NPLY
         LXI     H,0     ; Initialize best move to zero
         SHLD    BESTM
         LXI     H,MLIST ; Initialize ply list pointers
         SHLD    MLNXT
-        LXI     H,PLYIX-2
+        LXI     H,PLYIX-PTRSIZ
         SHLD    MLPTRI
         LDA     KOLOR   ; Initialize color
         STA     COLOR
@@ -1943,7 +1959,7 @@ back05: MOV     M,A
         DJNZ    back05
         STA     BC0     ; Zero ply 0 board control
         STA     MV0     ; Zero ply 0 material
-        CALL    PINFND  ; Complie pin list
+        CALL    PINFND  ; Compile pin list
         CALL    POINTS  ; Evaluate board at ply 0
         LDA     BRDC    ; Get board control points
         STA     BC0     ; Save
@@ -3629,6 +3645,7 @@ _shim_function PROC
     call    SARGON
 ;   MVI     A,1             ; Move number is 1 at at start
     mov al,1
+    add al,2 ;avoid book move
 ;   STA     MOVENO          ; Save
     mov byte ptr [MOVENO],al
 ;   CALL    CPTRMV          ; Make and write computers move

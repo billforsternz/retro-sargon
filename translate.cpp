@@ -946,11 +946,11 @@ void translate_init()
     // Push and pop
     //
 
-    // PUSH NULL, reg16 -> PUSH reg32
+    // PUSH reg16 -> PUSH reg32
     // PUSH PSW -> LAHF; PUSH AX
     xlat["PUSH"] = { "%s", "%s", NULL, push_parameter };
 
-    // POP NULL, reg16 -> POP reg32
+    // POP reg16 -> POP reg32
     // POP PSW -> POP AX; SAHF
     xlat["POP"] = { "%s", "%s", NULL, pop_parameter };
 
@@ -964,56 +964,56 @@ void translate_init()
     // ADI imm8 -> ADD al,imm8
     xlat["ADI"] = { "ADD\tal,%s", "ADD\ta,%s", "ADD\tal,%s", imm8 };
 
-    // ANA NULL, reg8_mem8 -> AND al,reg8_mem8
+    // ANA reg8_mem8 -> AND al,reg8_mem8
     xlat["ANA"] = { "AND\tal,%s", "AND\ta,%s", "AND\tal,%s", reg8_mem8 };
 
     // ANI imm8 -> AND al,imm8
     xlat["ANI"] = { "AND\tal,%s", "AND\ta,%s", "AND\tal,%s", imm8 };
 
-    // SUB NULL, reg8_mem8 -> SUB al,reg8_mem8
+    // SUB reg8_mem8 -> SUB al,reg8_mem8
     xlat["SUB"] = { "SUB\tal,%s",  "SUB\ta,%s", "SUB\tal,%s", reg8_mem8 };
 
     // SUI imm8 -> SUB al,imm8
     xlat["SUI"] = { "SUB\tal,%s", "SUB\ta,%s", "SUB\tal,%s", imm8 };
 
-    // XRA  NULL, reg8_mem8 -> XOR al,reg8_mem8
+    // XRA reg8_mem8 -> XOR al,reg8_mem8
     xlat["XRA"] = { "XOR\tal,%s", "XOR\ta,%s", "XOR\tal,%s", reg8_mem8 };
 
     // XRI imm8 -> XOR al,imm8
     xlat["XRI"] = { "XOR\tal,%s", "XOR\ta,%s", "XOR\tal,%s", imm8 };
 
-    // CMP NULL, reg8_mem8 -> CMP al,reg8_mem8
+    // CMP reg8_mem8 -> CMP al,reg8_mem8
     xlat["CMP"] = { "CMP\tal,%s", "CMP\ta,%s", "CMP\tal,%s", reg8_mem8 };
 
     // CPI imm8 -> CMP al, imm8
     xlat["CPI"] = { "CMP\tal,%s", "CMP\ta,%s", "CMP\tal,%s", imm8 };
 
-    // DCR NULL, reg8 -> DEC NULL, reg8
+    // DCR reg8 -> DEC reg8
     xlat["DCR"] = { "DEC\t%s", "DEC\t%s", NULL, reg8 };
 
-    // INR NULL, reg8 -> INC NULL, reg8
+    // INR reg8 -> INC reg8
     xlat["INR"] = { "INC\t%s", "INC\t%s", NULL, reg8 };
 
     //
     // 16 bit arithmetic
     //
 
-    // DAD NULL, reg16 -> LAHF; ADD ebx,reg16; SAHF        //CY (only) should be affected, but our emulation preserves flags
+    // DAD reg16 -> LAHF; ADD ebx,reg16; SAHF        //CY (only) should be affected, but our emulation preserves flags
     xlat["DAD"] = { "LEA\tebx,[ebx+%s]",  "ADD\thl,%s", "ADD\tbx,%s", reg16 };
 
-    // DADX NULL, reg16 -> LAHF; ADD esi,reg16; SAHF       //CY (only) should be affected, but our emulation preserves flags
+    // DADX reg16 -> LAHF; ADD esi,reg16; SAHF       //CY (only) should be affected, but our emulation preserves flags
     xlat["DADX"] = { "LEA\tesi,[esi+%s]", "ADD\tix,%s", "ADD\tsi,%s", reg16 };
 
-    // DADY NULL, reg16 -> LAHF; ADD edi,reg16; SAHF;      //CY (only) should be affected, but our emulation preserves flags
+    // DADY reg16 -> LAHF; ADD edi,reg16; SAHF;      //CY (only) should be affected, but our emulation preserves flags
     xlat["DADY"] = { "LEA\tedi,[edi+%s]",  "ADD\tiy,%s", "ADD\tdi,%s", reg16 };  // not actually used in codebas
 
-    // DSBC NULL, reg16 -> SBB ebx,reg16
+    // DSBC reg16 -> SBB ebx,reg16
     xlat["DSBC"] = { "SBB\tebx,%s",  "SBC\thl,%s",  "SBC\tbx,%s", reg16 };
 
-    // INX NULL, reg16 -> LAHF; INC reg16; SAHF;      ## INC NULL, reg16; Z80 flags unaffected, X86 INC preserve CY only
+    // INX reg16 -> LAHF; INC reg16; SAHF;      ## INC reg16; Z80 flags unaffected, X86 INC preserve CY only
     xlat["INX"] = { "LEA\t%s,[%s+1]",  "INC\t%s", NULL, reg16 };
 
-    // DCX NULL, reg16 -> LAHF; DEC reg16; SAHF;      ## DEC NULL, reg16; Z80 flags unaffected, X86 DEC preserve CY only
+    // DCX reg16 -> LAHF; DEC reg16; SAHF;      ## DEC reg16; Z80 flags unaffected, X86 DEC preserve CY only
     xlat["DCX"] = { "LEA\t%s,[%s-1]", "DEC\t%s", NULL, reg16 };
 
     //
@@ -1036,7 +1036,7 @@ void translate_init()
     // RAL -> RCL al,1             # rotate left through CY
     xlat["RAL"] = { "RCL\tal,1",  "RLA", NULL, none };
 
-    // RARR NULL, reg8 -> RCR reg, 1     # rotate right through CY
+    // RARR reg8 -> RCR reg, 1     # rotate right through CY
     xlat["RARR"] = { "RCR\t%s,1", "RR\t%s", NULL, reg8 };
 
     // RLD -> macro or call; 12 bits of low AL and byte [BX] rotated 4 bits left (!!)
@@ -1045,13 +1045,13 @@ void translate_init()
     // RRD -> macro or call; 12 bits of low AL and byte [BX] rotated 4 bits right (!!)
     xlat["RRD"] = { "Z80_RRD", "RRD", NULL, none };
 
-    // SLAR NULL, reg8 -> SHL reg8,1     # left shift into CY, bit 0 zeroed (arithmetic and logical are the same)
+    // SLAR reg8 -> SHL reg8,1     # left shift into CY, bit 0 zeroed (arithmetic and logical are the same)
     xlat["SLAR"] = { "SHL\t%s,1", "SLA\t%s", NULL, reg8 };
 
-    // SRAR NULL, reg8 -> SAR reg8,1     # arithmetic right shift into CY, bit 7 preserved
+    // SRAR reg8 -> SAR reg8,1     # arithmetic right shift into CY, bit 7 preserved
     xlat["SRAR"] = { "SAR\t%s,1", "SRA\t%s", NULL, reg8 };
 
-    // SRLR NULL, reg8 -> SHR reg8,1     # logical right shift into CY, bit 7 zeroed
+    // SRLR reg8 -> SHR reg8,1     # logical right shift into CY, bit 7 zeroed
     xlat["SRLR"] = { "SHR\t%s,1", "SRL\t%s", NULL, reg8 };
 
     //
@@ -1198,10 +1198,12 @@ void translate_init()
     // LDAR -> Load A with incrementing R (RAM refresh) register (to get a random number)
     xlat["LDAR"] = { "Z80_LDAR", "LDAR", NULL, none };
 
+    // CPIR (CCIR in quirky assembler) -> macro/call
+    xlat["CCIR"] = { "Z80_CPIR", "CPIR", NULL, none };
+
     //
     // Macros
     //
-    xlat["CCIR"] = { "CCIR", "CCIR", NULL, none };
     xlat["CARRET"] = { "CARRET", "CARRET", NULL, none };
     xlat["PRTBLK"] = { "PRTBLK\t%s", "PRTBLK\t%s", NULL, echo };
 

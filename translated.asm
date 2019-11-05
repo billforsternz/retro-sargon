@@ -28,8 +28,7 @@ BPAWN    EQU     BLACK+PAWN
 ;**********************************************************
 ; TABLES SECTION
 ;**********************************************************
-_TABLE   SEGMENT ALIGN(256)
-START    DB      100h DUP (?)
+_TABLE   SEGMENT    ALIGN(256)
 TBASE    EQU $
 ;X TBASE must be page aligned, it needs an absolute address
 ;X of 0XX00H. The CP/M ZASM Assembler has an ORG of 110H.
@@ -139,9 +138,14 @@ BOARDA   DB      120 DUP (?)
 ; BACT  --      Black Attack Count. This is the eighth byte of
 ;               the array and does the same for black.
 ;**********************************************************
-WACT     EQU     ATKLST
-BACT     EQU     ATKLST+7
-ATKLST   DD      0,0,0,0,0,0,0
+ATKLST:
+;WACT    =       ATKLST
+;BACT    =       ATKLST+7
+WACT     DB      0
+         DB      0,0,0,0,0,0
+BACT     DB      0
+         DB      0,0,0,0,0,0
+
 
 ;**********************************************************
 ; PLIST --      Pinned Piece Array. This is a two part array.
@@ -150,9 +154,10 @@ ATKLST   DD      0,0,0,0,0,0,0
 ;               piece to the attacker.
 ;**********************************************************
 ;PLIST   =       .-TBASE-1
-PLIST    EQU     0c7h
-PLISTD   EQU     PLIST+10
-PLISTA   DD      0,0,0,0,0,0,0,0,0,0
+PLISTA_IDX       EQU     0b9h
+PLISTD_IDX       EQU     PLISTA_IDX+10
+PLISTA   DB      0,0,0,0,0,0,0,0,0,0
+PLISTD   DB      0,0,0,0,0,0,0,0,0,0
 
 ;**********************************************************
 ; POSK  --      Position of Kings. A two byte area, the first
@@ -419,8 +424,6 @@ FCDMAT:  RET
 TBCPMV:  RET
 INSPCE:  RET
 BLNKER:  RET
-CCIR     MACRO                          ;todo
-         ENDM
 PRTBLK   MACRO   name,len               ;todo
          ENDM
 CARRET   MACRO                          ;todo
@@ -470,6 +473,15 @@ Z80_LDAR MACRO                          ;to get random number
          jnz     $-7
          pop     ebx
          popf
+         ENDM
+
+Z80_CPIR MACRO
+         dec     cx                 ;Counter decrements regardless
+         cmp     al,byte ptr [ebx]  ;Compare
+         lea     ebx,[ebx+1]        ;Address increments regardless (flags unaltered)
+         jz      $+7                ;End with Z set = found
+         jcxz    $+5                ;End with Z not set = not found
+         jmp     $-12               ;Else loop back
          ENDM
 
 ;Wrap all code in a PROC to get source debugging
@@ -1155,7 +1167,7 @@ ATKSAV:  PUSH    ecx                    ; Save Regs BC
          CALL    PNCK
 skip12:
          MOV     esi,[T2]               ; Init index to value table
-         MOV     ebx,offset ATKLST      ; Init address of attack list
+         MOV     ebx,ATKLST             ; Init address of attack list
          MOV     ecx,0                  ; Init increment for white
          MOV     al,byte ptr [P2]       ; Attacking piece
          TEST    al,80h                 ; Is it white ?
@@ -1168,7 +1180,9 @@ rel006:  AND     al,7                   ; Attacking piece type
          MOV     dl,QUEEN               ; Use Queen slot in attack list
 rel007:  LEA     ebx,[ebx+ecx]          ; Attack list address
          INC     byte ptr [ebx]         ; Increment list count
-         MOV     dh,0
+         mov     ah,dl
+         MOV     edx,0
+         mov     dl,ah
          LEA     ebx,[ebx+edx]          ; Attack list slot address
          MOV     al,byte ptr [ebx]      ; Get data already there
          AND     al,0FH                 ; Is first slot empty ?
@@ -1214,7 +1228,7 @@ PNCK:    MOV     dh,cl                  ; Save attack direction
          MOV     ch,0
          MOV     al,byte ptr [M2]       ; Position of piece
          MOV     ebx,offset PLISTA      ; Pin list address
-PC1:     CCIR                           ; Search list for position
+PC1:     Z80_CPIR                       ; Search list for position
          JZ      skip13                 ; Return if not found
          RET
 skip13:
@@ -1320,7 +1334,7 @@ PF19:    MOV     al,byte ptr [P1]       ; Load King or Queen
          PUSH    edi
          XOR     al,al                  ; Zero out attack list
          MOV     ch,14
-         MOV     ebx,offset ATKLST
+         MOV     ebx,ATKLST
 back02:  MOV     byte ptr [ebx],al
          LEA     ebx,[ebx+1]
          LAHF
@@ -1330,8 +1344,8 @@ back02:  MOV     byte ptr [ebx],al
          MOV     al,7                   ; Set attack flag
          MOV     byte ptr [T1],al
          CALL    ATTACK                 ; Find attackers/defenders
-         MOV     ebx,WACT               ; White queen attackers
-         MOV     edx,BACT               ; Black queen attackers
+         MOV     ebx,offset WACT        ; White queen attackers
+         MOV     edx,offset BACT        ; Black queen attackers
          MOV     al,byte ptr [P1]       ; Get queen
          TEST    al,80h                 ; Is she white ?
          JZ      rel008                 ; Yes - skip
@@ -1347,10 +1361,10 @@ rel008:  MOV     al,byte ptr [ebx]      ; Number of defenders
 PF20:    MOV     ebx,offset NPINS       ; Address of pinned piece count
          INC     byte ptr [ebx]         ; Increment
          MOV     esi,[NPINS]            ; Load pin list index
-         MOV     byte ptr [esi+PLISTD],cl ; Save direction of pin
+         MOV     byte ptr [esi+PLISTD_IDX],cl ; Save direction of pin
 ;X p46
          MOV     al,byte ptr [M4]       ; Position of pinned piece
-         MOV     byte ptr [esi+PLIST],al ; Save in list
+         MOV     byte ptr [esi+PLISTA_IDX],al ; Save in list
 PF25:    LEA     edi,[edi+1]            ; Increment direction index
          LAHF                           ; Done ? No - Jump
          DEC ch
@@ -1376,8 +1390,8 @@ PF27:    JMP     PF2                    ; Jump
 ;****************************************************************
 XCHNG:   Z80_EXX                        ; Swap regs.
          MOV     al,byte ptr [P1]       ; Piece attacked
-         MOV     ebx,WACT               ; Addr of white attkrs/dfndrs
-         MOV     edx,BACT               ; Addr of black attkrs/dfndrs
+         MOV     ebx,offset WACT        ; Addr of white attkrs/dfndrs
+         MOV     edx,offset BACT        ; Addr of black attkrs/dfndrs
          TEST    al,80h                 ; Is piece white ?
          JZ      rel009                 ; Yes - jump
          XCHG    ebx,edx                ; Swap list pointers
@@ -1531,7 +1545,7 @@ PT6D:    MOV     ebx,offset BRDC        ; Get address of board control
          MOV     byte ptr [ebx],al      ; Save
 PT6X:    XOR     al,al                  ; Zero out attack list
          MOV     ch,14
-         MOV     ebx,offset ATKLST
+         MOV     ebx,ATKLST
 back04:  MOV     byte ptr [ebx],al
          LEA     ebx,[ebx+1]
          LAHF
@@ -1539,7 +1553,7 @@ back04:  MOV     byte ptr [ebx],al
          JNZ     back04
          SAHF
          CALL    ATTACK                 ; Build attack list for square
-         MOV     ebx,BACT               ; Get black attacker count addr
+         MOV     ebx,offset BACT        ; Get black attacker count addr
          MOV     al,byte ptr [WACT]     ; Get white attacker count
          SUB     al,byte ptr [ebx]      ; Compute count difference
          MOV     ebx,offset BRDC        ; Address of board control
@@ -1940,18 +1954,18 @@ EV10:    CALL    UNMOVE                 ; Restore board array
 ;
 ; ARGUMENTS: -- None
 ;**********************************************************
-FNDMOV:  MOV     al,byte ptr [MOVENO]   ; Currnet move number
+FNDMOV:  MOV     al,byte ptr [MOVENO]   ; Current move number
          CMP     al,1                   ; First move ?
          JNZ     skip24                 ; Yes - execute book opening
          CALL    BOOK
 skip24:
-         XOR     al,al                  ; Initialize ply number to zer
+         XOR     al,al                  ; Initialize ply number to zero
          MOV     byte ptr [NPLY],al
          MOV     ebx,0                  ; Initialize best move to zero
          MOV     [BESTM],ebx
          MOV     ebx,offset MLIST       ; Initialize ply list pointers
          MOV     [MLNXT],ebx
-         MOV     ebx,offset PLYIX-2
+         MOV     ebx,offset PLYIX-PTRSIZ
          MOV     [MLPTRI],ebx
          MOV     al,byte ptr [KOLOR]    ; Initialize color
          MOV     byte ptr [COLOR],al
@@ -1969,7 +1983,7 @@ back05:  MOV     byte ptr [ebx],al
          SAHF
          MOV     byte ptr [BC0],al      ; Zero ply 0 board control
          MOV     byte ptr [MV0],al      ; Zero ply 0 material
-         CALL    PINFND                 ; Complie pin list
+         CALL    PINFND                 ; Compile pin list
          CALL    POINTS                 ; Evaluate board at ply 0
          MOV     al,byte ptr [BRDC]     ; Get board control points
          MOV     byte ptr [BC0],al      ; Save
@@ -3033,6 +3047,7 @@ _shim_function PROC
     call    SARGON
 ;   MVI     A,1             ; Move number is 1 at at start
     mov al,1
+    add al,2 ;avoid book move
 ;   STA     MOVENO          ; Save
     mov byte ptr [MOVENO],al
 ;   CALL    CPTRMV          ; Make and write computers move
