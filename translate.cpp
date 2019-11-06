@@ -55,20 +55,20 @@ bool is_mem8( const std::string &parm, std::string &out )
     if( util::suffix(parm,"(X)" ))
     {
         if( parm[0] == '-' )
-            out = "byte ptr [esi-" + parm.substr(1,len-4) + "]";
+            out = "byte ptr [ebp+esi-" + parm.substr(1,len-4) + "]";
         else
-            out = "byte ptr [esi+" + parm.substr(0,len-3) + "]";
+            out = "byte ptr [ebp+esi+" + parm.substr(0,len-3) + "]";
     }
     else if( util::suffix(parm,"(Y)" ))
     {
         if( parm[0] == '-' )
-            out = "byte ptr [edi-" + parm.substr(1,len-4) + "]";
+            out = "byte ptr [ebp+edi-" + parm.substr(1,len-4) + "]";
         else
-            out = "byte ptr [edi+" + parm.substr(0,len-3) + "]";
+            out = "byte ptr [ebp+edi+" + parm.substr(0,len-3) + "]";
     }
     else if( isascii(parm[0]) && isalpha(parm[0]) )
     {
-        out = "byte ptr ["+ parm +"]";
+        out = "byte ptr [ebp+"+ parm +"]";
     }
     else
     {
@@ -79,13 +79,17 @@ bool is_mem8( const std::string &parm, std::string &out )
 
 bool is_mem16( const std::string &parm, std::string &out )
 {
-    out = "["+ parm +"]";
+    out = "word ptr [ebp+"+ parm +"]";
     return true;
 }
 
 bool is_imm16( const std::string &parm, std::string &out, const std::set<std::string> &labels )
 {
-    std::string temp = parm;
+    bool ret = true;
+    out = parm; // don't actually check anything at least for now
+    return ret;
+
+/*  std::string temp = parm;
     size_t offset = temp.find_first_of("+-");
     if( offset != std::string::npos )
         temp = temp.substr(0,offset);
@@ -94,7 +98,7 @@ bool is_imm16( const std::string &parm, std::string &out, const std::set<std::st
         out = parm;
     else
         out = "offset "+ parm;
-    return true;
+    return true; */
 }
 
 bool is_reg8( const std::string &parm, std::string &out )
@@ -115,7 +119,7 @@ bool is_reg8( const std::string &parm, std::string &out )
     else if( parm == "L" )
         out = "bl";
     else if( parm == "M" )
-        out = "byte ptr [ebx]";
+        out = "byte ptr [ebp+ebx]";
     else
         ret = false;
     return ret;
@@ -125,15 +129,15 @@ bool is_reg16( const std::string &parm, std::string &out )
 {
     bool ret = true;
     if( parm == "H" )
-        out = "ebx";
+        out = "bx";
     else if( parm == "B" )
-        out = "ecx";
+        out = "cx";
     else if( parm == "D" )
-        out = "edx";
+        out = "dx";
     else if( parm == "X" )
-        out = "esi";
+        out = "si";
     else if( parm == "Y" )
-        out = "edi";
+        out = "di";
     else
         ret = false;
     return ret;
@@ -740,7 +744,7 @@ bool translate_x86( const std::string &line, const std::string &instruction, con
             if( parm == "PSW" )
                 x86_out = "lahf\n\tPUSH\teax";
             else if( is_reg16(parm,out) )
-                x86_out = util::sprintf( "PUSH\t%s", out.c_str() );
+                x86_out = util::sprintf( "PUSH\te%s", out.c_str() );
             else
             {
                 printf( "Error: Illegal push parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
@@ -755,7 +759,7 @@ bool translate_x86( const std::string &line, const std::string &instruction, con
             if( parm == "PSW" )
                 x86_out = "POP\teax\n\tsahf";
             else if( is_reg16(parm,out) )
-                x86_out = util::sprintf( "POP\t%s", out.c_str() );
+                x86_out = util::sprintf( "POP\te%s", out.c_str() );
             else
             {
                 printf( "Error: Illegal pop parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
@@ -999,22 +1003,22 @@ void translate_init()
     //
 
     // DAD reg16 -> LAHF; ADD ebx,reg16; SAHF        //CY (only) should be affected, but our emulation preserves flags
-    xlat["DAD"] = { "LEA\tebx,[ebx+%s]",  "ADD\thl,%s", "ADD\tbx,%s", reg16 };
+    xlat["DAD"] = { "LAHF\n\tADD\tbx,%s\n\tSAHF",  "ADD\thl,%s", "ADD\tbx,%s", reg16 };
 
     // DADX reg16 -> LAHF; ADD esi,reg16; SAHF       //CY (only) should be affected, but our emulation preserves flags
-    xlat["DADX"] = { "LEA\tesi,[esi+%s]", "ADD\tix,%s", "ADD\tsi,%s", reg16 };
+    xlat["DADX"] = { "LAHF\n\tADD\tsi,%s\n\tSAHF", "ADD\tix,%s", "ADD\tsi,%s", reg16 };
 
     // DADY reg16 -> LAHF; ADD edi,reg16; SAHF;      //CY (only) should be affected, but our emulation preserves flags
-    xlat["DADY"] = { "LEA\tedi,[edi+%s]",  "ADD\tiy,%s", "ADD\tdi,%s", reg16 };  // not actually used in codebas
+    xlat["DADY"] = { "LAHF\n\tADD\tdi,%s\n\tSAHF",  "ADD\tiy,%s", "ADD\tdi,%s", reg16 };  // not actually used in codebas
 
     // DSBC reg16 -> SBB ebx,reg16
-    xlat["DSBC"] = { "SBB\tebx,%s",  "SBC\thl,%s",  "SBC\tbx,%s", reg16 };
+    xlat["DSBC"] = { "SBB\tbx,%s",  "SBC\thl,%s",  "SBC\tbx,%s", reg16 };
 
     // INX reg16 -> LAHF; INC reg16; SAHF;      ## INC reg16; Z80 flags unaffected, X86 INC preserve CY only
-    xlat["INX"] = { "LEA\t%s,[%s+1]",  "INC\t%s", NULL, reg16 };
+    xlat["INX"] = { "LAHF\n\tINC\t%s\n\tSAHF",  "INC\t%s", NULL, reg16 };
 
     // DCX reg16 -> LAHF; DEC reg16; SAHF;      ## DEC reg16; Z80 flags unaffected, X86 DEC preserve CY only
-    xlat["DCX"] = { "LEA\t%s,[%s-1]", "DEC\t%s", NULL, reg16 };
+    xlat["DCX"] = { "LAHF\n\tDEC\t%s\n\tSAHF", "DEC\t%s", NULL, reg16 };
 
     //
     // Bit test, set, clear
@@ -1140,22 +1144,22 @@ void translate_init()
     xlat["LDA"] = { "MOV\tal,%s", "LD\ta,%s", "LD\tal,%s", mem8 };
 
     // LDAX reg16 -> MOV al,[reg16]
-    xlat["LDAX"] = { "MOV\tal,[%s]", "LD\ta,(%s)", "LD\tal,(%s)", reg16 };
+    xlat["LDAX"] = { "MOV\tal,[ebp+e%s]", "LD\ta,(%s)", "LD\tal,(%s)", reg16 };
 
     // LHLD mem16 -> MOV ebx,[mem16]
-    xlat["LHLD"] = { "MOV\tebx,%s", "LD\thl,%s", "LD\tbx,%s", mem16 };
+    xlat["LHLD"] = { "MOV\tbx,%s", "LD\thl,%s", "LD\tbx,%s", mem16 };
 
     // LBCD mem16 -> MOV ecx,[mem16]
-    xlat["LBCD"] = { "MOV\tecx,%s",  "LD\tbc,%s", "LD\tcx,%s", mem16 };
+    xlat["LBCD"] = { "MOV\tcx,%s",  "LD\tbc,%s", "LD\tcx,%s", mem16 };
 
     // LDED mem16 -> MOV edx,[mem16]
-    xlat["LDED"] = { "MOV\tedx,%s", "LD\tde,%s", "LD\tdx,%s", mem16 };
+    xlat["LDED"] = { "MOV\tdx,%s", "LD\tde,%s", "LD\tdx,%s", mem16 };
 
     // LIXD mem16 -> MOV esi,[mem16]
-    xlat["LIXD"] = { "MOV\tesi,%s", "LD\tix,%s", "LD\tsi,%s", mem16 };
+    xlat["LIXD"] = { "MOV\tsi,%s", "LD\tix,%s", "LD\tsi,%s", mem16 };
 
     // LIYD mem16 -> MOV edi,[mem16]
-    xlat["LIYD"] = { "MOV\tedi,%s", "LD\tiy,%s", "LD\tdi,%s", mem16 };
+    xlat["LIYD"] = { "MOV\tdi,%s", "LD\tiy,%s", "LD\tdi,%s", mem16 };
 
     // LXI reg16, imm16 -> MOV reg16, imm16 (if imm16 is a label precede it with offset)
     xlat["LXI"] = { "MOV\t%s,%s", "LD\t%s,%s", NULL, reg16_imm16 };
@@ -1168,16 +1172,16 @@ void translate_init()
     xlat["STA"]  = { "MOV\t%s,al", "LD\t%s,a", "LD\t%s,al", mem8 };
 
     // SHLD mem16 -> mov [mem16],ebx
-    xlat["SHLD"] = { "MOV\t%s,ebx", "LD\t%s,hl",  "LD\t%s,bx", mem16 };
+    xlat["SHLD"] = { "MOV\t%s,bx", "LD\t%s,hl",  "LD\t%s,bx", mem16 };
 
     // SBCD mem16 -> MOV [mem16],ecx
-    xlat["SBCD"] = { "MOV\t%s,ecx", "LD\t%s,bc", "LD\t%s,cx", mem16 };
+    xlat["SBCD"] = { "MOV\t%s,cx", "LD\t%s,bc", "LD\t%s,cx", mem16 };
 
     // SDED mem16 -> mov [mem16],edx
-    xlat["SDED"] = { "MOV\t%s,edx", "LD\t%s,de", "LD\t%s,dx", mem16 };
+    xlat["SDED"] = { "MOV\t%s,dx", "LD\t%s,de", "LD\t%s,dx", mem16 };
 
     // SIXD mem16 -> mov [mem16],esi
-    xlat["SIXD"] = { "MOV\t%s,esi", "LD\t%s,ix", "LD\t%s,si", mem16 };
+    xlat["SIXD"] = { "MOV\t%s,si", "LD\t%s,ix", "LD\t%s,si", mem16 };
 
     //
     // Miscellaneous
@@ -1187,7 +1191,7 @@ void translate_init()
     xlat["NEG"] = { "NEG\tal",  "NEG", NULL, none };
 
     // XCHG -> XCHG ebx,edx
-    xlat["XCHG"] = { "XCHG\tebx,edx", "EX\tde,hl", "EX\tdx,bx", none };
+    xlat["XCHG"] = { "XCHG\tbx,dx", "EX\tde,hl", "EX\tdx,bx", none };
 
     // EXAF -> macro/call
     xlat["EXAF"] = { "Z80_EXAF", "EXAF", NULL, none };

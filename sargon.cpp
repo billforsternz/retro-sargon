@@ -28,6 +28,7 @@ int main( int argc, const char *argv[] )
 {
     util::tests();
 #if 1
+    convert("sargon-step6.asm","output-step6.asm", "report-step6.txt");
     shim_parameters sh;
     shim_function( &sh );
     const unsigned char *p = sh.board;
@@ -40,7 +41,7 @@ int main( int argc, const char *argv[] )
 #endif
 
 #if 0
-    convert("sargon-step5.asm","output-step5.asm", "report-step5.txt");
+    convert("sargon-step6.asm","output-step6.asm", "report-step6.txt");
 #endif
 
 #if 0
@@ -109,7 +110,7 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
     enum { transform_none, transform_z80, transform_hybrid } transform_switch = transform_hybrid;
 
     // After optional transformation, the original line can be kept, discarded or commented out
-    enum { original_keep, original_comment_out, original_discard } original_switch = original_discard;
+    enum { original_keep, original_comment_out, original_discard } original_switch = original_comment_out;
 
     // Generated equivalent code can optionally be generated, in various flavours
     enum { generate_x86, generate_z80, generate_hybrid, generate_none } generate_switch = generate_x86;
@@ -117,6 +118,7 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
     // .IF controls let us switch between three modes (currently)
     enum { mode_normal, mode_pass_thru, mode_suspended } mode = mode_normal;
 
+    unsigned int track_location = 0;
     for(;;)
     {
         std::string line;
@@ -344,6 +346,11 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
                 mode = mode_suspended;
                 handled = true;         
             }
+            else if( stmt.instruction == ".IF_16BIT" )
+            {
+                mode = mode_normal;
+                handled = true;         
+            }
             else if( stmt.instruction == ".IF_X86" )
             {
                 mode = mode_pass_thru;
@@ -354,6 +361,8 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
                 if( mode == mode_suspended )
                     mode = mode_pass_thru;
                 else if( mode == mode_pass_thru )
+                    mode = mode_suspended;
+                else if( mode == mode_normal )
                     mode = mode_suspended;
                 else
                     printf( "Error, unexpected .ELSE\n" );
@@ -433,6 +442,7 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
         // Optionally generate code
         if( generate_switch != generate_none )
         {
+            std::string str_location = (generate_switch==generate_z80 ? "$" : util::sprintf( "0%xh", track_location ) );
             std::string asm_line_out;
             if( stmt.equate != "" )
             {
@@ -441,8 +451,8 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
                 bool first = true;
                 for( std::string s: stmt.parameters )
                 {
-                    if(first && s[0]=='.')
-                        s[0]='?';
+                    if( first && s[0]=='.' )
+                        s = str_location + s.substr(1);
                     asm_line_out += first ? "\t" : ",";
                     first = false;
                     asm_line_out += s;
@@ -454,8 +464,10 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
             }
             else if( stmt.label != "" && stmt.instruction=="" )
             {
-                asm_line_out = stmt.label;
-                asm_line_out += (data_mode?"\tEQU $":":");
+                if( data_mode )
+                    asm_line_out = util::sprintf( "%s\tEQU\t%s", stmt.label.c_str(), str_location.c_str() );
+                else
+                    asm_line_out = stmt.label + ":";
                 if( stmt.comment != "" )
                 {
                     asm_line_out += "\t;";
@@ -466,13 +478,87 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
             {
                 std::string out;
                 bool generated = false;
-                if( generate_switch == generate_x86 )
-                    generated = translate_x86( line_original, stmt.instruction, stmt.parameters, labels, out );
-                else
+                bool show_original = false;
+                if( generate_switch == generate_z80 )
+                {
                     generated = translate_z80( line_original, stmt.instruction, stmt.parameters, generate_switch==generate_hybrid, out );
-                if( !generated )
-                    asm_line_out = line_original;
+                    show_original = !generated;
+                }
                 else
+                {
+                    if( data_mode && (stmt.instruction == ".LOC" || stmt.instruction == ".BLKB"  ||
+                                      stmt.instruction == ".BYTE" || stmt.instruction == ".WORD")
+                      )
+                    {
+                        if( stmt.instruction == ".LOC" )
+                        {
+                            printf( "Error, .LOC not supported. Line: [%s]\n", line_original.c_str() );
+                            show_original = true;
+                        }
+                        else if( stmt.parameters.size() == 0 )
+                        {
+                            printf( "Error, at least one parameter required. Line: [%s]\n", line_original.c_str() );
+                            show_original = true;
+                        }
+                        else
+                        {
+                            bool first = true;
+                            bool commented = false;
+                            std::string parameter_list;
+                            for( std::string s: stmt.parameters )
+                            {
+                                parameter_list += first ? "" : ",";
+                                first = false;
+                                parameter_list += s;
+                            }
+                            if( stmt.label != "" )
+                            {
+                                asm_line_out = util::sprintf( "%s\tEQU\t%s", stmt.label.c_str(), str_location.c_str() );
+                                if( stmt.comment != "" )
+                                {
+                                    asm_line_out += "\t;";
+                                    asm_line_out += stmt.comment;
+                                    commented = true;
+                                }
+                                asm_line_out += "\n";
+                            }
+                            if( stmt.instruction == ".BLKB" )
+                            {
+                                asm_line_out += util::sprintf( "\tDB\t%s\tDUP (?)", parameter_list.c_str() );
+                                unsigned int nbr = atoi( stmt.parameters[0].c_str() );
+                                if( nbr == 0 )
+                                {
+                                    printf( "Error, .BLKB parameter is zero or unparseable. Line: [%s]\n", line_original.c_str() );
+                                    show_original = true;
+                                }
+                                track_location += nbr;
+                            }
+                            else if( stmt.instruction == ".BYTE" )
+                            {
+                                asm_line_out += util::sprintf( "\tDB\t%s", parameter_list.c_str() );
+                                track_location += stmt.parameters.size();
+                            }
+                            else if( stmt.instruction == ".WORD" )
+                            {
+                                asm_line_out += util::sprintf( "\tDW\t%s", parameter_list.c_str() );
+                                track_location += (2 * stmt.parameters.size());
+                            }
+                            if( !commented && stmt.comment != "" )
+                            {
+                                asm_line_out += "\t;";
+                                asm_line_out += stmt.comment;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        generated = translate_x86( line_original, stmt.instruction, stmt.parameters, labels, out );
+                        show_original = !generated;
+                    }
+                }
+                if( show_original )
+                    asm_line_out = line_original;
+                if( generated )
                 {
                     asm_line_out = stmt.label;
                     if( stmt.label == "" )

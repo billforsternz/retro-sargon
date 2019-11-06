@@ -15,21 +15,34 @@
 ;**********************************************************
 ; EQUATES
 ;**********************************************************
+;PAWN    =       1
 PAWN     EQU     1
+;KNIGHT  =       2
 KNIGHT   EQU     2
+;BISHOP  =       3
 BISHOP   EQU     3
+;ROOK    =       4
 ROOK     EQU     4
+;QUEEN   =       5
 QUEEN    EQU     5
+;KING    =       6
 KING     EQU     6
+;WHITE   =       0
 WHITE    EQU     0
+;BLACK   =       80H
 BLACK    EQU     80H
+;BPAWN   =       BLACK+PAWN
 BPAWN    EQU     BLACK+PAWN
 
 ;**********************************************************
 ; TABLES SECTION
 ;**********************************************************
-_TABLE   SEGMENT    ALIGN(256)
-TBASE    EQU $
+_DATA   SEGMENT
+base_address:
+;        DS      256
+         DB      256     DUP (?)
+;TBASE:
+TBASE    EQU     0100h
 ;X TBASE must be page aligned, it needs an absolute address
 ;X of 0XX00H. The CP/M ZASM Assembler has an ORG of 110H.
 ;X The relative address START+0F0H becomes the absolute
@@ -38,12 +51,20 @@ TBASE    EQU $
 ; DIRECT --     Direction Table.  Used to determine the dir-
 ;               ection of movement of each piece.
 ;**********************************************************
-DIRECT   EQU     0
+;DIRECT =        .-TBASE
+DIRECT   EQU     0100h-TBASE
+;DIRECT = 0
+;        DB      +09,+11,-11,-09
          DB      +09,+11,-11,-09
+;        DB      +10,-10,+01,-01
          DB      +10,-10,+01,-01
+;        DB      -21,-12,+08,+19
          DB      -21,-12,+08,+19
+;        DB      +21,+12,-08,-19
          DB      +21,+12,-08,-19
+;        DB      +10,+10,+11,+09
          DB      +10,+10,+11,+09
+;        DB      -10,-10,-11,-09
          DB      -10,-10,-11,-09
 ;X p20
 ;**********************************************************
@@ -52,8 +73,10 @@ DIRECT   EQU     0
 ;               given piece.
 ;**********************************************************
 ;DPOINT =        .-TBASE
-DPOINT   EQU     18h
+DPOINT   EQU     0118h-TBASE
+;DPOINT = 18h
 
+;        DB      20,16,8,0,4,0,0
          DB      20,16,8,0,4,0,0
 
 ;**********************************************************
@@ -62,7 +85,9 @@ DPOINT   EQU     18h
 ;               given piece.
 ;**********************************************************
 ;DCOUNT =        .-TBASE
-DCOUNT   EQU     1fh
+DCOUNT   EQU     011fh-TBASE
+;DCOUNT = 1fh
+;        DB      4,4,8,4,4,8,8
          DB      4,4,8,4,4,8,8
 
 ;**********************************************************
@@ -70,7 +95,9 @@ DCOUNT   EQU     1fh
 ;               piece, or the worth of each piece.
 ;**********************************************************
 ;PVALUE =        .-TBASE-1
-PVALUE   EQU     25h
+PVALUE   EQU     0126h-TBASE-1
+;PVALUE = 25h
+;        DB      1,3,3,5,9,10
          DB      1,3,3,5,9,10
 
 ;**********************************************************
@@ -79,7 +106,9 @@ PVALUE   EQU     25h
 ;               for the start of the game.
 ;**********************************************************
 ;PIECES =        .-TBASE
-PIECES   EQU     2ch
+PIECES   EQU     012ch-TBASE
+;PIECES = 2ch
+;        DB      4,2,3,5,6,3,2,4
          DB      4,2,3,5,6,3,2,4
 ;X p21
 ;************************************************************
@@ -121,8 +150,11 @@ PIECES   EQU     2ch
 ;                       0 -- Empty Square
 ;**********************************************************
 ;BOARD   =       .-TBASE
-BOARD    EQU     34h
-BOARDA   DB      120 DUP (?)
+BOARD    EQU     0134h-TBASE
+;BOARD  = 34h
+;BOARDA  DS      120
+BOARDA   EQU     0134h
+         DB      120     DUP (?)
 
 ;p22
 ;**********************************************************
@@ -138,13 +170,40 @@ BOARDA   DB      120 DUP (?)
 ; BACT  --      Black Attack Count. This is the eighth byte of
 ;               the array and does the same for black.
 ;**********************************************************
-ATKLST:
+;WACT    =       ATKLST
+WACT     EQU     ATKLST
+;BACT    =       ATKLST+7
+BACT     EQU     ATKLST+7
+;ATKLST  DW      0,0,0,0,0,0,0
+ATKLST   EQU     01ach
+         DW      0,0,0,0,0,0,0
+
+;**********************************************************
+; PLIST  --      Pinned Piece Array. This is a two part array.
+;                PLISTA contains the pinned piece position.
+;                PLISTD contains the direction from the pinned
+;                piece to the attacker.
+;**********************************************************
+;PLIST   =       .-TBASE-1
+PLIST    EQU     01bah-TBASE-1
+;PLISTD  =       PLIST+10
+PLISTD   EQU     PLIST+10
+;PLISTA  DW      0,0,0,0,0,0,0,0,0,0
+PLISTA   EQU     01bah
+         DW      0,0,0,0,0,0,0,0,0,0
+
+
+;        .IF_Z80
+;ATKLST  =   .
+;        .ELSE
+;ATKLST:
+;        .ENDIF
 ;WACT    =       ATKLST
 ;BACT    =       ATKLST+7
-WACT     DB      0
-         DB      0,0,0,0,0,0
-BACT     DB      0
-         DB      0,0,0,0,0,0
+;WACT:    .BYTE   0
+;         .BYTE   0,0,0,0,0,0
+;BACT:    .BYTE   0
+;         .BYTE   0,0,0,0,0,0;
 
 
 ;**********************************************************
@@ -154,10 +213,10 @@ BACT     DB      0
 ;               piece to the attacker.
 ;**********************************************************
 ;PLIST   =       .-TBASE-1
-PLISTA_IDX       EQU     0b9h
-PLISTD_IDX       EQU     PLISTA_IDX+10
-PLISTA   DB      0,0,0,0,0,0,0,0,0,0
-PLISTD   DB      0,0,0,0,0,0,0,0,0,0
+;PLISTA_IDX   =       0b9h
+;PLISTD_IDX   =       PLISTA_IDX+10
+;PLISTA:  .BYTE   0,0,0,0,0,0,0,0,0,0
+;PLISTD:  .BYTE   0,0,0,0,0,0,0,0,0,0
 
 ;**********************************************************
 ; POSK  --      Position of Kings. A two byte area, the first
@@ -167,8 +226,13 @@ PLISTD   DB      0,0,0,0,0,0,0,0,0,0
 ;
 ; POSQ  --      Position of Queens. Like POSK,but for queens.
 ;**********************************************************
-POSK     DB      24,95
-POSQ     DB      14,94
+;POSK    DB      24,95
+POSK     EQU     01ceh
+         DB      24,95
+;POSQ    DB      14,94
+POSQ     EQU     01d0h
+         DB      14,94
+;        DB      -1
          DB      -1
 
 ;X p23
@@ -177,7 +241,9 @@ POSQ     DB      14,94
 ;               hold the scores at each ply. It includes two
 ;               "dummy" entries for ply -1 and ply 0.
 ;**********************************************************
-SCORE    DD      0,0,0,0,0,0
+;SCORE   DW      0,0,0,0,0,0
+SCORE    EQU     01d3h
+         DW      0,0,0,0,0,0
 
 ;**********************************************************
 ; PLYIX --      Ply Table. Contains pairs of pointers, a pair
@@ -186,8 +252,11 @@ SCORE    DD      0,0,0,0,0,0
 ;               The second pointer points to which move in the
 ;               list is the one currently being considered.
 ;**********************************************************
-PLYIX    DD      0,0,0,0,0,0,0,0,0,0
-         DD      0,0,0,0,0,0,0,0,0,0
+;PLYIX   DW      0,0,0,0,0,0,0,0,0,0
+PLYIX    EQU     01dfh
+         DW      0,0,0,0,0,0,0,0,0,0
+;        DW      0,0,0,0,0,0,0,0,0,0
+         DW      0,0,0,0,0,0,0,0,0,0
 
 ;**********************************************************
 ; STACK --      Contains the stack for the program.
@@ -230,25 +299,59 @@ PLYIX    DD      0,0,0,0,0,0,0,0,0,0
 ; MLNXT --      Pointer to the next available space in the move
 ;               list.
 ;**********************************************************
-_TABLE   ENDS
-_DATA    SEGMENT
-                                        ;ORG     START+0
-M1       DD      TBASE
-M2       DD      TBASE
-M3       DD      TBASE
-M4       DD      TBASE
-T1       DD      TBASE
-T2       DD      TBASE
-T3       DD      TBASE
-INDX1    DD      TBASE
-INDX2    DD      TBASE
-NPINS    DD      TBASE
-MLPTRI   DD      PLYIX
-MLPTRJ   DD      0
-SCRIX    DD      0
-BESTM    DD      0
-MLLST    DD      0
-MLNXT    DD      MLIST
+;        .IF_X86
+;_TABLE   ENDS
+;_DATA    SEGMENT
+;        .ENDIF
+;        .LOC    START+0
+;M1      DW      TBASE
+M1       EQU     0207h
+         DW      TBASE
+;M2      DW      TBASE
+M2       EQU     0209h
+         DW      TBASE
+;M3      DW      TBASE
+M3       EQU     020bh
+         DW      TBASE
+;M4      DW      TBASE
+M4       EQU     020dh
+         DW      TBASE
+;T1      DW      TBASE
+T1       EQU     020fh
+         DW      TBASE
+;T2      DW      TBASE
+T2       EQU     0211h
+         DW      TBASE
+;T3      DW      TBASE
+T3       EQU     0213h
+         DW      TBASE
+;INDX1   DW      TBASE
+INDX1    EQU     0215h
+         DW      TBASE
+;INDX2   DW      TBASE
+INDX2    EQU     0217h
+         DW      TBASE
+;NPINS   DW      TBASE
+NPINS    EQU     0219h
+         DW      TBASE
+;MLPTRI  DW      PLYIX
+MLPTRI   EQU     021bh
+         DW      PLYIX
+;MLPTRJ  DW      0
+MLPTRJ   EQU     021dh
+         DW      0
+;SCRIX   DW      0
+SCRIX    EQU     021fh
+         DW      0
+;BESTM   DW      0
+BESTM    EQU     0221h
+         DW      0
+;MLLST   DW      0
+MLLST    EQU     0223h
+         DW      0
+;MLNXT   DW      MLIST
+MLNXT    EQU     0225h
+         DW      MLIST
 
 ;X p25
 ;**********************************************************
@@ -314,29 +417,74 @@ MLNXT    DD      MLIST
 ;               the first move for the computer.
 ;
 ;**********************************************************
-KOLOR    DB      0
-COLOR    DB      0
-P1       DB      0
-P2       DB      0
-P3       DB      0
-PMATE    DB      0
-MOVENO   DB      0
-PLYMAX   DB      2
-NPLY     DB      0
-CKFLG    DB      0
-MATEF    DB      0
-VALM     DB      0
-BRDC     DB      0
-PTSL     DB      0
-PTSW1    DB      0
-PTSW2    DB      0
-MTRL     DB      0
-BC0      DB      0
-MV0      DB      0
-PTSCK    DB      0
-BMOVES   DB      35,55,10H
+;KOLOR   DB      0
+KOLOR    EQU     0227h
+         DB      0
+;COLOR   DB      0
+COLOR    EQU     0228h
+         DB      0
+;P1      DB      0
+P1       EQU     0229h
+         DB      0
+;P2      DB      0
+P2       EQU     022ah
+         DB      0
+;P3      DB      0
+P3       EQU     022bh
+         DB      0
+;PMATE   DB      0
+PMATE    EQU     022ch
+         DB      0
+;MOVENO  DB      0
+MOVENO   EQU     022dh
+         DB      0
+;PLYMAX  DB      2
+PLYMAX   EQU     022eh
+         DB      2
+;NPLY    DB      0
+NPLY     EQU     022fh
+         DB      0
+;CKFLG   DB      0
+CKFLG    EQU     0230h
+         DB      0
+;MATEF   DB      0
+MATEF    EQU     0231h
+         DB      0
+;VALM    DB      0
+VALM     EQU     0232h
+         DB      0
+;BRDC    DB      0
+BRDC     EQU     0233h
+         DB      0
+;PTSL    DB      0
+PTSL     EQU     0234h
+         DB      0
+;PTSW1   DB      0
+PTSW1    EQU     0235h
+         DB      0
+;PTSW2   DB      0
+PTSW2    EQU     0236h
+         DB      0
+;MTRL    DB      0
+MTRL     EQU     0237h
+         DB      0
+;BC0     DB      0
+BC0      EQU     0238h
+         DB      0
+;MV0     DB      0
+MV0      EQU     0239h
+         DB      0
+;PTSCK   DB      0
+PTSCK    EQU     023ah
+         DB      0
+;BMOVES  DB      35,55,10H
+BMOVES   EQU     023bh
+         DB      35,55,10H
+;        DB      34,54,10H
          DB      34,54,10H
+;        DB      85,65,10H
          DB      85,65,10H
+;        DB      84,64,10H
          DB      84,64,10H
 
 ;X p27
@@ -387,25 +535,47 @@ BMOVES   DB      35,55,10H
 
 
 ;*** TEMP TODO BEGIN
-MVEMSG   DD      0
-MVEMSG_2 DD      0
-BRDPOS   DB      1 DUP (?)              ; Index into the board array
-ANBDPS   DB      1 DUP (?)              ; Additional index required for ANALYS
-LINECT   DB      0                      ; Current line number
+;MVEMSG  DW      0
+MVEMSG   EQU     0247h
+         DW      0
+;MVEMSG_2        DW      0
+MVEMSG_2 EQU     0249h
+         DW      0
+;BRDPOS  DS      1                      ; Index into the board array
+BRDPOS   EQU     024bh                  ; Index into the board array
+         DB      1       DUP (?)
+;ANBDPS  DS      1                      ; Additional index required for ANALYS
+ANBDPS   EQU     024ch                  ; Additional index required for ANALYS
+         DB      1       DUP (?)
+;LINECT  DB      0                      ; Current line number
+LINECT   EQU     024dh                  ; Current line number
+         DB      0
 ;**** TEMP TODO END
 
 ;X p28
-                                        ;ORG     START+3F0H ;X START+300H
-MLIST    DB      2048 DUP (?)
-MLEND    DD      0
-PTRSIZ  EQU     4
-MOVSIZ  EQU     8
+;        .LOC    START+3F0H      ;X START+300H
+;MLIST   DS      4096
+MLIST    EQU     024eh
+         DB      4096    DUP (?)
+;MLEND   DW      0
+MLEND    EQU     0124eh
+         DW      0
+;PTRSIZ  =       2
+PTRSIZ   EQU     2
+;MOVSIZ  =       6
+MOVSIZ   EQU     6
+;MLPTR   =       0
 MLPTR    EQU     0
+;MLFRP   =       PTRSIZ
 MLFRP    EQU     PTRSIZ
+;MLTOP   =       PTRSIZ+1
 MLTOP    EQU     PTRSIZ+1
+;MLFLG   =       PTRSIZ+2
 MLFLG    EQU     PTRSIZ+2
+;MLVAL   =       PTRSIZ+3
 MLVAL    EQU     PTRSIZ+3
-         DB      100 DUP (?)
+;        DS      100
+         DB      100     DUP (?)
         
 shadow_eax  dd   0
 shadow_ebx  dd   0
@@ -446,25 +616,25 @@ Z80_EXX  MACRO
          ENDM
 
 Z80_RLD  MACRO                          ;a=kx (hl)=yz -> a=ky (hl)=zx
-         mov     ah,byte ptr [ebx]      ;ax=yzkx
+         mov     ah,byte ptr [ebp+ebx]      ;ax=yzkx
          ror     al,4                   ;ax=yzxk
          rol     ax,4                   ;ax=zxky
-         mov     byte ptr [ebx],ah      ;al=ky [ebx]=zx
+         mov     byte ptr [ebp+ebx],ah      ;al=ky [ebx]=zx
          or      al,al                  ;set z and s flags
          ENDM
 
 Z80_RRD  MACRO                          ;a=kx (hl)=yz -> a=kz (hl)=xy
-         mov     ah,byte ptr [ebx]      ;ax=yzkx
+         mov     ah,byte ptr [ebp+ebx]      ;ax=yzkx
          ror     ax,4                   ;ax=xyzk
          ror     al,4                   ;ax=xykz
-         mov     byte ptr [ebx],ah      ;al=kz [ebx]=xy
+         mov     byte ptr [ebp+ebx],ah      ;al=kz [ebx]=xy
          or      al,al                  ;set z and s flags
          ENDM
 
 Z80_LDAR MACRO                          ;to get random number
          pushf                          ;maybe there's entropy in stack junk
          push    ebx
-         mov     ebx,ebp
+         mov     ebx,esp
          mov     ax,0
          xor     al,byte ptr [ebx]
          dec     ebx
@@ -476,16 +646,34 @@ Z80_LDAR MACRO                          ;to get random number
          ENDM
 
 Z80_CPIR MACRO
+         cmp     al,byte ptr [ebp+ebx]  ;Compare
+         lahf
          dec     cx                 ;Counter decrements regardless
-         cmp     al,byte ptr [ebx]  ;Compare
-         lea     ebx,[ebx+1]        ;Address increments regardless (flags unaltered)
+         inc     bx                 ;Address increments regardless
+         sahf
          jz      $+7                ;End with Z set = found
          jcxz    $+5                ;End with Z not set = not found
-         jmp     $-12               ;Else loop back
+         jmp     $-15               ;Else loop back
          ENDM
-
+         
 ;Wrap all code in a PROC to get source debugging
 SARGON   PROC
+         push eax
+         push ebx
+         push ecx
+         push edx
+         push esi
+         push edi
+         push ebp
+         
+         ;We are going to use 32 bit registers as 16 bit ptrs - hi 16 bits should always be zero
+         lea  ebp,base_address
+         and  eax,0ffh  ; keep al only
+         xor  ebx,ebx
+         xor  ecx,ecx
+         xor  edx,edx
+         xor  esi,esi
+         xor  edi,edi
 
          ;Experiments
          ;mov edx,4563h
@@ -496,9 +684,19 @@ SARGON   PROC
     
          ;Implement a kind of system call API, at least for now
          cmp al,0
-         jz  INITBD
-         cmp al,1
-         jz  CPTRMV
+         jnz  around1
+         call INITBD
+         jmp  around2
+around1: cmp al,1
+         jnz  around2
+         call CPTRMV
+around2: pop ebp
+         pop edi
+         pop esi
+         pop edx
+         pop ecx
+         pop ebx
+         pop eax
          ret
         
 ;**********************************************************
@@ -514,38 +712,67 @@ SARGON   PROC
 ;
 ; ARGUMENTS:    None
 ;**********************************************************
-INITBD:  MOV     ch,120                 ; Pre-fill board with -1's
-         MOV     ebx,offset BOARDA
-back01:  MOV     byte ptr [ebx],-1
-         LEA     ebx,[ebx+1]
+;INITBD: LD      ch,120                 ; Pre-fill board with -1's
+INITBD:  MOV     ch,120
+;        LD      bx,BOARDA
+         MOV     bx,BOARDA
+;back01: LD      (bx),-1
+back01:  MOV     byte ptr [ebp+ebx],-1
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        DJNZ    back01
          LAHF
          DEC ch
          JNZ     back01
          SAHF
+;        LD      ch,8
          MOV     ch,8
-         MOV     esi,offset BOARDA
-IB2:     MOV     al,byte ptr [esi-8]    ; Fill non-border squares
-         MOV     byte ptr [esi+21],al   ; White pieces
-         LAHF                           ; Change to black
+;        LD      si,BOARDA
+         MOV     si,BOARDA
+;IB2:    LD      al,(si-8)              ; Fill non-border squares
+IB2:     MOV     al,byte ptr [ebp+esi-8]
+;        LD      (si+21),al             ; White pieces
+         MOV     byte ptr [ebp+esi+21],al
+;        SET     7,al                   ; Change to black
+         LAHF
          OR      al,80h
          SAHF
-         MOV     byte ptr [esi+91],al   ; Black pieces
-         MOV     byte ptr [esi+31],PAWN ; White Pawns
-         MOV     byte ptr [esi+81],BPAWN ; Black Pawns
-         MOV     byte ptr [esi+41],0    ; Empty squares
-         MOV     byte ptr [esi+51],0
-         MOV     byte ptr [esi+61],0
-         MOV     byte ptr [esi+71],0
-         LEA     esi,[esi+1]
+;        LD      (si+91),al             ; Black pieces
+         MOV     byte ptr [ebp+esi+91],al
+;        LD      (si+31),PAWN           ; White Pawns
+         MOV     byte ptr [ebp+esi+31],PAWN
+;        LD      (si+81),BPAWN          ; Black Pawns
+         MOV     byte ptr [ebp+esi+81],BPAWN
+;        LD      (si+41),0              ; Empty squares
+         MOV     byte ptr [ebp+esi+41],0
+;        LD      (si+51),0
+         MOV     byte ptr [ebp+esi+51],0
+;        LD      (si+61),0
+         MOV     byte ptr [ebp+esi+61],0
+;        LD      (si+71),0
+         MOV     byte ptr [ebp+esi+71],0
+;        INC     si
+         LAHF
+         INC     si
+         SAHF
+;        DJNZ    IB2
          LAHF
          DEC ch
          JNZ     IB2
          SAHF
-         MOV     esi,offset POSK        ; Init King/Queen position list
-         MOV     byte ptr [esi+0],25
-         MOV     byte ptr [esi+1],95
-         MOV     byte ptr [esi+2],24
-         MOV     byte ptr [esi+3],94
+;        LD      si,POSK                ; Init King/Queen position list
+         MOV     si,POSK
+;        LD      (si+0),25
+         MOV     byte ptr [ebp+esi+0],25
+;        LD      (si+1),95
+         MOV     byte ptr [ebp+esi+1],95
+;        LD      (si+2),24
+         MOV     byte ptr [ebp+esi+2],24
+;        LD      (si+3),94
+         MOV     byte ptr [ebp+esi+3],94
+;        RET
          RET
 
 ;X p29
@@ -575,31 +802,54 @@ IB2:     MOV     al,byte ptr [esi-8]    ; Fill non-border squares
 ;               constant to be added for the new position.
 ;
 ;**********************************************************
-PATH:    MOV     ebx,offset M2          ; Get previous position
-         MOV     al,byte ptr [ebx]
-         ADD     al,cl                  ; Add direction constant
-         MOV     byte ptr [ebx],al      ; Save new position
-         MOV     esi,[M2]               ; Load board index
-         MOV     al,byte ptr [esi+BOARD] ; Get contents of board
-         CMP     al,-1                  ; In border area ?
-         JZ      PA2                    ; Yes - jump
-         MOV     byte ptr [P2],al       ; Save piece
-         AND     al,7                   ; Clear flags
-         MOV     byte ptr [T2],al       ; Save piece type
-         JNZ     skip1                  ; Return if empty
+;PATH:   LD      bx,M2                  ; Get previous position
+PATH:    MOV     bx,M2
+;        LD      al,(bx)
+         MOV     al,byte ptr [ebp+ebx]
+;        ADD     al,cl                  ; Add direction constant
+         ADD     al,cl
+;        LD      (bx),al                ; Save new position
+         MOV     byte ptr [ebp+ebx],al
+;        LD      si,(M2)                ; Load board index
+         MOV     si,word ptr [ebp+M2]
+;        LD      al,(si+BOARD)          ; Get contents of board
+         MOV     al,byte ptr [ebp+esi+BOARD]
+;        CMP     al,-1                  ; In border area ?
+         CMP     al,-1
+;        JR      Z,PA2                  ; Yes - jump
+         JZ      PA2
+;        LD      (P2),al                ; Save piece
+         MOV     byte ptr [ebp+P2],al
+;        AND     al,7                   ; Clear flags
+         AND     al,7
+;        LD      (T2),al                ; Save piece type
+         MOV     byte ptr [ebp+T2],al
+;        RET     Z                      ; Return if empty
+         JNZ     skip1
          RET
 skip1:
-         MOV     al,byte ptr [P2]       ; Get piece encountered
-         MOV     ebx,offset P1          ; Get moving piece address
-         XOR     al,byte ptr [ebx]      ; Compare
-         TEST    al,80h                 ; Do colors match ?
-         JZ      PA1                    ; Yes - jump
-         MOV     al,1                   ; Set different color flag
-         RET                            ; Return
-PA1:     MOV     al,2                   ; Set same color flag
-         RET                            ; Return
-PA2:     MOV     al,3                   ; Set off board flag
-         RET                            ; Return
+;        LD      al,(P2)                ; Get piece encountered
+         MOV     al,byte ptr [ebp+P2]
+;        LD      bx,P1                  ; Get moving piece address
+         MOV     bx,P1
+;        XOR     al,(bx)                ; Compare
+         XOR     al,byte ptr [ebp+ebx]
+;        BIT     7,al                   ; Do colors match ?
+         TEST    al,80h
+;        JR      Z,PA1                  ; Yes - jump
+         JZ      PA1
+;        LD      al,1                   ; Set different color flag
+         MOV     al,1
+;        RET                            ; Return
+         RET
+;PA1:    LD      al,2                   ; Set same color flag
+PA1:     MOV     al,2
+;        RET                            ; Return
+         RET
+;PA2:    LD      al,3                   ; Set off board flag
+PA2:     MOV     al,3
+;        RET                            ; Return
+         RET
 
 ;X p30
 ;*****************************************************************
@@ -618,90 +868,167 @@ PA2:     MOV     al,3                   ; Set off board flag
 ;
 ; ARGUMENTS:    The piece to be moved.
 ;*****************************************************************
-MPIECE:  XOR     al,byte ptr [ebx]      ; Piece to move
-         AND     al,87H                 ; Clear flag bit
-         CMP     al,BPAWN               ; Is it a black Pawn ?
-         JNZ     rel001                 ; No-Skip
-         DEC     al                     ; Decrement for black Pawns
-rel001:  AND     al,7                   ; Get piece type
-         MOV     byte ptr [T1],al       ; Save piece type
-         MOV     edi,[T1]               ; Load index to DCOUNT/DPOINT
-         MOV     ch,byte ptr [edi+DCOUNT] ; Get direction count
-         MOV     al,byte ptr [edi+DPOINT] ; Get direction pointer
-         MOV     byte ptr [INDX2],al    ; Save as index to direct
-         MOV     edi,[INDX2]            ; Load index
-MP5:     MOV     cl,byte ptr [edi+DIRECT] ; Get move direction
-         MOV     al,byte ptr [M1]       ; From position
-         MOV     byte ptr [M2],al       ; Initialize to position
-MP10:    CALL    PATH                   ; Calculate next position
-         CMP     al,2                   ; Ready for new direction ?
-         JNC     MP15                   ; Yes - Jump
-         AND     al,al                  ; Test for empty square
-         Z80_EXAF                       ; Save result
-         MOV     al,byte ptr [T1]       ; Get piece moved
-         CMP     al,PAWN+1              ; Is it a Pawn ?
-         JC      MP20                   ; Yes - Jump
-         CALL    ADMOVE                 ; Add move to list
-         Z80_EXAF                       ; Empty square ?
-         JNZ     MP15                   ; No - Jump
-         MOV     al,byte ptr [T1]       ; Piece type
-         CMP     al,KING                ; King ?
-         JZ      MP15                   ; Yes - Jump
-         CMP     al,BISHOP              ; Bishop, Rook, or Queen ?
-         JNC     MP10                   ; Yes - Jump
-MP15:    LEA     edi,[edi+1]            ; Increment direction index
-         LAHF                           ; Decr. count-jump if non-zerc
+;MPIECE: XOR     al,(bx)                ; Piece to move
+MPIECE:  XOR     al,byte ptr [ebp+ebx]
+;        AND     al,87H                 ; Clear flag bit
+         AND     al,87H
+;        CMP     al,BPAWN               ; Is it a black Pawn ?
+         CMP     al,BPAWN
+;        JR      NZ,rel001              ; No-Skip
+         JNZ     rel001
+;        DEC     al                     ; Decrement for black Pawns
+         DEC     al
+;rel001: AND     al,7                   ; Get piece type
+rel001:  AND     al,7
+;        LD      (T1),al                ; Save piece type
+         MOV     byte ptr [ebp+T1],al
+;        LD      di,(T1)                ; Load index to DCOUNT/DPOINT
+         MOV     di,word ptr [ebp+T1]
+;        LD      ch,(di+DCOUNT)         ; Get direction count
+         MOV     ch,byte ptr [ebp+edi+DCOUNT]
+;        LD      al,(di+DPOINT)         ; Get direction pointer
+         MOV     al,byte ptr [ebp+edi+DPOINT]
+;        LD      (INDX2),al             ; Save as index to direct
+         MOV     byte ptr [ebp+INDX2],al
+;        LD      di,(INDX2)             ; Load index
+         MOV     di,word ptr [ebp+INDX2]
+;MP5:    LD      cl,(di+DIRECT)         ; Get move direction
+MP5:     MOV     cl,byte ptr [ebp+edi+DIRECT]
+;        LD      al,(M1)                ; From position
+         MOV     al,byte ptr [ebp+M1]
+;        LD      (M2),al                ; Initialize to position
+         MOV     byte ptr [ebp+M2],al
+;MP10:   CALL    PATH                   ; Calculate next position
+MP10:    CALL    PATH
+;        CMP     al,2                   ; Ready for new direction ?
+         CMP     al,2
+;        JR      NC,MP15                ; Yes - Jump
+         JNC     MP15
+;        AND     al,al                  ; Test for empty square
+         AND     al,al
+;        EXAF                           ; Save result
+         Z80_EXAF
+;        LD      al,(T1)                ; Get piece moved
+         MOV     al,byte ptr [ebp+T1]
+;        CMP     al,PAWN+1              ; Is it a Pawn ?
+         CMP     al,PAWN+1
+;        JR      C,MP20                 ; Yes - Jump
+         JC      MP20
+;        CALL    ADMOVE                 ; Add move to list
+         CALL    ADMOVE
+;        EXAF                           ; Empty square ?
+         Z80_EXAF
+;        JR      NZ,MP15                ; No - Jump
+         JNZ     MP15
+;        LD      al,(T1)                ; Piece type
+         MOV     al,byte ptr [ebp+T1]
+;        CMP     al,KING                ; King ?
+         CMP     al,KING
+;        JR      Z,MP15                 ; Yes - Jump
+         JZ      MP15
+;        CMP     al,BISHOP              ; Bishop, Rook, or Queen ?
+         CMP     al,BISHOP
+;        JR      NC,MP10                ; Yes - Jump
+         JNC     MP10
+;MP15:   INC     di                     ; Increment direction index
+MP15:    LAHF
+         INC     di
+         SAHF
+;        DJNZ    MP5                    ; Decr. count-jump if non-zerc
+         LAHF
          DEC ch
          JNZ     MP5
          SAHF
-         MOV     al,byte ptr [T1]       ; Piece type
+;        LD      al,(T1)                ; Piece type
+         MOV     al,byte ptr [ebp+T1]
 ;X p31
-         CMP     al,KING                ; King ?
-         JNZ     skip2                  ; Yes - Try Castling
+;        CMP     al,KING                ; King ?
+         CMP     al,KING
+;        CALL    Z,CASTLE               ; Yes - Try Castling
+         JNZ     skip2
          CALL    CASTLE
 skip2:
-         RET                            ; Return
+;        RET                            ; Return
+         RET
 ; ***** PAWN LOGIC *****
-MP20:    MOV     al,ch                  ; Counter for direction
-         CMP     al,3                   ; On diagonal moves ?
-         JC      MP35                   ; Yes - Jump
-         JZ      MP30                   ; -or-jump if on 2 square move
-         Z80_EXAF                       ; Is forward square empty?
-         JNZ     MP15                   ; No - jump
-         MOV     al,byte ptr [M2]       ; Get "to" position
-         CMP     al,91                  ; Promote white Pawn ?
-         JNC     MP25                   ; Yes - Jump
-         CMP     al,29                  ; Promote black Pawn ?
-         JNC     MP26                   ; No - Jump
-MP25:    MOV     ebx,offset P2          ; Flag address
-         LAHF                           ; Set promote flag
-         OR      byte ptr [ebx],20h
+;MP20:   LD      al,ch                  ; Counter for direction
+MP20:    MOV     al,ch
+;        CMP     al,3                   ; On diagonal moves ?
+         CMP     al,3
+;        JR      C,MP35                 ; Yes - Jump
+         JC      MP35
+;        JR      Z,MP30                 ; -or-jump if on 2 square move
+         JZ      MP30
+;        EXAF                           ; Is forward square empty?
+         Z80_EXAF
+;        JR      NZ,MP15                ; No - jump
+         JNZ     MP15
+;        LD      al,(M2)                ; Get "to" position
+         MOV     al,byte ptr [ebp+M2]
+;        CMP     al,91                  ; Promote white Pawn ?
+         CMP     al,91
+;        JR      NC,MP25                ; Yes - Jump
+         JNC     MP25
+;        CMP     al,29                  ; Promote black Pawn ?
+         CMP     al,29
+;        JR      NC,MP26                ; No - Jump
+         JNC     MP26
+;MP25:   LD      bx,P2                  ; Flag address
+MP25:    MOV     bx,P2
+;        SET     5,(bx)                 ; Set promote flag
+         LAHF
+         OR      byte ptr [ebp+ebx],20h
          SAHF
-MP26:    CALL    ADMOVE                 ; Add to move list
-         LEA     edi,[edi+1]            ; Adjust to two square move
+;MP26:   CALL    ADMOVE                 ; Add to move list
+MP26:    CALL    ADMOVE
+;        INC     di                     ; Adjust to two square move
+         LAHF
+         INC     di
+         SAHF
+;        DEC     ch
          DEC     ch
-         MOV     ebx,offset P1          ; Check Pawn moved flag
-         TEST    byte ptr [ebx],8       ; Has it moved before ?
-         JZ      MP10                   ; No - Jump
-         JMP     MP15                   ; Jump
-MP30:    Z80_EXAF                       ; Is forward square empty ?
-         JNZ     MP15                   ; No - Jump
-MP31:    CALL    ADMOVE                 ; Add to move list
-         JMP     MP15                   ; Jump
-MP35:    Z80_EXAF                       ; Is diagonal square empty ?
-         JZ      MP36                   ; Yes - Jump
-         MOV     al,byte ptr [M2]       ; Get "to" position
-         CMP     al,91                  ; Promote white Pawn ?
-         JNC     MP37                   ; Yes - Jump
-         CMP     al,29                  ; Black Pawn promotion ?
-         JNC     MP31                   ; No- Jump
-MP37:    MOV     ebx,offset P2          ; Get flag address
-         LAHF                           ; Set promote flag
-         OR      byte ptr [ebx],20h
+;        LD      bx,P1                  ; Check Pawn moved flag
+         MOV     bx,P1
+;        BIT     3,(bx)                 ; Has it moved before ?
+         TEST    byte ptr [ebp+ebx],8
+;        JR      Z,MP10                 ; No - Jump
+         JZ      MP10
+;        JMP     MP15                   ; Jump
+         JMP     MP15
+;MP30:   EXAF                           ; Is forward square empty ?
+MP30:    Z80_EXAF
+;        JR      NZ,MP15                ; No - Jump
+         JNZ     MP15
+;MP31:   CALL    ADMOVE                 ; Add to move list
+MP31:    CALL    ADMOVE
+;        JMP     MP15                   ; Jump
+         JMP     MP15
+;MP35:   EXAF                           ; Is diagonal square empty ?
+MP35:    Z80_EXAF
+;        JR      Z,MP36                 ; Yes - Jump
+         JZ      MP36
+;        LD      al,(M2)                ; Get "to" position
+         MOV     al,byte ptr [ebp+M2]
+;        CMP     al,91                  ; Promote white Pawn ?
+         CMP     al,91
+;        JR      NC,MP37                ; Yes - Jump
+         JNC     MP37
+;        CMP     al,29                  ; Black Pawn promotion ?
+         CMP     al,29
+;        JR      NC,MP31                ; No- Jump
+         JNC     MP31
+;MP37:   LD      bx,P2                  ; Get flag address
+MP37:    MOV     bx,P2
+;        SET     5,(bx)                 ; Set promote flag
+         LAHF
+         OR      byte ptr [ebp+ebx],20h
          SAHF
-         JMP     MP31                   ; Jump
-MP36:    CALL    ENPSNT                 ; Try en passant capture
-         JMP     MP15                   ; Jump
+;        JR      MP31                   ; Jump
+         JMP     MP31
+;MP36:   CALL    ENPSNT                 ; Try en passant capture
+MP36:    CALL    ENPSNT
+;        JMP     MP15                   ; Jump
+         JMP     MP15
 
 ;X p32
 ;**********************************************************
@@ -718,60 +1045,100 @@ MP36:    CALL    ENPSNT                 ; Try en passant capture
 ;
 ; ARGUMENTS:    --      None
 ;**********************************************************
-ENPSNT:  MOV     al,byte ptr [M1]       ; Set position of Pawn
-         MOV     ebx,offset P1          ; Check color
-         TEST    byte ptr [ebx],80h     ; Is it white ?
-         JZ      rel002                 ; Yes - skip
-         ADD     al,10                  ; Add 10 for black
-rel002:  CMP     al,61                  ; On en passant capture rank ?
-         JNC     skip3                  ; No - return
+;ENPSNT: LD      al,(M1)                ; Set position of Pawn
+ENPSNT:  MOV     al,byte ptr [ebp+M1]
+;        LD      bx,P1                  ; Check color
+         MOV     bx,P1
+;        BIT     7,(bx)                 ; Is it white ?
+         TEST    byte ptr [ebp+ebx],80h
+;        JR      Z,rel002               ; Yes - skip
+         JZ      rel002
+;        ADD     al,10                  ; Add 10 for black
+         ADD     al,10
+;rel002: CMP     al,61                  ; On en passant capture rank ?
+rel002:  CMP     al,61
+;        RET     C                      ; No - return
+         JNC     skip3
          RET
 skip3:
-         CMP     al,69                  ; On en passant capture rank ?
-         JC      skip4                  ; No - return
+;        CMP     al,69                  ; On en passant capture rank ?
+         CMP     al,69
+;        RET     NC                     ; No - return
+         JC      skip4
          RET
 skip4:
-         MOV     esi,[MLPTRJ]           ; Get pointer to previous move
-         TEST    byte ptr [esi+MLFLG],10h ; First move for that piece ?
-         JNZ     skip5                  ; No - return
+;        LD      si,(MLPTRJ)            ; Get pointer to previous move
+         MOV     si,word ptr [ebp+MLPTRJ]
+;        BIT     4,(si+MLFLG)           ; First move for that piece ?
+         TEST    byte ptr [ebp+esi+MLFLG],10h
+;        RET     Z                      ; No - return
+         JNZ     skip5
          RET
 skip5:
-         MOV     al,byte ptr [esi+MLTOP] ; Get "to" postition
-         MOV     byte ptr [M4],al       ; Store as index to board
-         MOV     esi,[M4]               ; Load board index
-         MOV     al,byte ptr [esi+BOARD] ; Get piece moved
-         MOV     byte ptr [P3],al       ; Save it
-         AND     al,7                   ; Get piece type
-         CMP     al,PAWN                ; Is it a Pawn ?
-         JZ      skip6                  ; No - return
+;        LD      al,(si+MLTOP)          ; Get "to" postition
+         MOV     al,byte ptr [ebp+esi+MLTOP]
+;        LD      (M4),al                ; Store as index to board
+         MOV     byte ptr [ebp+M4],al
+;        LD      si,(M4)                ; Load board index
+         MOV     si,word ptr [ebp+M4]
+;        LD      al,(si+BOARD)          ; Get piece moved
+         MOV     al,byte ptr [ebp+esi+BOARD]
+;        LD      (P3),al                ; Save it
+         MOV     byte ptr [ebp+P3],al
+;        AND     al,7                   ; Get piece type
+         AND     al,7
+;        CMP     al,PAWN                ; Is it a Pawn ?
+         CMP     al,PAWN
+;        RET     NZ                     ; No - return
+         JZ      skip6
          RET
 skip6:
-         MOV     al,byte ptr [M4]       ; Get "to" position
-         MOV     ebx,offset M2          ; Get present "to" position
-         SUB     al,byte ptr [ebx]      ; Find difference
-         JP      rel003                 ; Positive ? Yes - Jump
-         NEG     al                     ; Else take absolute value
-         CMP     al,10                  ; Is difference 10 ?
-rel003:  JZ      skip7                  ; No - return
+;        LD      al,(M4)                ; Get "to" position
+         MOV     al,byte ptr [ebp+M4]
+;        LD      bx,M2                  ; Get present "to" position
+         MOV     bx,M2
+;        SUB     al,(bx)                ; Find difference
+         SUB     al,byte ptr [ebp+ebx]
+;        JMP     P,rel003               ; Positive ? Yes - Jump
+         JP      rel003
+;        NEG                            ; Else take absolute value
+         NEG     al
+;        CMP     al,10                  ; Is difference 10 ?
+         CMP     al,10
+;rel003: RET     NZ                     ; No - return
+rel003:  JZ      skip7
          RET
 skip7:
-         MOV     ebx,offset P2          ; Address of flags
-         LAHF                           ; Set double move flag
-         OR      byte ptr [ebx],40h
+;        LD      bx,P2                  ; Address of flags
+         MOV     bx,P2
+;        SET     6,(bx)                 ; Set double move flag
+         LAHF
+         OR      byte ptr [ebp+ebx],40h
          SAHF
-         CALL    ADMOVE                 ; Add Pawn move to move list
-         MOV     al,byte ptr [M1]       ; Save initial Pawn position
-         MOV     byte ptr [M3],al
-         MOV     al,byte ptr [M4]       ; Set "from" and "to" positions
+;        CALL    ADMOVE                 ; Add Pawn move to move list
+         CALL    ADMOVE
+;        LD      al,(M1)                ; Save initial Pawn position
+         MOV     al,byte ptr [ebp+M1]
+;        LD      (M3),al
+         MOV     byte ptr [ebp+M3],al
+;        LD      al,(M4)                ; Set "from" and "to" positions
+         MOV     al,byte ptr [ebp+M4]
                         ; for dummy move
 ;X p33
-         MOV     byte ptr [M1],al
-         MOV     byte ptr [M2],al
-         MOV     al,byte ptr [P3]       ; Save captured Pawn
-         MOV     byte ptr [P2],al
-         CALL    ADMOVE                 ; Add Pawn capture to move list
-         MOV     al,byte ptr [M3]       ; Restore "from" position
-         MOV     byte ptr [M1],al
+;        LD      (M1),al
+         MOV     byte ptr [ebp+M1],al
+;        LD      (M2),al
+         MOV     byte ptr [ebp+M2],al
+;        LD      al,(P3)                ; Save captured Pawn
+         MOV     al,byte ptr [ebp+P3]
+;        LD      (P2),al
+         MOV     byte ptr [ebp+P2],al
+;        CALL    ADMOVE                 ; Add Pawn capture to move list
+         CALL    ADMOVE
+;        LD      al,(M3)                ; Restore "from" position
+         MOV     al,byte ptr [ebp+M3]
+;        LD      (M1),al
+         MOV     byte ptr [ebp+M1],al
 
 ;*****************************************************************
 ; ADJUST MOVE LIST POINTER FOR DOUBLE MOVE
@@ -788,12 +1155,26 @@ skip7:
 ;
 ; ARGUMENTS: -- None
 ;*****************************************************************
-ADJPTR:  MOV     ebx,[MLLST]            ; Get list pointer
-         MOV     edx,-MOVSIZ            ; Size of a move entry
-         LEA     ebx,[ebx+edx]          ; Back up list pointer
-         MOV     [MLLST],ebx            ; Save list pointer
-        mov     dword ptr [ebx],0   ;Zero out link ptr
-         RET                            ; Return
+;ADJPTR: LD      bx,(MLLST)             ; Get list pointer
+ADJPTR:  MOV     bx,word ptr [ebp+MLLST]
+;        LD      dx,-MOVSIZ             ; Size of a move entry
+         MOV     dx,-MOVSIZ
+;        ADD     bx,dx                  ; Back up list pointer
+         LAHF
+         ADD     bx,dx
+         SAHF
+;        LD      (MLLST),bx             ; Save list pointer
+         MOV     word ptr [ebp+MLLST],bx
+;        LD      (bx),0                 ; Zero out link, first byte
+         MOV     byte ptr [ebp+ebx],0
+;        INC     bx                     ; Next byte
+         LAHF
+         INC     bx
+         SAHF
+;        LD      (bx),0                 ; Zero out link, second byte
+         MOV     byte ptr [ebp+ebx],0
+;        RET                            ; Return
+         RET
 
 ;X p34
 ;*****************************************************************
@@ -811,71 +1192,129 @@ ADJPTR:  MOV     ebx,[MLLST]            ; Get list pointer
 ;
 ; ARGUMENTS: -- None
 ;*****************************************************************
-CASTLE:  MOV     al,byte ptr [P1]       ; Get King
-         TEST    al,8                   ; Has it moved ?
-         JZ      skip8                  ; Yes - return
+;CASTLE: LD      al,(P1)                ; Get King
+CASTLE:  MOV     al,byte ptr [ebp+P1]
+;        BIT     3,al                   ; Has it moved ?
+         TEST    al,8
+;        RET     NZ                     ; Yes - return
+         JZ      skip8
          RET
 skip8:
-         MOV     al,byte ptr [CKFLG]    ; Fetch Check Flag
-         AND     al,al                  ; Is the King in check ?
-         JZ      skip9                  ; Yes - Return
+;        LD      al,(CKFLG)             ; Fetch Check Flag
+         MOV     al,byte ptr [ebp+CKFLG]
+;        AND     al,al                  ; Is the King in check ?
+         AND     al,al
+;        RET     NZ                     ; Yes - Return
+         JZ      skip9
          RET
 skip9:
-         MOV     ecx,0FF03H             ; Initialize King-side values
-CA5:     MOV     al,byte ptr [M1]       ; King position
-         ADD     al,cl                  ; Rook position
-         MOV     cl,al                  ; Save
-         MOV     byte ptr [M3],al       ; Store as board index
-         MOV     esi,[M3]               ; Load board index
-         MOV     al,byte ptr [esi+BOARD] ; Get contents of board
-         AND     al,7FH                 ; Clear color bit
-         CMP     al,ROOK                ; Has Rook ever moved ?
-         JNZ     CA20                   ; Yes - Jump
-         MOV     al,cl                  ; Restore Rook position
-         JMP     CA15                   ; Jump
-CA10:    MOV     esi,[M3]               ; Load board index
-         MOV     al,byte ptr [esi+BOARD] ; Get contents of board
-         AND     al,al                  ; Empty ?
-         JNZ     CA20                   ; No - Jump
-         MOV     al,byte ptr [M3]       ; Current position
-         CMP     al,22                  ; White Queen Knight square ?
-         JZ      CA15                   ; Yes - Jump
-         CMP     al,92                  ; Black Queen Knight square ?
-         JZ      CA15                   ; Yes - Jump
-         CALL    ATTACK                 ; Look for attack on square
-         AND     al,al                  ; Any attackers ?
-         JNZ     CA20                   ; Yes - Jump
-         MOV     al,byte ptr [M3]       ; Current position
-CA15:    ADD     al,ch                  ; Next position
-         MOV     byte ptr [M3],al       ; Save as board index
-         MOV     ebx,offset M1          ; King position
-         CMP     al,byte ptr [ebx]      ; Reached King ?
+;        LD      cx,0FF03H              ; Initialize King-side values
+         MOV     cx,0FF03H
+;CA5:    LD      al,(M1)                ; King position
+CA5:     MOV     al,byte ptr [ebp+M1]
+;        ADD     al,cl                  ; Rook position
+         ADD     al,cl
+;        LD      cl,al                  ; Save
+         MOV     cl,al
+;        LD      (M3),al                ; Store as board index
+         MOV     byte ptr [ebp+M3],al
+;        LD      si,(M3)                ; Load board index
+         MOV     si,word ptr [ebp+M3]
+;        LD      al,(si+BOARD)          ; Get contents of board
+         MOV     al,byte ptr [ebp+esi+BOARD]
+;        AND     al,7FH                 ; Clear color bit
+         AND     al,7FH
+;        CMP     al,ROOK                ; Has Rook ever moved ?
+         CMP     al,ROOK
+;        JR      NZ,CA20                ; Yes - Jump
+         JNZ     CA20
+;        LD      al,cl                  ; Restore Rook position
+         MOV     al,cl
+;        JR      CA15                   ; Jump
+         JMP     CA15
+;CA10:   LD      si,(M3)                ; Load board index
+CA10:    MOV     si,word ptr [ebp+M3]
+;        LD      al,(si+BOARD)          ; Get contents of board
+         MOV     al,byte ptr [ebp+esi+BOARD]
+;        AND     al,al                  ; Empty ?
+         AND     al,al
+;        JR      NZ,CA20                ; No - Jump
+         JNZ     CA20
+;        LD      al,(M3)                ; Current position
+         MOV     al,byte ptr [ebp+M3]
+;        CMP     al,22                  ; White Queen Knight square ?
+         CMP     al,22
+;        JR      Z,CA15                 ; Yes - Jump
+         JZ      CA15
+;        CMP     al,92                  ; Black Queen Knight square ?
+         CMP     al,92
+;        JR      Z,CA15                 ; Yes - Jump
+         JZ      CA15
+;        CALL    ATTACK                 ; Look for attack on square
+         CALL    ATTACK
+;        AND     al,al                  ; Any attackers ?
+         AND     al,al
+;        JR      NZ,CA20                ; Yes - Jump
+         JNZ     CA20
+;        LD      al,(M3)                ; Current position
+         MOV     al,byte ptr [ebp+M3]
+;CA15:   ADD     al,ch                  ; Next position
+CA15:    ADD     al,ch
+;        LD      (M3),al                ; Save as board index
+         MOV     byte ptr [ebp+M3],al
+;        LD      bx,M1                  ; King position
+         MOV     bx,M1
+;        CMP     al,(bx)                ; Reached King ?
+         CMP     al,byte ptr [ebp+ebx]
 ;X p35
-         JNZ     CA10                   ; No - jump
-         SUB     al,ch                  ; Determine King's position
+;        JR      NZ,CA10                ; No - jump
+         JNZ     CA10
+;        SUB     al,ch                  ; Determine King's position
          SUB     al,ch
-         MOV     byte ptr [M2],al       ; Save it
-         MOV     ebx,offset P2          ; Address of flags
-         MOV     byte ptr [ebx],40H     ; Set double move flag
-         CALL    ADMOVE                 ; Put king move in list
-         MOV     ebx,offset M1          ; Addr of King "from" position
-         MOV     al,byte ptr [ebx]      ; Get King's "from" position
-         MOV     byte ptr [ebx],cl      ; Store Rook "from" position
-         SUB     al,ch                  ; Get Rook "to" position
-         MOV     byte ptr [M2],al       ; Store Rook "to" position
-         XOR     al,al                  ; Zero
-         MOV     byte ptr [P2],al       ; Zero move flags
-         CALL    ADMOVE                 ; Put Rook move in list
-         CALL    ADJPTR                 ; Re-adjust move list pointer
-         MOV     al,byte ptr [M3]       ; Restore King position
-         MOV     byte ptr [M1],al       ; Store
-CA20:    MOV     al,ch                  ; Scan Index
-         CMP     al,1                   ; Done ?
-         JNZ     skip10                 ; Yes - return
+;        SUB     al,ch
+         SUB     al,ch
+;        LD      (M2),al                ; Save it
+         MOV     byte ptr [ebp+M2],al
+;        LD      bx,P2                  ; Address of flags
+         MOV     bx,P2
+;        LD      (bx),40H               ; Set double move flag
+         MOV     byte ptr [ebp+ebx],40H
+;        CALL    ADMOVE                 ; Put king move in list
+         CALL    ADMOVE
+;        LD      bx,M1                  ; Addr of King "from" position
+         MOV     bx,M1
+;        LD      al,(bx)                ; Get King's "from" position
+         MOV     al,byte ptr [ebp+ebx]
+;        LD      (bx),cl                ; Store Rook "from" position
+         MOV     byte ptr [ebp+ebx],cl
+;        SUB     al,ch                  ; Get Rook "to" position
+         SUB     al,ch
+;        LD      (M2),al                ; Store Rook "to" position
+         MOV     byte ptr [ebp+M2],al
+;        XOR     al,al                  ; Zero
+         XOR     al,al
+;        LD      (P2),al                ; Zero move flags
+         MOV     byte ptr [ebp+P2],al
+;        CALL    ADMOVE                 ; Put Rook move in list
+         CALL    ADMOVE
+;        CALL    ADJPTR                 ; Re-adjust move list pointer
+         CALL    ADJPTR
+;        LD      al,(M3)                ; Restore King position
+         MOV     al,byte ptr [ebp+M3]
+;        LD      (M1),al                ; Store
+         MOV     byte ptr [ebp+M1],al
+;CA20:   LD      al,ch                  ; Scan Index
+CA20:    MOV     al,ch
+;        CMP     al,1                   ; Done ?
+         CMP     al,1
+;        RET     Z                      ; Yes - return
+         JNZ     skip10
          RET
 skip10:
-         MOV     ecx,01FCH              ; Set Queen-side initial values
-         JMP     CA5                    ; Jump
+;        LD      cx,01FCH               ; Set Queen-side initial values
+         MOV     cx,01FCH
+;        JMP     CA5                    ; Jump
+         JMP     CA5
 
 ;X p36
 ;**********************************************************
@@ -891,41 +1330,94 @@ skip10:
 ;
 ; ARGUMENT: --  None
 ;**********************************************************
-ADMOVE:  MOV     edx,[MLNXT]            ; Addr of next loc in move list
-         MOV     ebx,offset MLEND       ; Address of list end
-         AND     al,al                  ; Clear carry flag
-         SBB     ebx,edx                ; Calculate difference
-         JC      AM10                   ; Jump if out of space
-         MOV     ebx,[MLLST]            ; Addr of prev. list area
-         MOV     [MLLST],edx            ; Save next as previous
-         MOV     dword ptr [ebx],edx    ; Store link address
-         MOV     ebx,offset P1          ; Address of moved piece
-         TEST    byte ptr [ebx],8       ; Has it moved before ?
-         JNZ     rel004                 ; Yes - jump
-         MOV     ebx,offset P2          ; Address of move flags
-         LAHF                           ; Set first move flag
-         OR      byte ptr [ebx],10h
+;ADMOVE: LD      dx,(MLNXT)             ; Addr of next loc in move list
+ADMOVE:  MOV     dx,word ptr [ebp+MLNXT]
+;        LD      bx,MLEND               ; Address of list end
+         MOV     bx,MLEND
+;        AND     al,al                  ; Clear carry flag
+         AND     al,al
+;        SBC     bx,dx                  ; Calculate difference
+         SBB     bx,dx
+;        JR      C,AM10                 ; Jump if out of space
+         JC      AM10
+;        LD      bx,(MLLST)             ; Addr of prev. list area
+         MOV     bx,word ptr [ebp+MLLST]
+;        LD      (MLLST),dx             ; Save next as previous
+         MOV     word ptr [ebp+MLLST],dx
+;        LD      (bx),dl                ; Store link address
+         MOV     byte ptr [ebp+ebx],dl
+;        INC     bx
+         LAHF
+         INC     bx
          SAHF
-rel004:  XCHG    ebx,edx                ; Address of move area
-        MOV     dword ptr [ebx],0   ; Store zero in link address
-        LEA     ebx,[ebx+4]
-         MOV     al,byte ptr [M1]       ; Store "from" move position
-         MOV     byte ptr [ebx],al
-         LEA     ebx,[ebx+1]
-         MOV     al,byte ptr [M2]       ; Store "to" move position
-         MOV     byte ptr [ebx],al
-         LEA     ebx,[ebx+1]
-         MOV     al,byte ptr [P2]       ; Store move flags/capt. piece
-         MOV     byte ptr [ebx],al
-         LEA     ebx,[ebx+1]
-         MOV     byte ptr [ebx],0       ; Store initial move value
-         LEA     ebx,[ebx+1]
-         MOV     [MLNXT],ebx            ; Save address for next move
-         RET                            ; Return
+;        LD      (bx),dh
+         MOV     byte ptr [ebp+ebx],dh
+;        LD      bx,P1                  ; Address of moved piece
+         MOV     bx,P1
+;        BIT     3,(bx)                 ; Has it moved before ?
+         TEST    byte ptr [ebp+ebx],8
+;        JR      NZ,rel004              ; Yes - jump
+         JNZ     rel004
+;        LD      bx,P2                  ; Address of move flags
+         MOV     bx,P2
+;        SET     4,(bx)                 ; Set first move flag
+         LAHF
+         OR      byte ptr [ebp+ebx],10h
+         SAHF
+;rel004: EX      dx,bx                  ; Address of move area
+rel004:  XCHG    bx,dx
+;        LD      (bx),0                 ; Store zero in link address
+         MOV     byte ptr [ebp+ebx],0
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        LD      (bx),0
+         MOV     byte ptr [ebp+ebx],0
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        LD      al,(M1)                ; Store "from" move position
+         MOV     al,byte ptr [ebp+M1]
+;        LD      (bx),al
+         MOV     byte ptr [ebp+ebx],al
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        LD      al,(M2)                ; Store "to" move position
+         MOV     al,byte ptr [ebp+M2]
+;        LD      (bx),al
+         MOV     byte ptr [ebp+ebx],al
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        LD      al,(P2)                ; Store move flags/capt. piece
+         MOV     al,byte ptr [ebp+P2]
+;        LD      (bx),al
+         MOV     byte ptr [ebp+ebx],al
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        LD      (bx),0                 ; Store initial move value
+         MOV     byte ptr [ebp+ebx],0
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        LD      (MLNXT),bx             ; Save address for next move
+         MOV     word ptr [ebp+MLNXT],bx
+;        RET                            ; Return
+         RET
+;AM10:   ;MVI     M,0     ; Abort entry on table ovflow
 AM10:                                   ;MVI     M,0     ; Abort entry on table ovflow
         ;INX     H
         ;MVI     M,0       ;TODO fix this
         ;DCX     H
+;        RET
          RET
 
 ;X p37
@@ -942,35 +1434,76 @@ AM10:                                   ;MVI     M,0     ; Abort entry on table 
 ;
 ; ARGUMENTS: -- None
 ;**********************************************************
-GENMOV:  CALL    INCHK                  ; Test for King in check
-         MOV     byte ptr [CKFLG],al    ; Save attack count as flag
-         MOV     edx,[MLNXT]            ; Addr of next avail list space
-         MOV     ebx,[MLPTRI]           ; Ply list pointer index
-        LEA     ebx,[ebx+PTRSIZ]       ; Increment to next ply
-        MOV     dword ptr [ebx],edx    ; Save move list pointer
-        LEA     ebx,[ebx+PTRSIZ]       ;
-         MOV     [MLPTRI],ebx           ; Save new index
-         MOV     [MLLST],ebx            ; Last pointer for chain init.
-         MOV     al,21                  ; First position on board
-GM5:     MOV     byte ptr [M1],al       ; Save as index
-         MOV     esi,[M1]               ; Load board index
-         MOV     al,byte ptr [esi+BOARD] ; Fetch board contents
-         AND     al,al                  ; Is it empty ?
-         JZ      GM10                   ; Yes - Jump
-         CMP     al,-1                  ; Is it a boarder square ?
-         JZ      GM10                   ; Yes - Jump
-         MOV     byte ptr [P1],al       ; Save piece
-         MOV     ebx,offset COLOR       ; Address of color of piece
-         XOR     al,byte ptr [ebx]      ; Test color of piece
-         TEST    al,80h                 ; Match ?
-         JNZ     skip11                 ; Yes - call Move Piece
+;GENMOV: CALL    INCHK                  ; Test for King in check
+GENMOV:  CALL    INCHK
+;        LD      (CKFLG),al             ; Save attack count as flag
+         MOV     byte ptr [ebp+CKFLG],al
+;        LD      dx,(MLNXT)             ; Addr of next avail list space
+         MOV     dx,word ptr [ebp+MLNXT]
+;        LD      bx,(MLPTRI)            ; Ply list pointer index
+         MOV     bx,word ptr [ebp+MLPTRI]
+;        INC     bx                     ; Increment to next ply
+         LAHF
+         INC     bx
+         SAHF
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        LD      (bx),dl                ; Save move list pointer
+         MOV     byte ptr [ebp+ebx],dl
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        LD      (bx),dh
+         MOV     byte ptr [ebp+ebx],dh
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        LD      (MLPTRI),bx            ; Save new index
+         MOV     word ptr [ebp+MLPTRI],bx
+;        LD      (MLLST),bx             ; Last pointer for chain init.
+         MOV     word ptr [ebp+MLLST],bx
+;        LD      al,21                  ; First position on board
+         MOV     al,21
+;GM5:    LD      (M1),al                ; Save as index
+GM5:     MOV     byte ptr [ebp+M1],al
+;        LD      si,(M1)                ; Load board index
+         MOV     si,word ptr [ebp+M1]
+;        LD      al,(si+BOARD)          ; Fetch board contents
+         MOV     al,byte ptr [ebp+esi+BOARD]
+;        AND     al,al                  ; Is it empty ?
+         AND     al,al
+;        JR      Z,GM10                 ; Yes - Jump
+         JZ      GM10
+;        CMP     al,-1                  ; Is it a boarder square ?
+         CMP     al,-1
+;        JR      Z,GM10                 ; Yes - Jump
+         JZ      GM10
+;        LD      (P1),al                ; Save piece
+         MOV     byte ptr [ebp+P1],al
+;        LD      bx,COLOR               ; Address of color of piece
+         MOV     bx,COLOR
+;        XOR     al,(bx)                ; Test color of piece
+         XOR     al,byte ptr [ebp+ebx]
+;        BIT     7,al                   ; Match ?
+         TEST    al,80h
+;        CALL    Z,MPIECE               ; Yes - call Move Piece
+         JNZ     skip11
          CALL    MPIECE
 skip11:
-GM10:    MOV     al,byte ptr [M1]       ; Fetch current board position
-         INC     al                     ; Incr to next board position
-         CMP     al,99                  ; End of board array ?
-         JNZ     GM5                    ; No - Jump
-         RET                            ; Return
+;GM10:   LD      al,(M1)                ; Fetch current board position
+GM10:    MOV     al,byte ptr [ebp+M1]
+;        INC     al                     ; Incr to next board position
+         INC     al
+;        CMP     al,99                  ; End of board array ?
+         CMP     al,99
+;        JMP     NZ,GM5                 ; No - Jump
+         JNZ     GM5
+;        RET                            ; Return
+         RET
 
 ;X p38
 ;**********************************************************
@@ -987,20 +1520,36 @@ GM10:    MOV     al,byte ptr [M1]       ; Fetch current board position
 ;
 ; ARGUMENTS: -- Color of King
 ;**********************************************************
-INCHK:   MOV     al,byte ptr [COLOR]    ; Get color
-INCHK1:  MOV     ebx,offset POSK        ; Addr of white King position
-         AND     al,al                  ; White ?
-         JZ      rel005                 ; Yes - Skip
-         LEA     ebx,[ebx+1]            ; Addr of black King position
-rel005:  MOV     al,byte ptr [ebx]      ; Fetch King position
-         MOV     byte ptr [M3],al       ; Save
-         MOV     esi,[M3]               ; Load board index
-         MOV     al,byte ptr [esi+BOARD] ; Fetch board contents
-         MOV     byte ptr [P1],al       ; Save
-         AND     al,7                   ; Get piece type
-         MOV     byte ptr [T1],al       ; Save
-         CALL    ATTACK                 ; Look for attackers on King
-         RET                            ; Return
+;INCHK:  LD      al,(COLOR)             ; Get color
+INCHK:   MOV     al,byte ptr [ebp+COLOR]
+;INCHK1: LD      bx,POSK                ; Addr of white King position
+INCHK1:  MOV     bx,POSK
+;        AND     al,al                  ; White ?
+         AND     al,al
+;        JR      Z,rel005               ; Yes - Skip
+         JZ      rel005
+;        INC     bx                     ; Addr of black King position
+         LAHF
+         INC     bx
+         SAHF
+;rel005: LD      al,(bx)                ; Fetch King position
+rel005:  MOV     al,byte ptr [ebp+ebx]
+;        LD      (M3),al                ; Save
+         MOV     byte ptr [ebp+M3],al
+;        LD      si,(M3)                ; Load board index
+         MOV     si,word ptr [ebp+M3]
+;        LD      al,(si+BOARD)          ; Fetch board contents
+         MOV     al,byte ptr [ebp+esi+BOARD]
+;        LD      (P1),al                ; Save
+         MOV     byte ptr [ebp+P1],al
+;        AND     al,7                   ; Get piece type
+         AND     al,7
+;        LD      (T1),al                ; Save
+         MOV     byte ptr [ebp+T1],al
+;        CALL    ATTACK                 ; Look for attackers on King
+         CALL    ATTACK
+;        RET                            ; Return
+         RET
 
 ;**********************************************************
 ; ATTACK ROUTINE
@@ -1035,111 +1584,206 @@ rel005:  MOV     al,byte ptr [ebx]      ; Fetch King position
 ;
 ; ARGUMENTS: -- None
 ;*****************************************************************
-ATTACK:  PUSH    ecx                    ; Save Register B
-         XOR     al,al                  ; Clear
-         MOV     ch,16                  ; Initial direction count
-         MOV     byte ptr [INDX2],al    ; Initial direction index
-         MOV     edi,[INDX2]            ; Load index
-AT5:     MOV     cl,byte ptr [edi+DIRECT] ; Get direction
-         MOV     dh,0                   ; Init. scan count/flags
-         MOV     al,byte ptr [M3]       ; Init. board start position
-         MOV     byte ptr [M2],al       ; Save
-AT10:    INC     dh                     ; Increment scan count
-         CALL    PATH                   ; Next position
-         CMP     al,1                   ; Piece of a opposite color ?
-         JZ      AT14A                  ; Yes - jump
-         CMP     al,2                   ; Piece of same color ?
-         JZ      AT14B                  ; Yes - jump
-         AND     al,al                  ; Empty position ?
-         JNZ     AT12                   ; No - jump
-         MOV     al,ch                  ; Fetch direction count
-         CMP     al,9                   ; On knight scan ?
-         JNC     AT10                   ; No - jump
-AT12:    LEA     edi,[edi+1]            ; Increment direction index
-         LAHF                           ; Done ? No - jump
+;ATTACK: PUSH    cx                     ; Save Register B
+ATTACK:  PUSH    ecx
+;        XOR     al,al                  ; Clear
+         XOR     al,al
+;        LD      ch,16                  ; Initial direction count
+         MOV     ch,16
+;        LD      (INDX2),al             ; Initial direction index
+         MOV     byte ptr [ebp+INDX2],al
+;        LD      di,(INDX2)             ; Load index
+         MOV     di,word ptr [ebp+INDX2]
+;AT5:    LD      cl,(di+DIRECT)         ; Get direction
+AT5:     MOV     cl,byte ptr [ebp+edi+DIRECT]
+;        LD      dh,0                   ; Init. scan count/flags
+         MOV     dh,0
+;        LD      al,(M3)                ; Init. board start position
+         MOV     al,byte ptr [ebp+M3]
+;        LD      (M2),al                ; Save
+         MOV     byte ptr [ebp+M2],al
+;AT10:   INC     dh                     ; Increment scan count
+AT10:    INC     dh
+;        CALL    PATH                   ; Next position
+         CALL    PATH
+;        CMP     al,1                   ; Piece of a opposite color ?
+         CMP     al,1
+;        JR      Z,AT14A                ; Yes - jump
+         JZ      AT14A
+;        CMP     al,2                   ; Piece of same color ?
+         CMP     al,2
+;        JR      Z,AT14B                ; Yes - jump
+         JZ      AT14B
+;        AND     al,al                  ; Empty position ?
+         AND     al,al
+;        JR      NZ,AT12                ; No - jump
+         JNZ     AT12
+;        LD      al,ch                  ; Fetch direction count
+         MOV     al,ch
+;        CMP     al,9                   ; On knight scan ?
+         CMP     al,9
+;        JR      NC,AT10                ; No - jump
+         JNC     AT10
+;AT12:   INC     di                     ; Increment direction index
+AT12:    LAHF
+         INC     di
+         SAHF
+;        DJNZ    AT5                    ; Done ? No - jump
+         LAHF
          DEC ch
          JNZ     AT5
          SAHF
-         XOR     al,al                  ; No attackers
-AT13:    POP     ecx                    ; Restore register B
-         RET                            ; Return
-AT14A:   TEST    dh,40h                 ; Same color found already ?
-         JNZ     AT12                   ; Yes - jump
-         LAHF                           ; Set opposite color found flag
+;        XOR     al,al                  ; No attackers
+         XOR     al,al
+;AT13:   POP     cx                     ; Restore register B
+AT13:    POP     ecx
+;        RET                            ; Return
+         RET
+;AT14A:  BIT     6,dh                   ; Same color found already ?
+AT14A:   TEST    dh,40h
+;        JR      NZ,AT12                ; Yes - jump
+         JNZ     AT12
+;        SET     5,dh                   ; Set opposite color found flag
+         LAHF
          OR      dh,20h
          SAHF
-         JMP     AT14                   ; Jump
-AT14B:   TEST    dh,20h                 ; Opposite color found already?
-         JNZ     AT12                   ; Yes - jump
-         LAHF                           ; Set same color found flag
+;        JMP     AT14                   ; Jump
+         JMP     AT14
+;AT14B:  BIT     5,dh                   ; Opposite color found already?
+AT14B:   TEST    dh,20h
+;        JR      NZ,AT12                ; Yes - jump
+         JNZ     AT12
+;        SET     6,dh                   ; Set same color found flag
+         LAHF
          OR      dh,40h
          SAHF
 
 ; ***** DETERMINE IF PIECE ENCOUNTERED ATTACKS SQUARE *****
-AT14:    MOV     al,byte ptr [T2]       ; Fetch piece type encountered
-         MOV     dl,al                  ; Save
-         MOV     al,ch                  ; Get direction-counter
-         CMP     al,9                   ; Look for Knights ?
-         JC      AT25                   ; Yes - jump
-         MOV     al,dl                  ; Get piece type
-         CMP     al,QUEEN               ; Is is a Queen ?
-         JNZ     AT15                   ; No - Jump
-         LAHF                           ; Set Queen found flag
+;AT14:   LD      al,(T2)                ; Fetch piece type encountered
+AT14:    MOV     al,byte ptr [ebp+T2]
+;        LD      dl,al                  ; Save
+         MOV     dl,al
+;        LD      al,ch                  ; Get direction-counter
+         MOV     al,ch
+;        CMP     al,9                   ; Look for Knights ?
+         CMP     al,9
+;        JR      C,AT25                 ; Yes - jump
+         JC      AT25
+;        LD      al,dl                  ; Get piece type
+         MOV     al,dl
+;        CMP     al,QUEEN               ; Is is a Queen ?
+         CMP     al,QUEEN
+;        JR      NZ,AT15                ; No - Jump
+         JNZ     AT15
+;        SET     7,dh                   ; Set Queen found flag
+         LAHF
          OR      dh,80h
          SAHF
-         JMP     AT30                   ; Jump
-AT15:    MOV     al,dh                  ; Get flag/scan count
-         AND     al,0FH                 ; Isolate count
-         CMP     al,1                   ; On first position ?
-         JNZ     AT16                   ; No - jump
-         MOV     al,dl                  ; Get encountered piece type
-         CMP     al,KING                ; Is it a King ?
-         JZ      AT30                   ; Yes - jump
-AT16:    MOV     al,ch                  ; Get direction counter
-         CMP     al,13                  ; Scanning files or ranks ?
-         JC      AT21                   ; Yes - jump
-         MOV     al,dl                  ; Get piece type
-         CMP     al,BISHOP              ; Is it a Bishop ?
-         JZ      AT30                   ; Yes - jump
-         MOV     al,dh                  ; Get flags/scan count
-         AND     al,0FH                 ; Isolate count
-         CMP     al,1                   ; On first position ?
-         JNZ     AT12                   ; No - jump
-         CMP     al,dl                  ; Is it a Pawn ?
-         JNZ     AT12                   ; No - jump
-         MOV     al,byte ptr [P2]       ; Fetch piece including color
+;        JR      AT30                   ; Jump
+         JMP     AT30
+;AT15:   LD      al,dh                  ; Get flag/scan count
+AT15:    MOV     al,dh
+;        AND     al,0FH                 ; Isolate count
+         AND     al,0FH
+;        CMP     al,1                   ; On first position ?
+         CMP     al,1
+;        JR      NZ,AT16                ; No - jump
+         JNZ     AT16
+;        LD      al,dl                  ; Get encountered piece type
+         MOV     al,dl
+;        CMP     al,KING                ; Is it a King ?
+         CMP     al,KING
+;        JR      Z,AT30                 ; Yes - jump
+         JZ      AT30
+;AT16:   LD      al,ch                  ; Get direction counter
+AT16:    MOV     al,ch
+;        CMP     al,13                  ; Scanning files or ranks ?
+         CMP     al,13
+;        JR      C,AT21                 ; Yes - jump
+         JC      AT21
+;        LD      al,dl                  ; Get piece type
+         MOV     al,dl
+;        CMP     al,BISHOP              ; Is it a Bishop ?
+         CMP     al,BISHOP
+;        JR      Z,AT30                 ; Yes - jump
+         JZ      AT30
+;        LD      al,dh                  ; Get flags/scan count
+         MOV     al,dh
+;        AND     al,0FH                 ; Isolate count
+         AND     al,0FH
+;        CMP     al,1                   ; On first position ?
+         CMP     al,1
+;        JR      NZ,AT12                ; No - jump
+         JNZ     AT12
+;        CMP     al,dl                  ; Is it a Pawn ?
+         CMP     al,dl
+;        JR      NZ,AT12                ; No - jump
+         JNZ     AT12
+;        LD      al,(P2)                ; Fetch piece including color
+         MOV     al,byte ptr [ebp+P2]
 ;X p41
-         TEST    al,80h                 ; Is it white ?
-         JZ      AT20                   ; Yes - jump
-         MOV     al,ch                  ; Get direction counter
-         CMP     al,15                  ; On a non-attacking diagonal ?
-         JC      AT12                   ; Yes - jump
-         JMP     AT30                   ; Jump
-AT20:    MOV     al,ch                  ; Get direction counter
-         CMP     al,15                  ; On a non-attacking diagonal ?
-         JNC     AT12                   ; Yes - jump
-         JMP     AT30                   ; Jump
-AT21:    MOV     al,dl                  ; Get piece type
-         CMP     al,ROOK                ; Is is a Rook ?
-         JNZ     AT12                   ; No - jump
-         JMP     AT30                   ; Jump
-AT25:    MOV     al,dl                  ; Get piece type
-         CMP     al,KNIGHT              ; Is it a Knight ?
-         JNZ     AT12                   ; No - jump
-AT30:    MOV     al,byte ptr [T1]       ; Attacked piece type/flag
-         CMP     al,7                   ; Call from POINTS ?
-         JZ      AT31                   ; Yes - jump
-         TEST    dh,20h                 ; Is attacker opposite color ?
-         JZ      AT32                   ; No - jump
-         MOV     al,1                   ; Set attacker found flag
-         JMP     AT13                   ; Jump
-AT31:    CALL    ATKSAV                 ; Save attacker in attack list
-AT32:    MOV     al,byte ptr [T2]       ; Attacking piece type
-         CMP     al,KING                ; Is it a King,?
-         JZ      AT12                   ; Yes - jump
-         CMP     al,KNIGHT              ; Is it a Knight ?
-         JZ      AT12                   ; Yes - jump
-         JMP     AT10                   ; Jump
+;        BIT     7,al                   ; Is it white ?
+         TEST    al,80h
+;        JR      Z,AT20                 ; Yes - jump
+         JZ      AT20
+;        LD      al,ch                  ; Get direction counter
+         MOV     al,ch
+;        CMP     al,15                  ; On a non-attacking diagonal ?
+         CMP     al,15
+;        JR      C,AT12                 ; Yes - jump
+         JC      AT12
+;        JR      AT30                   ; Jump
+         JMP     AT30
+;AT20:   LD      al,ch                  ; Get direction counter
+AT20:    MOV     al,ch
+;        CMP     al,15                  ; On a non-attacking diagonal ?
+         CMP     al,15
+;        JR      NC,AT12                ; Yes - jump
+         JNC     AT12
+;        JR      AT30                   ; Jump
+         JMP     AT30
+;AT21:   LD      al,dl                  ; Get piece type
+AT21:    MOV     al,dl
+;        CMP     al,ROOK                ; Is is a Rook ?
+         CMP     al,ROOK
+;        JR      NZ,AT12                ; No - jump
+         JNZ     AT12
+;        JR      AT30                   ; Jump
+         JMP     AT30
+;AT25:   LD      al,dl                  ; Get piece type
+AT25:    MOV     al,dl
+;        CMP     al,KNIGHT              ; Is it a Knight ?
+         CMP     al,KNIGHT
+;        JR      NZ,AT12                ; No - jump
+         JNZ     AT12
+;AT30:   LD      al,(T1)                ; Attacked piece type/flag
+AT30:    MOV     al,byte ptr [ebp+T1]
+;        CMP     al,7                   ; Call from POINTS ?
+         CMP     al,7
+;        JR      Z,AT31                 ; Yes - jump
+         JZ      AT31
+;        BIT     5,dh                   ; Is attacker opposite color ?
+         TEST    dh,20h
+;        JR      Z,AT32                 ; No - jump
+         JZ      AT32
+;        LD      al,1                   ; Set attacker found flag
+         MOV     al,1
+;        JMP     AT13                   ; Jump
+         JMP     AT13
+;AT31:   CALL    ATKSAV                 ; Save attacker in attack list
+AT31:    CALL    ATKSAV
+;AT32:   LD      al,(T2)                ; Attacking piece type
+AT32:    MOV     al,byte ptr [ebp+T2]
+;        CMP     al,KING                ; Is it a King,?
+         CMP     al,KING
+;        JMP     Z,AT12                 ; Yes - jump
+         JZ      AT12
+;        CMP     al,KNIGHT              ; Is it a Knight ?
+         CMP     al,KNIGHT
+;        JMP     Z,AT12                 ; Yes - jump
+         JZ      AT12
+;        JMP     AT10                   ; Jump
+         JMP     AT10
 ;p42
 
 ;****************************************************************
@@ -1159,49 +1803,91 @@ AT32:    MOV     al,byte ptr [T2]       ; Attacking piece type
 ;
 ; ARGUMENTS: -- None
 ;****************************************************************
-ATKSAV:  PUSH    ecx                    ; Save Regs BC
-         PUSH    edx                    ; Save Regs DE
-         MOV     al,byte ptr [NPINS]    ; Number of pinned pieces
-         AND     al,al                  ; Any ?
-         JZ      skip12                 ; yes - check pin list
+;ATKSAV: PUSH    cx                     ; Save Regs BC
+ATKSAV:  PUSH    ecx
+;        PUSH    dx                     ; Save Regs DE
+         PUSH    edx
+;        LD      al,(NPINS)             ; Number of pinned pieces
+         MOV     al,byte ptr [ebp+NPINS]
+;        AND     al,al                  ; Any ?
+         AND     al,al
+;        CALL    NZ,PNCK                ; yes - check pin list
+         JZ      skip12
          CALL    PNCK
 skip12:
-         MOV     esi,[T2]               ; Init index to value table
-         MOV     ebx,ATKLST             ; Init address of attack list
-         MOV     ecx,0                  ; Init increment for white
-         MOV     al,byte ptr [P2]       ; Attacking piece
-         TEST    al,80h                 ; Is it white ?
-         JZ      rel006                 ; Yes - jump
-         MOV     cl,7                   ; Init increment for black
-rel006:  AND     al,7                   ; Attacking piece type
-         MOV     dl,al                  ; Init increment for type
-         TEST    dh,80h                 ; Queen found this scan ?
-         JZ      rel007                 ; No - jump
-         MOV     dl,QUEEN               ; Use Queen slot in attack list
-rel007:  LEA     ebx,[ebx+ecx]          ; Attack list address
-         INC     byte ptr [ebx]         ; Increment list count
-         mov     ah,dl
-         MOV     edx,0
-         mov     dl,ah
-         LEA     ebx,[ebx+edx]          ; Attack list slot address
-         MOV     al,byte ptr [ebx]      ; Get data already there
-         AND     al,0FH                 ; Is first slot empty ?
-         JZ      AS20                   ; Yes - jump
-         MOV     al,byte ptr [ebx]      ; Get data again
-         AND     al,0F0H                ; Is second slot empty ?
-         JZ      AS19                   ; Yes - jump
-         LEA     ebx,[ebx+1]            ; Increment to King slot
-         JMP     AS20                   ; Jump
-AS19:    Z80_RLD                        ; Temp save lower in upper
-         MOV     al,byte ptr [esi+PVALUE] ; Get new value for attack list
-         Z80_RRD                        ; Put in 2nd attack list slot
-         JMP     AS25                   ; Jump
-AS20:    MOV     al,byte ptr [esi+PVALUE] ; Get new value for attack list
-         Z80_RLD                        ; Put in 1st attack list slot
+;        LD      si,(T2)                ; Init index to value table
+         MOV     si,word ptr [ebp+T2]
+;        LD      bx,ATKLST              ; Init address of attack list
+         MOV     bx,ATKLST
+;        LD      cx,0                   ; Init increment for white
+         MOV     cx,0
+;        LD      al,(P2)                ; Attacking piece
+         MOV     al,byte ptr [ebp+P2]
+;        BIT     7,al                   ; Is it white ?
+         TEST    al,80h
+;        JR      Z,rel006               ; Yes - jump
+         JZ      rel006
+;        LD      cl,7                   ; Init increment for black
+         MOV     cl,7
+;rel006: AND     al,7                   ; Attacking piece type
+rel006:  AND     al,7
+;        LD      dl,al                  ; Init increment for type
+         MOV     dl,al
+;        BIT     7,dh                   ; Queen found this scan ?
+         TEST    dh,80h
+;        JR      Z,rel007               ; No - jump
+         JZ      rel007
+;        LD      dl,QUEEN               ; Use Queen slot in attack list
+         MOV     dl,QUEEN
+;rel007: ADD     bx,cx                  ; Attack list address
+rel007:  LAHF
+         ADD     bx,cx
+         SAHF
+;        INC     (bx)                   ; Increment list count
+         INC     byte ptr [ebp+ebx]
+;        LD      dh,0
+         MOV     dh,0
+;        ADD     bx,dx                  ; Attack list slot address
+         LAHF
+         ADD     bx,dx
+         SAHF
+;        LD      al,(bx)                ; Get data already there
+         MOV     al,byte ptr [ebp+ebx]
+;        AND     al,0FH                 ; Is first slot empty ?
+         AND     al,0FH
+;        JR      Z,AS20                 ; Yes - jump
+         JZ      AS20
+;        LD      al,(bx)                ; Get data again
+         MOV     al,byte ptr [ebp+ebx]
+;        AND     al,0F0H                ; Is second slot empty ?
+         AND     al,0F0H
+;        JR      Z,AS19                 ; Yes - jump
+         JZ      AS19
+;        INC     bx                     ; Increment to King slot
+         LAHF
+         INC     bx
+         SAHF
+;        JR      AS20                   ; Jump
+         JMP     AS20
+;AS19:   RLD                            ; Temp save lower in upper
+AS19:    Z80_RLD
+;        LD      al,(si+PVALUE)         ; Get new value for attack list
+         MOV     al,byte ptr [ebp+esi+PVALUE]
+;        RRD                            ; Put in 2nd attack list slot
+         Z80_RRD
+;        JR      AS25                   ; Jump
+         JMP     AS25
+;AS20:   LD      al,(si+PVALUE)         ; Get new value for attack list
+AS20:    MOV     al,byte ptr [ebp+esi+PVALUE]
+;        RLD                            ; Put in 1st attack list slot
+         Z80_RLD
 ;X p43
-AS25:    POP     edx                    ; Restore DE regs
-         POP     ecx                    ; Restore BC regs
-         RET                            ; Return
+;AS25:   POP     dx                     ; Restore DE regs
+AS25:    POP     edx
+;        POP     cx                     ; Restore BC regs
+         POP     ecx
+;        RET                            ; Return
+         RET
 
 ;**********************************************************
 ; PIN CHECK ROUTINE
@@ -1222,38 +1908,65 @@ AS25:    POP     edx                    ; Restore DE regs
 ; ARGUMENTS: -- The direction of the attack. The
 ;               pinned piece counnt.
 ;**********************************************************
-PNCK:    MOV     dh,cl                  ; Save attack direction
-         MOV     dl,0                   ; Clear flag
-         MOV     cl,al                  ; Load pin count for search
+;PNCK:   LD      dh,cl                  ; Save attack direction
+PNCK:    MOV     dh,cl
+;        LD      dl,0                   ; Clear flag
+         MOV     dl,0
+;        LD      cl,al                  ; Load pin count for search
+         MOV     cl,al
+;        LD      ch,0
          MOV     ch,0
-         MOV     al,byte ptr [M2]       ; Position of piece
-         MOV     ebx,offset PLISTA      ; Pin list address
-PC1:     Z80_CPIR                       ; Search list for position
-         JZ      skip13                 ; Return if not found
+;        LD      al,(M2)                ; Position of piece
+         MOV     al,byte ptr [ebp+M2]
+;        LD      bx,PLISTA              ; Pin list address
+         MOV     bx,PLISTA
+;PC1:    CPIR                           ; Search list for position
+PC1:     Z80_CPIR
+;        RET     NZ                     ; Return if not found
+         JZ      skip13
          RET
 skip13:
-         Z80_EXAF                       ; Save search paramenters
-         TEST    dl,1                   ; Is this the first find ?
-         JNZ     PC5                    ; No - jump
-         LAHF                           ; Set first find flag
+;        EXAF                           ; Save search paramenters
+         Z80_EXAF
+;        BIT     0,dl                   ; Is this the first find ?
+         TEST    dl,1
+;        JR      NZ,PC5                 ; No - jump
+         JNZ     PC5
+;        SET     0,dl                   ; Set first find flag
+         LAHF
          OR      dl,1
          SAHF
-         PUSH    ebx                    ; Get corresp index to dir list
+;        PUSH    bx                     ; Get corresp index to dir list
+         PUSH    ebx
+;        POP     si
          POP     esi
-         MOV     al,byte ptr [esi+9]    ; Get direction
-         CMP     al,dh                  ; Same as attacking direction ?
-         JZ      PC3                    ; Yes - jump
-         NEG     al                     ; Opposite direction ?
-         CMP     al,dh                  ; Same as attacking direction ?
-         JNZ     PC5                    ; No - jump
-PC3:     Z80_EXAF                       ; Restore search parameters
-         JPE     PC1                    ; Jump if search not complete
-         RET                            ; Return
-PC5:     POP     eax                    ; Abnormal exit
+;        LD      al,(si+9)              ; Get direction
+         MOV     al,byte ptr [ebp+esi+9]
+;        CMP     al,dh                  ; Same as attacking direction ?
+         CMP     al,dh
+;        JR      Z,PC3                  ; Yes - jump
+         JZ      PC3
+;        NEG                            ; Opposite direction ?
+         NEG     al
+;        CMP     al,dh                  ; Same as attacking direction ?
+         CMP     al,dh
+;        JR      NZ,PC5                 ; No - jump
+         JNZ     PC5
+;PC3:    EXAF                           ; Restore search parameters
+PC3:     Z80_EXAF
+;        JMP     PE,PC1                 ; Jump if search not complete
+         JPE     PC1
+;        RET                            ; Return
+         RET
+;PC5:    POP     af                     ; Abnormal exit
+PC5:     POP     eax
          sahf
-         POP     edx                    ; Restore regs.
+;        POP     dx                     ; Restore regs.
+         POP     edx
+;        POP     cx
          POP     ecx
-         RET                            ; Return to ATTACK
+;        RET                            ; Return to ATTACK
+         RET
 
 ;X p44
 ;**********************************************************
@@ -1271,108 +1984,206 @@ PC5:     POP     eax                    ; Abnormal exit
 ;
 ; ARGUMENTS: -- None
 ;**********************************************************
-PINFND:  XOR     al,al                  ; Zero pin count
-         MOV     byte ptr [NPINS],al
-         MOV     edx,offset POSK        ; Addr of King/Queen pos list
-PF1:     MOV     al,[edx]               ; Get position of royal piece
-         AND     al,al                  ; Is it on board ?
-         JZ      PF26                   ; No- jump
-         CMP     al,-1                  ; At end of list ?
-         JNZ     skip14                 ; Yes return
+;PINFND: XOR     al,al                  ; Zero pin count
+PINFND:  XOR     al,al
+;        LD      (NPINS),al
+         MOV     byte ptr [ebp+NPINS],al
+;        LD      dx,POSK                ; Addr of King/Queen pos list
+         MOV     dx,POSK
+;PF1:    LD      al,(dx)                ; Get position of royal piece
+PF1:     MOV     al,[ebp+edx]
+;        AND     al,al                  ; Is it on board ?
+         AND     al,al
+;        JMP     Z,PF26                 ; No- jump
+         JZ      PF26
+;        CMP     al,-1                  ; At end of list ?
+         CMP     al,-1
+;        RET     Z                      ; Yes return
+         JNZ     skip14
          RET
 skip14:
-         MOV     byte ptr [M3],al       ; Save position as board index
-         MOV     esi,[M3]               ; Load index to board
-         MOV     al,byte ptr [esi+BOARD] ; Get contents of board
-         MOV     byte ptr [P1],al       ; Save
-         MOV     ch,8                   ; Init scan direction count
+;        LD      (M3),al                ; Save position as board index
+         MOV     byte ptr [ebp+M3],al
+;        LD      si,(M3)                ; Load index to board
+         MOV     si,word ptr [ebp+M3]
+;        LD      al,(si+BOARD)          ; Get contents of board
+         MOV     al,byte ptr [ebp+esi+BOARD]
+;        LD      (P1),al                ; Save
+         MOV     byte ptr [ebp+P1],al
+;        LD      ch,8                   ; Init scan direction count
+         MOV     ch,8
+;        XOR     al,al
          XOR     al,al
-         MOV     byte ptr [INDX2],al    ; Init direction index
-         MOV     edi,[INDX2]
-PF2:     MOV     al,byte ptr [M3]       ; Get King/Queen position
-         MOV     byte ptr [M2],al       ; Save
+;        LD      (INDX2),al             ; Init direction index
+         MOV     byte ptr [ebp+INDX2],al
+;        LD      di,(INDX2)
+         MOV     di,word ptr [ebp+INDX2]
+;PF2:    LD      al,(M3)                ; Get King/Queen position
+PF2:     MOV     al,byte ptr [ebp+M3]
+;        LD      (M2),al                ; Save
+         MOV     byte ptr [ebp+M2],al
+;        XOR     al,al
          XOR     al,al
-         MOV     byte ptr [M4],al       ; Clear pinned piece saved pos
-         MOV     cl,byte ptr [edi+DIRECT] ; Get direction of scan
-PF5:     CALL    PATH                   ; Compute next position
-         AND     al,al                  ; Is it empty ?
-         JZ      PF5                    ; Yes - jump
-         CMP     al,3                   ; Off board ?
-         JZ      PF25                   ; Yes - jump
-         CMP     al,2                   ; Piece of same color
-         MOV     al,byte ptr [M4]       ; Load pinned piece position
-         JZ      PF15                   ; Yes - jump
-         AND     al,al                  ; Possible pin ?
-         JZ      PF25                   ; No - jump
-         MOV     al,byte ptr [T2]       ; Piece type encountered
-         CMP     al,QUEEN               ; Queen ?
-         JZ      PF19                   ; Yes - jump
-         MOV     bl,al                  ; Save piece type
+;        LD      (M4),al                ; Clear pinned piece saved pos
+         MOV     byte ptr [ebp+M4],al
+;        LD      cl,(di+DIRECT)         ; Get direction of scan
+         MOV     cl,byte ptr [ebp+edi+DIRECT]
+;PF5:    CALL    PATH                   ; Compute next position
+PF5:     CALL    PATH
+;        AND     al,al                  ; Is it empty ?
+         AND     al,al
+;        JR      Z,PF5                  ; Yes - jump
+         JZ      PF5
+;        CMP     al,3                   ; Off board ?
+         CMP     al,3
+;        JMP     Z,PF25                 ; Yes - jump
+         JZ      PF25
+;        CMP     al,2                   ; Piece of same color
+         CMP     al,2
+;        LD      al,(M4)                ; Load pinned piece position
+         MOV     al,byte ptr [ebp+M4]
+;        JR      Z,PF15                 ; Yes - jump
+         JZ      PF15
+;        AND     al,al                  ; Possible pin ?
+         AND     al,al
+;        JMP     Z,PF25                 ; No - jump
+         JZ      PF25
+;        LD      al,(T2)                ; Piece type encountered
+         MOV     al,byte ptr [ebp+T2]
+;        CMP     al,QUEEN               ; Queen ?
+         CMP     al,QUEEN
+;        JMP     Z,PF19                 ; Yes - jump
+         JZ      PF19
+;        LD      bl,al                  ; Save piece type
+         MOV     bl,al
 ;X p45
-         MOV     al,ch                  ; Direction counter
-         CMP     al,5                   ; Non-diagonal direction ?
-         JC      PF10                   ; Yes - jump
-         MOV     al,bl                  ; Piece type
-         CMP     al,BISHOP              ; Bishop ?
-         JNZ     PF25                   ; No - jump
-         JMP     PF20                   ; Jump
-PF10:    MOV     al,bl                  ; Piece type
-         CMP     al,ROOK                ; Rook ?
-         JNZ     PF25                   ; No - jump
-         JMP     PF20                   ; Jump
-PF15:    AND     al,al                  ; Possible pin ?
-         JNZ     PF25                   ; No - jump
-         MOV     al,byte ptr [M2]       ; Save possible pin position
-         MOV     byte ptr [M4],al
-         JMP     PF5                    ; Jump
-PF19:    MOV     al,byte ptr [P1]       ; Load King or Queen
-         AND     al,7                   ; Clear flags
-         CMP     al,QUEEN               ; Queen ?
-         JNZ     PF20                   ; No - jump
-         PUSH    ecx                    ; Save regs.
+;        LD      al,ch                  ; Direction counter
+         MOV     al,ch
+;        CMP     al,5                   ; Non-diagonal direction ?
+         CMP     al,5
+;        JR      C,PF10                 ; Yes - jump
+         JC      PF10
+;        LD      al,bl                  ; Piece type
+         MOV     al,bl
+;        CMP     al,BISHOP              ; Bishop ?
+         CMP     al,BISHOP
+;        JMP     NZ,PF25                ; No - jump
+         JNZ     PF25
+;        JMP     PF20                   ; Jump
+         JMP     PF20
+;PF10:   LD      al,bl                  ; Piece type
+PF10:    MOV     al,bl
+;        CMP     al,ROOK                ; Rook ?
+         CMP     al,ROOK
+;        JMP     NZ,PF25                ; No - jump
+         JNZ     PF25
+;        JMP     PF20                   ; Jump
+         JMP     PF20
+;PF15:   AND     al,al                  ; Possible pin ?
+PF15:    AND     al,al
+;        JMP     NZ,PF25                ; No - jump
+         JNZ     PF25
+;        LD      al,(M2)                ; Save possible pin position
+         MOV     al,byte ptr [ebp+M2]
+;        LD      (M4),al
+         MOV     byte ptr [ebp+M4],al
+;        JMP     PF5                    ; Jump
+         JMP     PF5
+;PF19:   LD      al,(P1)                ; Load King or Queen
+PF19:    MOV     al,byte ptr [ebp+P1]
+;        AND     al,7                   ; Clear flags
+         AND     al,7
+;        CMP     al,QUEEN               ; Queen ?
+         CMP     al,QUEEN
+;        JR      NZ,PF20                ; No - jump
+         JNZ     PF20
+;        PUSH    cx                     ; Save regs.
+         PUSH    ecx
+;        PUSH    dx
          PUSH    edx
+;        PUSH    di
          PUSH    edi
-         XOR     al,al                  ; Zero out attack list
+;        XOR     al,al                  ; Zero out attack list
+         XOR     al,al
+;        LD      ch,14
          MOV     ch,14
-         MOV     ebx,ATKLST
-back02:  MOV     byte ptr [ebx],al
-         LEA     ebx,[ebx+1]
+;        LD      bx,ATKLST
+         MOV     bx,ATKLST
+;back02: LD      (bx),al
+back02:  MOV     byte ptr [ebp+ebx],al
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        DJNZ    back02
          LAHF
          DEC ch
          JNZ     back02
          SAHF
-         MOV     al,7                   ; Set attack flag
-         MOV     byte ptr [T1],al
-         CALL    ATTACK                 ; Find attackers/defenders
-         MOV     ebx,offset WACT        ; White queen attackers
-         MOV     edx,offset BACT        ; Black queen attackers
-         MOV     al,byte ptr [P1]       ; Get queen
-         TEST    al,80h                 ; Is she white ?
-         JZ      rel008                 ; Yes - skip
-         XCHG    ebx,edx                ; Reverse for black
-rel008:  MOV     al,byte ptr [ebx]      ; Number of defenders
-         XCHG    ebx,edx                ; Reverse for attackers
-         SUB     al,byte ptr [ebx]      ; Defenders minus attackers
-         DEC     al                     ; Less 1
-         POP     edi                    ; Restore regs.
+;        LD      al,7                   ; Set attack flag
+         MOV     al,7
+;        LD      (T1),al
+         MOV     byte ptr [ebp+T1],al
+;        CALL    ATTACK                 ; Find attackers/defenders
+         CALL    ATTACK
+;        LD      bx,WACT                ; White queen attackers
+         MOV     bx,WACT
+;        LD      dx,BACT                ; Black queen attackers
+         MOV     dx,BACT
+;        LD      al,(P1)                ; Get queen
+         MOV     al,byte ptr [ebp+P1]
+;        BIT     7,al                   ; Is she white ?
+         TEST    al,80h
+;        JR      Z,rel008               ; Yes - skip
+         JZ      rel008
+;        EX      dx,bx                  ; Reverse for black
+         XCHG    bx,dx
+;rel008: LD      al,(bx)                ; Number of defenders
+rel008:  MOV     al,byte ptr [ebp+ebx]
+;        EX      dx,bx                  ; Reverse for attackers
+         XCHG    bx,dx
+;        SUB     al,(bx)                ; Defenders minus attackers
+         SUB     al,byte ptr [ebp+ebx]
+;        DEC     al                     ; Less 1
+         DEC     al
+;        POP     di                     ; Restore regs.
+         POP     edi
+;        POP     dx
          POP     edx
+;        POP     cx
          POP     ecx
-         JP      PF25                   ; Jump if pin not valid
-PF20:    MOV     ebx,offset NPINS       ; Address of pinned piece count
-         INC     byte ptr [ebx]         ; Increment
-         MOV     esi,[NPINS]            ; Load pin list index
-         MOV     byte ptr [esi+PLISTD_IDX],cl ; Save direction of pin
+;        JMP     P,PF25                 ; Jump if pin not valid
+         JP      PF25
+;PF20:   LD      bx,NPINS               ; Address of pinned piece count
+PF20:    MOV     bx,NPINS
+;        INC     (bx)                   ; Increment
+         INC     byte ptr [ebp+ebx]
+;        LD      si,(NPINS)             ; Load pin list index
+         MOV     si,word ptr [ebp+NPINS]
+;        LD      (si+PLISTD),cl         ; Save direction of pin  ;PLISTD_IDX
+         MOV     byte ptr [ebp+esi+PLISTD],cl
 ;X p46
-         MOV     al,byte ptr [M4]       ; Position of pinned piece
-         MOV     byte ptr [esi+PLISTA_IDX],al ; Save in list
-PF25:    LEA     edi,[edi+1]            ; Increment direction index
-         LAHF                           ; Done ? No - Jump
+;        LD      al,(M4)                ; Position of pinned piece
+         MOV     al,byte ptr [ebp+M4]
+;        LD      (si+PLIST),al          ; Save in list ;PLISTA_IDX
+         MOV     byte ptr [ebp+esi+PLIST],al
+;PF25:   INC     di                     ; Increment direction index
+PF25:    LAHF
+         INC     di
+         SAHF
+;        DJNZ    PF27                   ; Done ? No - Jump
+         LAHF
          DEC ch
          JNZ     PF27
          SAHF
-PF26:    LEA     edx,[edx+1]            ; Incr King/Queen pos index
-         JMP     PF1                    ; Jump
-PF27:    JMP     PF2                    ; Jump
+;PF26:   INC     dx                     ; Incr King/Queen pos index
+PF26:    LAHF
+         INC     dx
+         SAHF
+;        JMP     PF1                    ; Jump
+         JMP     PF1
+;PF27:   JMP     PF2                    ; Jump
+PF27:    JMP     PF2
 
 ;X p47
 ;****************************************************************
@@ -1388,61 +2199,107 @@ PF27:    JMP     PF2                    ; Jump
 ;
 ; ARGUMENTS: -- None.
 ;****************************************************************
-XCHNG:   Z80_EXX                        ; Swap regs.
-         MOV     al,byte ptr [P1]       ; Piece attacked
-         MOV     ebx,offset WACT        ; Addr of white attkrs/dfndrs
-         MOV     edx,offset BACT        ; Addr of black attkrs/dfndrs
-         TEST    al,80h                 ; Is piece white ?
-         JZ      rel009                 ; Yes - jump
-         XCHG    ebx,edx                ; Swap list pointers
-rel009:  MOV     ch,byte ptr [ebx]      ; Init list counts
-         XCHG    ebx,edx
-         MOV     cl,byte ptr [ebx]
-         XCHG    ebx,edx
-         Z80_EXX                        ; Restore regs.
-         MOV     cl,0                   ; Init attacker/defender flag
-         MOV     dl,0                   ; Init points lost count
-         MOV     esi,[T3]               ; Load piece value index
-         MOV     dh,byte ptr [esi+PVALUE] ; Get attacked piece value
-         SHL     dh,1                   ; Double it
-         MOV     ch,dh                  ; Save
-         CALL    NEXTAD                 ; Retrieve first attacker
-         JNZ     skip15                 ; Return if none
+;XCHNG:  EXX                            ; Swap regs.
+XCHNG:   Z80_EXX
+;        LD      al,(P1)                ; Piece attacked
+         MOV     al,byte ptr [ebp+P1]
+;        LD      bx,WACT                ; Addr of white attkrs/dfndrs
+         MOV     bx,WACT
+;        LD      dx,BACT                ; Addr of black attkrs/dfndrs
+         MOV     dx,BACT
+;        BIT     7,al                   ; Is piece white ?
+         TEST    al,80h
+;        JR      Z,rel009               ; Yes - jump
+         JZ      rel009
+;        EX      dx,bx                  ; Swap list pointers
+         XCHG    bx,dx
+;rel009: LD      ch,(bx)                ; Init list counts
+rel009:  MOV     ch,byte ptr [ebp+ebx]
+;        EX      dx,bx
+         XCHG    bx,dx
+;        LD      cl,(bx)
+         MOV     cl,byte ptr [ebp+ebx]
+;        EX      dx,bx
+         XCHG    bx,dx
+;        EXX                            ; Restore regs.
+         Z80_EXX
+;        LD      cl,0                   ; Init attacker/defender flag
+         MOV     cl,0
+;        LD      dl,0                   ; Init points lost count
+         MOV     dl,0
+;        LD      si,(T3)                ; Load piece value index
+         MOV     si,word ptr [ebp+T3]
+;        LD      dh,(si+PVALUE)         ; Get attacked piece value
+         MOV     dh,byte ptr [ebp+esi+PVALUE]
+;        SLA     dh                     ; Double it
+         SHL     dh,1
+;        LD      ch,dh                  ; Save
+         MOV     ch,dh
+;        CALL    NEXTAD                 ; Retrieve first attacker
+         CALL    NEXTAD
+;        RET     Z                      ; Return if none
+         JNZ     skip15
          RET
 skip15:
-XC10:    MOV     bl,al                  ; Save attacker value
-         CALL    NEXTAD                 ; Get next defender
-         JZ      XC18                   ; Jump if none
-         Z80_EXAF                       ; Save defender value
-         MOV     al,ch                  ; Get attacked value
-         CMP     al,bl                  ; Attacked less than attacker ?
-         JNC     XC19                   ; No - jump
-         Z80_EXAF                       ; -Restore defender
-XC15:    CMP     al,bl                  ; Defender less than attacker ?
-         JNC     skip16                 ; Yes - return
+;XC10:   LD      bl,al                  ; Save attacker value
+XC10:    MOV     bl,al
+;        CALL    NEXTAD                 ; Get next defender
+         CALL    NEXTAD
+;        JR      Z,XC18                 ; Jump if none
+         JZ      XC18
+;        EXAF                           ; Save defender value
+         Z80_EXAF
+;        LD      al,ch                  ; Get attacked value
+         MOV     al,ch
+;        CMP     al,bl                  ; Attacked less than attacker ?
+         CMP     al,bl
+;        JR      NC,XC19                ; No - jump
+         JNC     XC19
+;        EXAF                           ; -Restore defender
+         Z80_EXAF
+;XC15:   CMP     al,bl                  ; Defender less than attacker ?
+XC15:    CMP     al,bl
+;        RET     C                      ; Yes - return
+         JNC     skip16
          RET
 skip16:
-         CALL    NEXTAD                 ; Retrieve next attacker value
-         JNZ     skip17                 ; Return if none
+;        CALL    NEXTAD                 ; Retrieve next attacker value
+         CALL    NEXTAD
+;        RET     Z                      ; Return if none
+         JNZ     skip17
          RET
 skip17:
-         MOV     bl,al                  ; Save attacker value
-         CALL    NEXTAD                 ; Retrieve next defender value
-         JNZ     XC15                   ; Jump if none
-XC18:    Z80_EXAF                       ; Save Defender
-         MOV     al,ch                  ; Get value of attacked piece
+;        LD      bl,al                  ; Save attacker value
+         MOV     bl,al
+;        CALL    NEXTAD                 ; Retrieve next defender value
+         CALL    NEXTAD
+;        JR      NZ,XC15                ; Jump if none
+         JNZ     XC15
+;XC18:   EXAF                           ; Save Defender
+XC18:    Z80_EXAF
+;        LD      al,ch                  ; Get value of attacked piece
+         MOV     al,ch
 ;X p48
-XC19:    TEST    cl,1                   ; Attacker or defender ?
-         JZ      rel010                 ; Jump if defender
-         NEG     al                     ; Negate value for attacker
-         ADD     al,dl                  ; Total points lost
-rel010:  MOV     dl,al                  ; Save total
-         Z80_EXAF                       ; Restore previous defender
-         JNZ     skip18                 ; Return if none
+;XC19:   BIT     0,cl                   ; Attacker or defender ?
+XC19:    TEST    cl,1
+;        JR      Z,rel010               ; Jump if defender
+         JZ      rel010
+;        NEG                            ; Negate value for attacker
+         NEG     al
+;        ADD     al,dl                  ; Total points lost
+         ADD     al,dl
+;rel010: LD      dl,al                  ; Save total
+rel010:  MOV     dl,al
+;        EXAF                           ; Restore previous defender
+         Z80_EXAF
+;        RET     Z                      ; Return if none
+         JNZ     skip18
          RET
 skip18:
-         MOV     ch,bl                  ; Prev attckr becomes defender
-         JMP     XC10                   ; Jump
+;        LD      ch,bl                  ; Prev attckr becomes defender
+         MOV     ch,bl
+;        JMP     XC10                   ; Jump
+         JMP     XC10
 
 ;****************************************************************
 ; NEXT ATTACKER/DEFENDER ROUTINE
@@ -1459,24 +2316,46 @@ skip18:
 ;               Side flag
 ;               Attack list counts
 ;****************************************************************
-NEXTAD:  INC     cl                     ; Increment side flag
-         Z80_EXX                        ; Swap registers
-         MOV     al,ch                  ; Swap list counts
+;NEXTAD: INC     cl                     ; Increment side flag
+NEXTAD:  INC     cl
+;        EXX                            ; Swap registers
+         Z80_EXX
+;        LD      al,ch                  ; Swap list counts
+         MOV     al,ch
+;        LD      ch,cl
          MOV     ch,cl
+;        LD      cl,al
          MOV     cl,al
-         XCHG    ebx,edx                ; Swap list pointers
+;        EX      dx,bx                  ; Swap list pointers
+         XCHG    bx,dx
+;        XOR     al,al
          XOR     al,al
-         CMP     al,ch                  ; At end of list ?
-         JZ      NX6                    ; Yes - jump
-         DEC     ch                     ; Decrement list count
-back03:  LEA     ebx,[ebx+1]            ; Increment list inter
-         CMP     al,byte ptr [ebx]      ; Check next item in list
-         JZ      back03                 ; Jump if empty
-         Z80_RRD                        ; Get value from list
-         ADD     al,al                  ; Double it
-         LEA     ebx,[ebx-1]            ; Decrement list pointer
-NX6:     Z80_EXX                        ; Restore regs.
-         RET                            ; Return
+;        CMP     al,ch                  ; At end of list ?
+         CMP     al,ch
+;        JR      Z,NX6                  ; Yes - jump
+         JZ      NX6
+;        DEC     ch                     ; Decrement list count
+         DEC     ch
+;back03: INC     bx                     ; Increment list inter
+back03:  LAHF
+         INC     bx
+         SAHF
+;        CMP     al,(bx)                ; Check next item in list
+         CMP     al,byte ptr [ebp+ebx]
+;        JR      Z,back03               ; Jump if empty
+         JZ      back03
+;        RRD                            ; Get value from list
+         Z80_RRD
+;        ADD     al,al                  ; Double it
+         ADD     al,al
+;        DEC     bx                     ; Decrement list pointer
+         LAHF
+         DEC     bx
+         SAHF
+;NX6:    EXX                            ; Restore regs.
+NX6:     Z80_EXX
+;        RET                            ; Return
+         RET
 
 ;X p49
 ;****************************************************************
@@ -1494,175 +2373,340 @@ NX6:     Z80_EXX                        ; Restore regs.
 ;
 ; ARGUMENTS: -- None
 ;****************************************************************
-POINTS:  XOR     al,al                  ; Zero out variables
-         MOV     byte ptr [MTRL],al
-         MOV     byte ptr [BRDC],al
-         MOV     byte ptr [PTSL],al
-         MOV     byte ptr [PTSW1],al
-         MOV     byte ptr [PTSW2],al
-         MOV     byte ptr [PTSCK],al
-         MOV     ebx,offset T1          ; Set attacker flag
-         MOV     byte ptr [ebx],7
-         MOV     al,21                  ; Init to first square on board
-PT5:     MOV     byte ptr [M3],al       ; Save as board index
-         MOV     esi,[M3]               ; Load board index
-         MOV     al,byte ptr [esi+BOARD] ; Get piece from board
-         CMP     al,-1                  ; Off board edge ?
-         JZ      PT25                   ; Yes - jump
-         MOV     ebx,offset P1          ; Save piece, if any
-         MOV     byte ptr [ebx],al
-         AND     al,7                   ; Save piece type, if any
-         MOV     byte ptr [T3],al
-         CMP     al,KNIGHT              ; Less than a Knight (Pawn) ?
-         JC      PT6X                   ; Yes - Jump
-         CMP     al,ROOK                ; Rook, Queen or King ?
-         JC      PT6B                   ; No - jump
-         CMP     al,KING                ; Is it a King ?
-         JZ      PT6AA                  ; Yes - jump
-         MOV     al,byte ptr [MOVENO]   ; Get move number
-         CMP     al,7                   ; Less than 7 ?
-         JC      PT6A                   ; Yes - Jump
-         JMP     PT6X                   ; Jump
-PT6AA:   TEST    byte ptr [ebx],10h     ; Castled yet ?
-         JZ      PT6A                   ; No - jump
-         MOV     al,+6                  ; Bonus for castling
-         TEST    byte ptr [ebx],80h     ; Check piece color
-         JZ      PT6D                   ; Jump if white
-         MOV     al,-6                  ; Bonus for black castling
+;POINTS: XOR     al,al                  ; Zero out variables
+POINTS:  XOR     al,al
+;        LD      (MTRL),al
+         MOV     byte ptr [ebp+MTRL],al
+;        LD      (BRDC),al
+         MOV     byte ptr [ebp+BRDC],al
+;        LD      (PTSL),al
+         MOV     byte ptr [ebp+PTSL],al
+;        LD      (PTSW1),al
+         MOV     byte ptr [ebp+PTSW1],al
+;        LD      (PTSW2),al
+         MOV     byte ptr [ebp+PTSW2],al
+;        LD      (PTSCK),al
+         MOV     byte ptr [ebp+PTSCK],al
+;        LD      bx,T1                  ; Set attacker flag
+         MOV     bx,T1
+;        LD      (bx),7
+         MOV     byte ptr [ebp+ebx],7
+;        LD      al,21                  ; Init to first square on board
+         MOV     al,21
+;PT5:    LD      (M3),al                ; Save as board index
+PT5:     MOV     byte ptr [ebp+M3],al
+;        LD      si,(M3)                ; Load board index
+         MOV     si,word ptr [ebp+M3]
+;        LD      al,(si+BOARD)          ; Get piece from board
+         MOV     al,byte ptr [ebp+esi+BOARD]
+;        CMP     al,-1                  ; Off board edge ?
+         CMP     al,-1
+;        JMP     Z,PT25                 ; Yes - jump
+         JZ      PT25
+;        LD      bx,P1                  ; Save piece, if any
+         MOV     bx,P1
+;        LD      (bx),al
+         MOV     byte ptr [ebp+ebx],al
+;        AND     al,7                   ; Save piece type, if any
+         AND     al,7
+;        LD      (T3),al
+         MOV     byte ptr [ebp+T3],al
+;        CMP     al,KNIGHT              ; Less than a Knight (Pawn) ?
+         CMP     al,KNIGHT
+;        JR      C,PT6X                 ; Yes - Jump
+         JC      PT6X
+;        CMP     al,ROOK                ; Rook, Queen or King ?
+         CMP     al,ROOK
+;        JR      C,PT6B                 ; No - jump
+         JC      PT6B
+;        CMP     al,KING                ; Is it a King ?
+         CMP     al,KING
+;        JR      Z,PT6AA                ; Yes - jump
+         JZ      PT6AA
+;        LD      al,(MOVENO)            ; Get move number
+         MOV     al,byte ptr [ebp+MOVENO]
+;        CMP     al,7                   ; Less than 7 ?
+         CMP     al,7
+;        JR      C,PT6A                 ; Yes - Jump
+         JC      PT6A
+;        JMP     PT6X                   ; Jump
+         JMP     PT6X
+;PT6AA:  BIT     4,(bx)                 ; Castled yet ?
+PT6AA:   TEST    byte ptr [ebp+ebx],10h
+;        JR      Z,PT6A                 ; No - jump
+         JZ      PT6A
+;        LD      al,+6                  ; Bonus for castling
+         MOV     al,+6
+;        BIT     7,(bx)                 ; Check piece color
+         TEST    byte ptr [ebp+ebx],80h
+;        JR      Z,PT6D                 ; Jump if white
+         JZ      PT6D
+;        LD      al,-6                  ; Bonus for black castling
+         MOV     al,-6
 ;X p50
-         JMP     PT6D                   ; Jump
-PT6A:    TEST    byte ptr [ebx],8       ; Has piece moved yet ?
-         JZ      PT6X                   ; No - jump
-         JMP     PT6C                   ; Jump
-PT6B:    TEST    byte ptr [ebx],8       ; Has piece moved yet ?
-         JNZ     PT6X                   ; Yes - jump
-PT6C:    MOV     al,-2                  ; Two point penalty for white
-         TEST    byte ptr [ebx],80h     ; Check piece color
-         JZ      PT6D                   ; Jump if white
-         MOV     al,+2                  ; Two point penalty for black
-PT6D:    MOV     ebx,offset BRDC        ; Get address of board control
-         ADD     al,byte ptr [ebx]      ; Add on penalty/bonus points
-         MOV     byte ptr [ebx],al      ; Save
-PT6X:    XOR     al,al                  ; Zero out attack list
+;        JMP     PT6D                   ; Jump
+         JMP     PT6D
+;PT6A:   BIT     3,(bx)                 ; Has piece moved yet ?
+PT6A:    TEST    byte ptr [ebp+ebx],8
+;        JR      Z,PT6X                 ; No - jump
+         JZ      PT6X
+;        JMP     PT6C                   ; Jump
+         JMP     PT6C
+;PT6B:   BIT     3,(bx)                 ; Has piece moved yet ?
+PT6B:    TEST    byte ptr [ebp+ebx],8
+;        JR      NZ,PT6X                ; Yes - jump
+         JNZ     PT6X
+;PT6C:   LD      al,-2                  ; Two point penalty for white
+PT6C:    MOV     al,-2
+;        BIT     7,(bx)                 ; Check piece color
+         TEST    byte ptr [ebp+ebx],80h
+;        JR      Z,PT6D                 ; Jump if white
+         JZ      PT6D
+;        LD      al,+2                  ; Two point penalty for black
+         MOV     al,+2
+;PT6D:   LD      bx,BRDC                ; Get address of board control
+PT6D:    MOV     bx,BRDC
+;        ADD     al,(bx)                ; Add on penalty/bonus points
+         ADD     al,byte ptr [ebp+ebx]
+;        LD      (bx),al                ; Save
+         MOV     byte ptr [ebp+ebx],al
+;PT6X:   XOR     al,al                  ; Zero out attack list
+PT6X:    XOR     al,al
+;        LD      ch,14
          MOV     ch,14
-         MOV     ebx,ATKLST
-back04:  MOV     byte ptr [ebx],al
-         LEA     ebx,[ebx+1]
+;        LD      bx,ATKLST
+         MOV     bx,ATKLST
+;back04: LD      (bx),al
+back04:  MOV     byte ptr [ebp+ebx],al
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        DJNZ    back04
          LAHF
          DEC ch
          JNZ     back04
          SAHF
-         CALL    ATTACK                 ; Build attack list for square
-         MOV     ebx,offset BACT        ; Get black attacker count addr
-         MOV     al,byte ptr [WACT]     ; Get white attacker count
-         SUB     al,byte ptr [ebx]      ; Compute count difference
-         MOV     ebx,offset BRDC        ; Address of board control
-         ADD     al,byte ptr [ebx]      ; Accum board control score
-         MOV     byte ptr [ebx],al      ; Save
-         MOV     al,byte ptr [P1]       ; Get piece on current square
-         AND     al,al                  ; Is it empty ?
-         JZ      PT25                   ; Yes - jump
-         CALL    XCHNG                  ; Evaluate exchange, if any
-         XOR     al,al                  ; Check for a loss
-         CMP     al,dl                  ; Points lost ?
-         JZ      PT23                   ; No - Jump
-         DEC     dh                     ; Deduct half a Pawn value
-         MOV     al,byte ptr [P1]       ; Get piece under attack
-         MOV     ebx,offset COLOR       ; Color of side just moved
-         XOR     al,byte ptr [ebx]      ; Compare with piece
-         TEST    al,80h                 ; Do colors match ?
-         MOV     al,dl                  ; Points lost
-         JNZ     PT20                   ; Jump if no match
-         MOV     ebx,offset PTSL        ; Previous max points lost
-         CMP     al,byte ptr [ebx]      ; Compare to current value
-         JC      PT23                   ; Jump if greater than
-         MOV     byte ptr [ebx],dl      ; Store new value as max lost
-         MOV     esi,[MLPTRJ]           ; Load pointer to this move
-         MOV     al,byte ptr [M3]       ; Get position of lost piece
-         CMP     al,byte ptr [esi+MLTOP] ; Is it the one moving ?
-         JNZ     PT23                   ; No - jump
-         MOV     byte ptr [PTSCK],al    ; Save position as a flag
-         JMP     PT23                   ; Jump
+;        CALL    ATTACK                 ; Build attack list for square
+         CALL    ATTACK
+;        LD      bx,BACT                ; Get black attacker count addr
+         MOV     bx,BACT
+;        LD      al,(WACT)              ; Get white attacker count
+         MOV     al,byte ptr [ebp+WACT]
+;        SUB     al,(bx)                ; Compute count difference
+         SUB     al,byte ptr [ebp+ebx]
+;        LD      bx,BRDC                ; Address of board control
+         MOV     bx,BRDC
+;        ADD     al,(bx)                ; Accum board control score
+         ADD     al,byte ptr [ebp+ebx]
+;        LD      (bx),al                ; Save
+         MOV     byte ptr [ebp+ebx],al
+;        LD      al,(P1)                ; Get piece on current square
+         MOV     al,byte ptr [ebp+P1]
+;        AND     al,al                  ; Is it empty ?
+         AND     al,al
+;        JMP     Z,PT25                 ; Yes - jump
+         JZ      PT25
+;        CALL    XCHNG                  ; Evaluate exchange, if any
+         CALL    XCHNG
+;        XOR     al,al                  ; Check for a loss
+         XOR     al,al
+;        CMP     al,dl                  ; Points lost ?
+         CMP     al,dl
+;        JR      Z,PT23                 ; No - Jump
+         JZ      PT23
+;        DEC     dh                     ; Deduct half a Pawn value
+         DEC     dh
+;        LD      al,(P1)                ; Get piece under attack
+         MOV     al,byte ptr [ebp+P1]
+;        LD      bx,COLOR               ; Color of side just moved
+         MOV     bx,COLOR
+;        XOR     al,(bx)                ; Compare with piece
+         XOR     al,byte ptr [ebp+ebx]
+;        BIT     7,al                   ; Do colors match ?
+         TEST    al,80h
+;        LD      al,dl                  ; Points lost
+         MOV     al,dl
+;        JR      NZ,PT20                ; Jump if no match
+         JNZ     PT20
+;        LD      bx,PTSL                ; Previous max points lost
+         MOV     bx,PTSL
+;        CMP     al,(bx)                ; Compare to current value
+         CMP     al,byte ptr [ebp+ebx]
+;        JR      C,PT23                 ; Jump if greater than
+         JC      PT23
+;        LD      (bx),dl                ; Store new value as max lost
+         MOV     byte ptr [ebp+ebx],dl
+;        LD      si,(MLPTRJ)            ; Load pointer to this move
+         MOV     si,word ptr [ebp+MLPTRJ]
+;        LD      al,(M3)                ; Get position of lost piece
+         MOV     al,byte ptr [ebp+M3]
+;        CMP     al,(si+MLTOP)          ; Is it the one moving ?
+         CMP     al,byte ptr [ebp+esi+MLTOP]
+;        JR      NZ,PT23                ; No - jump
+         JNZ     PT23
+;        LD      (PTSCK),al             ; Save position as a flag
+         MOV     byte ptr [ebp+PTSCK],al
+;        JMP     PT23                   ; Jump
+         JMP     PT23
 ;X p51
-PT20:    MOV     ebx,offset PTSW1       ; Previous maximum points won
-         CMP     al,byte ptr [ebx]      ; Compare to current value
-         JC      rel011                 ; Jump if greater than
-         MOV     al,byte ptr [ebx]      ; Load previous max value
-         MOV     byte ptr [ebx],dl      ; Store new value as max won
-rel011:  MOV     ebx,offset PTSW2       ; Previous 2nd max points won
-         CMP     al,byte ptr [ebx]      ; Compare to current value
-         JC      PT23                   ; Jump if greater than
-         MOV     byte ptr [ebx],al      ; Store as new 2nd max lost
-PT23:    MOV     ebx,offset P1          ; Get piece
-         TEST    byte ptr [ebx],80h     ; Test color
-         MOV     al,dh                  ; Value of piece
-         JZ      rel012                 ; Jump if white
-         NEG     al                     ; Negate for black
-rel012:  MOV     ebx,offset MTRL        ; Get addrs of material total
-         ADD     al,byte ptr [ebx]      ; Add new value
-         MOV     byte ptr [ebx],al      ; Store
-PT25:    MOV     al,byte ptr [M3]       ; Get current board position
-         INC     al                     ; Increment
-         CMP     al,99                  ; At end of board ?
-         JNZ     PT5                    ; No - jump
-         MOV     al,byte ptr [PTSCK]    ; Moving piece lost flag
-         AND     al,al                  ; Was it lost ?
-         JZ      PT25A                  ; No - jump
-         MOV     al,byte ptr [PTSW2]    ; 2nd max points won
-         MOV     byte ptr [PTSW1],al    ; Store as max points won
-         XOR     al,al                  ; Zero out 2nd max points won
-         MOV     byte ptr [PTSW2],al
-PT25A:   MOV     al,byte ptr [PTSL]     ; Get max points lost
-         AND     al,al                  ; Is it zero ?
-         JZ      rel013                 ; Yes - jump
-         DEC     al                     ; Decrement it
-rel013:  MOV     ch,al                  ; Save it
-         MOV     al,byte ptr [PTSW1]    ; Max,points won
-         AND     al,al                  ; Is it zero ?
-         JZ      rel014                 ; Yes - jump
-         MOV     al,byte ptr [PTSW2]    ; 2nd max points won
-         AND     al,al                  ; Is it zero ?
-         JZ      rel014                 ; Yes - jump
-         DEC     al                     ; Decrement it
-         SHR     al,1                   ; Divide it by 2
-         SUB     al,ch                  ; Subtract points lost
-rel014:  MOV     ebx,offset COLOR       ; Color of side just moved ???
-         TEST    byte ptr [ebx],80h     ; Is it white ?
-         JZ      rel015                 ; Yes - jump
-         NEG     al                     ; Negate for black
-rel015:  MOV     ebx,offset MTRL        ; Net material on board
-         ADD     al,byte ptr [ebx]      ; Add exchange adjustments
-         MOV     ebx,offset MV0         ; Material at ply 0
+;PT20:   LD      bx,PTSW1               ; Previous maximum points won
+PT20:    MOV     bx,PTSW1
+;        CMP     al,(bx)                ; Compare to current value
+         CMP     al,byte ptr [ebp+ebx]
+;        JR      C,rel011               ; Jump if greater than
+         JC      rel011
+;        LD      al,(bx)                ; Load previous max value
+         MOV     al,byte ptr [ebp+ebx]
+;        LD      (bx),dl                ; Store new value as max won
+         MOV     byte ptr [ebp+ebx],dl
+;rel011: LD      bx,PTSW2               ; Previous 2nd max points won
+rel011:  MOV     bx,PTSW2
+;        CMP     al,(bx)                ; Compare to current value
+         CMP     al,byte ptr [ebp+ebx]
+;        JR      C,PT23                 ; Jump if greater than
+         JC      PT23
+;        LD      (bx),al                ; Store as new 2nd max lost
+         MOV     byte ptr [ebp+ebx],al
+;PT23:   LD      bx,P1                  ; Get piece
+PT23:    MOV     bx,P1
+;        BIT     7,(bx)                 ; Test color
+         TEST    byte ptr [ebp+ebx],80h
+;        LD      al,dh                  ; Value of piece
+         MOV     al,dh
+;        JR      Z,rel012               ; Jump if white
+         JZ      rel012
+;        NEG                            ; Negate for black
+         NEG     al
+;rel012: LD      bx,MTRL                ; Get addrs of material total
+rel012:  MOV     bx,MTRL
+;        ADD     al,(bx)                ; Add new value
+         ADD     al,byte ptr [ebp+ebx]
+;        LD      (bx),al                ; Store
+         MOV     byte ptr [ebp+ebx],al
+;PT25:   LD      al,(M3)                ; Get current board position
+PT25:    MOV     al,byte ptr [ebp+M3]
+;        INC     al                     ; Increment
+         INC     al
+;        CMP     al,99                  ; At end of board ?
+         CMP     al,99
+;        JMP     NZ,PT5                 ; No - jump
+         JNZ     PT5
+;        LD      al,(PTSCK)             ; Moving piece lost flag
+         MOV     al,byte ptr [ebp+PTSCK]
+;        AND     al,al                  ; Was it lost ?
+         AND     al,al
+;        JR      Z,PT25A                ; No - jump
+         JZ      PT25A
+;        LD      al,(PTSW2)             ; 2nd max points won
+         MOV     al,byte ptr [ebp+PTSW2]
+;        LD      (PTSW1),al             ; Store as max points won
+         MOV     byte ptr [ebp+PTSW1],al
+;        XOR     al,al                  ; Zero out 2nd max points won
+         XOR     al,al
+;        LD      (PTSW2),al
+         MOV     byte ptr [ebp+PTSW2],al
+;PT25A:  LD      al,(PTSL)              ; Get max points lost
+PT25A:   MOV     al,byte ptr [ebp+PTSL]
+;        AND     al,al                  ; Is it zero ?
+         AND     al,al
+;        JR      Z,rel013               ; Yes - jump
+         JZ      rel013
+;        DEC     al                     ; Decrement it
+         DEC     al
+;rel013: LD      ch,al                  ; Save it
+rel013:  MOV     ch,al
+;        LD      al,(PTSW1)             ; Max,points won
+         MOV     al,byte ptr [ebp+PTSW1]
+;        AND     al,al                  ; Is it zero ?
+         AND     al,al
+;        JR      Z,rel014               ; Yes - jump
+         JZ      rel014
+;        LD      al,(PTSW2)             ; 2nd max points won
+         MOV     al,byte ptr [ebp+PTSW2]
+;        AND     al,al                  ; Is it zero ?
+         AND     al,al
+;        JR      Z,rel014               ; Yes - jump
+         JZ      rel014
+;        DEC     al                     ; Decrement it
+         DEC     al
+;        SRL     al                     ; Divide it by 2
+         SHR     al,1
+;        SUB     al,ch                  ; Subtract points lost
+         SUB     al,ch
+;rel014: LD      bx,COLOR               ; Color of side just moved ???
+rel014:  MOV     bx,COLOR
+;        BIT     7,(bx)                 ; Is it white ?
+         TEST    byte ptr [ebp+ebx],80h
+;        JR      Z,rel015               ; Yes - jump
+         JZ      rel015
+;        NEG                            ; Negate for black
+         NEG     al
+;rel015: LD      bx,MTRL                ; Net material on board
+rel015:  MOV     bx,MTRL
+;        ADD     al,(bx)                ; Add exchange adjustments
+         ADD     al,byte ptr [ebp+ebx]
+;        LD      bx,MV0                 ; Material at ply 0
+         MOV     bx,MV0
 ;X p52
-         SUB     al,byte ptr [ebx]      ; Subtract from current
-         MOV     ch,al                  ; Save
-         MOV     al,30                  ; Load material limit
-         CALL    LIMIT                  ; Limit to plus or minus value
-         MOV     dl,al                  ; Save limited value
-         MOV     al,byte ptr [BRDC]     ; Get board control points
-         MOV     ebx,offset BC0         ; Board control at ply zero
-         SUB     al,byte ptr [ebx]      ; Get difference
-         MOV     ch,al                  ; Save
-         MOV     al,byte ptr [PTSCK]    ; Moving piece lost flag
-         AND     al,al                  ; Is it zero ?
-         JZ      rel026                 ; Yes - jump
-         MOV     ch,0                   ; Zero board control points
-rel026:  MOV     al,6                   ; Load board control limit
-         CALL    LIMIT                  ; Limit to plus or minus value
-         MOV     dh,al                  ; Save limited value
-         MOV     al,dl                  ; Get material points
-         ADD     al,al                  ; Multiply by 4
+;        SUB     al,(bx)                ; Subtract from current
+         SUB     al,byte ptr [ebp+ebx]
+;        LD      ch,al                  ; Save
+         MOV     ch,al
+;        LD      al,30                  ; Load material limit
+         MOV     al,30
+;        CALL    LIMIT                  ; Limit to plus or minus value
+         CALL    LIMIT
+;        LD      dl,al                  ; Save limited value
+         MOV     dl,al
+;        LD      al,(BRDC)              ; Get board control points
+         MOV     al,byte ptr [ebp+BRDC]
+;        LD      bx,BC0                 ; Board control at ply zero
+         MOV     bx,BC0
+;        SUB     al,(bx)                ; Get difference
+         SUB     al,byte ptr [ebp+ebx]
+;        LD      ch,al                  ; Save
+         MOV     ch,al
+;        LD      al,(PTSCK)             ; Moving piece lost flag
+         MOV     al,byte ptr [ebp+PTSCK]
+;        AND     al,al                  ; Is it zero ?
+         AND     al,al
+;        JR      Z,rel026               ; Yes - jump
+         JZ      rel026
+;        LD      ch,0                   ; Zero board control points
+         MOV     ch,0
+;rel026: LD      al,6                   ; Load board control limit
+rel026:  MOV     al,6
+;        CALL    LIMIT                  ; Limit to plus or minus value
+         CALL    LIMIT
+;        LD      dh,al                  ; Save limited value
+         MOV     dh,al
+;        LD      al,dl                  ; Get material points
+         MOV     al,dl
+;        ADD     al,al                  ; Multiply by 4
          ADD     al,al
-         ADD     al,dh                  ; Add board control
-         MOV     ebx,offset COLOR       ; Color of side just moved
-         TEST    byte ptr [ebx],80h     ; Is it white ?
-         JNZ     rel016                 ; No - jump
-         NEG     al                     ; Negate for white
-rel016:  ADD     al,80H                 ; Rescale score (neutral = 80H
-         MOV     byte ptr [VALM],al     ; Save score
-         MOV     esi,[MLPTRJ]           ; Load move list pointer
-         MOV     byte ptr [esi+MLVAL],al ; Save score in move list
-         RET                            ; Return
+;        ADD     al,al
+         ADD     al,al
+;        ADD     al,dh                  ; Add board control
+         ADD     al,dh
+;        LD      bx,COLOR               ; Color of side just moved
+         MOV     bx,COLOR
+;        BIT     7,(bx)                 ; Is it white ?
+         TEST    byte ptr [ebp+ebx],80h
+;        JR      NZ,rel016              ; No - jump
+         JNZ     rel016
+;        NEG                            ; Negate for white
+         NEG     al
+;rel016: ADD     al,80H                 ; Rescale score (neutral = 80H
+rel016:  ADD     al,80H
+;        LD      (VALM),al              ; Save score
+         MOV     byte ptr [ebp+VALM],al
+;        LD      si,(MLPTRJ)            ; Load move list pointer
+         MOV     si,word ptr [ebp+MLPTRJ]
+;        LD      (si+MLVAL),al          ; Save score in move list
+         MOV     byte ptr [ebp+esi+MLVAL],al
+;        RET                            ; Return
+         RET
 
 ;X p53
 ;**********************************************************
@@ -1680,21 +2724,32 @@ rel016:  ADD     al,80H                 ; Rescale score (neutral = 80H
 ;                       - Value to limit to in the A register
 ;               Output  - Limited value in the A register.
 ;**********************************************************
-LIMIT:   TEST    ch,80h                 ; Is value negative ?
-         JZ      LIM10                  ; No - jump
-         NEG     al                     ; Make positive
-         CMP     al,ch                  ; Compare to limit
-         JC      skip19                 ; Return if outside limit
+;LIMIT:  BIT     7,ch                   ; Is value negative ?
+LIMIT:   TEST    ch,80h
+;        JMP     Z,LIM10                ; No - jump
+         JZ      LIM10
+;        NEG                            ; Make positive
+         NEG     al
+;        CMP     al,ch                  ; Compare to limit
+         CMP     al,ch
+;        RET     NC                     ; Return if outside limit
+         JC      skip19
          RET
 skip19:
-         MOV     al,ch                  ; Output value as is
-         RET                            ; Return
-LIM10:   CMP     al,ch                  ; Compare to limit
-         JNC     skip20                 ; Return if outside limit
+;        LD      al,ch                  ; Output value as is
+         MOV     al,ch
+;        RET                            ; Return
+         RET
+;LIM10:  CMP     al,ch                  ; Compare to limit
+LIM10:   CMP     al,ch
+;        RET     C                      ; Return if outside limit
+         JNC     skip20
          RET
 skip20:
-         MOV     al,ch                  ; Output value as is
-         RET                            ; Return
+;        LD      al,ch                  ; Output value as is
+         MOV     al,ch
+;        RET                            ; Return
+         RET
 ;X      .END            ;X Bug in the original listing.
 
 ;X p54
@@ -1714,69 +2769,139 @@ skip20:
 ;
 ; ARGUMENTS: -- None
 ;**********************************************************
-MOVE:    MOV     ebx,[MLPTRJ]           ; Load move list pointer
-         LEA     ebx,[ebx+4]    ; Increment past link bytes
-MV1:     MOV     al,byte ptr [ebx]      ; "From" position
-         MOV     byte ptr [M1],al       ; Save
-         LEA     ebx,[ebx+1]            ; Increment pointer
-         MOV     al,byte ptr [ebx]      ; "To" position
-         MOV     byte ptr [M2],al       ; Save
-         LEA     ebx,[ebx+1]            ; Increment pointer
-         MOV     dh,byte ptr [ebx]      ; Get captured piece/flags
-         MOV     esi,[M1]               ; Load "from" pos board index
-         MOV     dl,byte ptr [esi+BOARD] ; Get piece moved
-         TEST    dh,20h                 ; Test Pawn promotion flag
-         JNZ     MV15                   ; Jump if set
-         MOV     al,dl                  ; Piece moved
-         AND     al,7                   ; Clear flag bits
-         CMP     al,QUEEN               ; Is it a queen ?
-         JZ      MV20                   ; Yes - jump
-         CMP     al,KING                ; Is it a king ?
-         JZ      MV30                   ; Yes - jump
-MV5:     MOV     edi,[M2]               ; Load "to" pos board index
-         LAHF                           ; Set piece moved flag
+;MOVE:   LD      bx,(MLPTRJ)            ; Load move list pointer
+MOVE:    MOV     bx,word ptr [ebp+MLPTRJ]
+;        INC     bx                     ; Increment past link bytes
+         LAHF
+         INC     bx
+         SAHF
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;MV1:    LD      al,(bx)                ; "From" position
+MV1:     MOV     al,byte ptr [ebp+ebx]
+;        LD      (M1),al                ; Save
+         MOV     byte ptr [ebp+M1],al
+;        INC     bx                     ; Increment pointer
+         LAHF
+         INC     bx
+         SAHF
+;        LD      al,(bx)                ; "To" position
+         MOV     al,byte ptr [ebp+ebx]
+;        LD      (M2),al                ; Save
+         MOV     byte ptr [ebp+M2],al
+;        INC     bx                     ; Increment pointer
+         LAHF
+         INC     bx
+         SAHF
+;        LD      dh,(bx)                ; Get captured piece/flags
+         MOV     dh,byte ptr [ebp+ebx]
+;        LD      si,(M1)                ; Load "from" pos board index
+         MOV     si,word ptr [ebp+M1]
+;        LD      dl,(si+BOARD)          ; Get piece moved
+         MOV     dl,byte ptr [ebp+esi+BOARD]
+;        BIT     5,dh                   ; Test Pawn promotion flag
+         TEST    dh,20h
+;        JR      NZ,MV15                ; Jump if set
+         JNZ     MV15
+;        LD      al,dl                  ; Piece moved
+         MOV     al,dl
+;        AND     al,7                   ; Clear flag bits
+         AND     al,7
+;        CMP     al,QUEEN               ; Is it a queen ?
+         CMP     al,QUEEN
+;        JR      Z,MV20                 ; Yes - jump
+         JZ      MV20
+;        CMP     al,KING                ; Is it a king ?
+         CMP     al,KING
+;        JR      Z,MV30                 ; Yes - jump
+         JZ      MV30
+;MV5:    LD      di,(M2)                ; Load "to" pos board index
+MV5:     MOV     di,word ptr [ebp+M2]
+;        SET     3,dl                   ; Set piece moved flag
+         LAHF
          OR      dl,8
          SAHF
-         MOV     byte ptr [edi+BOARD],dl ; Insert piece at new position
-         MOV     byte ptr [esi+BOARD],0 ; Empty previous position
-         TEST    dh,40h                 ; Double move ?
-         JNZ     MV40                   ; Yes - jump
-         MOV     al,dh                  ; Get captured piece, if any
+;        LD      (di+BOARD),dl          ; Insert piece at new position
+         MOV     byte ptr [ebp+edi+BOARD],dl
+;        LD      (si+BOARD),0           ; Empty previous position
+         MOV     byte ptr [ebp+esi+BOARD],0
+;        BIT     6,dh                   ; Double move ?
+         TEST    dh,40h
+;        JR      NZ,MV40                ; Yes - jump
+         JNZ     MV40
+;        LD      al,dh                  ; Get captured piece, if any
+         MOV     al,dh
+;        AND     al,7
          AND     al,7
-         CMP     al,QUEEN               ; Was it a queen ?
-         JZ      skip21                 ; No - return
+;        CMP     al,QUEEN               ; Was it a queen ?
+         CMP     al,QUEEN
+;        RET     NZ                     ; No - return
+         JZ      skip21
          RET
 skip21:
-         MOV     ebx,offset POSQ        ; Addr of saved Queen position
-         TEST    dh,80h                 ; Is Queen white ?
-         JZ      MV10                   ; Yes - jump
-         LEA     ebx,[ebx+1]            ; Increment to black Queen pos
+;        LD      bx,POSQ                ; Addr of saved Queen position
+         MOV     bx,POSQ
+;        BIT     7,dh                   ; Is Queen white ?
+         TEST    dh,80h
+;        JR      Z,MV10                 ; Yes - jump
+         JZ      MV10
+;        INC     bx                     ; Increment to black Queen pos
+         LAHF
+         INC     bx
+         SAHF
 ;X p55
-MV10:    XOR     al,al                  ; Set saved position to zero
-         MOV     byte ptr [ebx],al
-         RET                            ; Return
-MV15:    LAHF                           ; Change Pawn to a Queen
+;MV10:   XOR     al,al                  ; Set saved position to zero
+MV10:    XOR     al,al
+;        LD      (bx),al
+         MOV     byte ptr [ebp+ebx],al
+;        RET                            ; Return
+         RET
+;MV15:   SET     2,dl                   ; Change Pawn to a Queen
+MV15:    LAHF
          OR      dl,4
          SAHF
-         JMP     MV5                    ; Jump
-MV20:    MOV     ebx,offset POSQ        ; Addr of saved Queen position
-MV21:    TEST    dl,80h                 ; Is Queen white ?
-         JZ      MV22                   ; Yes - jump
-         LEA     ebx,[ebx+1]
-MV22:    MOV     al,byte ptr [M2]       ; Get new Queen position
-         MOV     byte ptr [ebx],al      ; Save
-         JMP     MV5                    ; Jump
-MV30:    MOV     ebx,offset POSK        ; Get saved King position
-         TEST    dh,40h                 ; Castling ?
-         JZ      MV21                   ; No - jump
-         LAHF                           ; Set King castled flag
+;        JMP     MV5                    ; Jump
+         JMP     MV5
+;MV20:   LD      bx,POSQ                ; Addr of saved Queen position
+MV20:    MOV     bx,POSQ
+;MV21:   BIT     7,dl                   ; Is Queen white ?
+MV21:    TEST    dl,80h
+;        JR      Z,MV22                 ; Yes - jump
+         JZ      MV22
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;MV22:   LD      al,(M2)                ; Get new Queen position
+MV22:    MOV     al,byte ptr [ebp+M2]
+;        LD      (bx),al                ; Save
+         MOV     byte ptr [ebp+ebx],al
+;        JMP     MV5                    ; Jump
+         JMP     MV5
+;MV30:   LD      bx,POSK                ; Get saved King position
+MV30:    MOV     bx,POSK
+;        BIT     6,dh                   ; Castling ?
+         TEST    dh,40h
+;        JR      Z,MV21                 ; No - jump
+         JZ      MV21
+;        SET     4,dl                   ; Set King castled flag
+         LAHF
          OR      dl,10h
          SAHF
-         JMP     MV21                   ; Jump
-MV40:    MOV     ebx,[MLPTRJ]           ; Get move list pointer
-         MOV     edx,8                  ; Increment to next move
-         LEA     ebx,[ebx+edx]
-         JMP     MV1                    ; Jump (2nd part of dbl move)
+;        JMP     MV21                   ; Jump
+         JMP     MV21
+;MV40:   LD      bx,(MLPTRJ)            ; Get move list pointer
+MV40:    MOV     bx,word ptr [ebp+MLPTRJ]
+;        LD      dx,8                   ; Increment to next move
+         MOV     dx,8
+;        ADD     bx,dx
+         LAHF
+         ADD     bx,dx
+         SAHF
+;        JMP     MV1                    ; Jump (2nd part of dbl move)
+         JMP     MV1
 
 ;X p56
 ;**********************************************************
@@ -1795,75 +2920,149 @@ MV40:    MOV     ebx,[MLPTRJ]           ; Get move list pointer
 ;
 ; ARGUMENTS: -- None
 ;**********************************************************
-UNMOVE:  MOV     ebx,[MLPTRJ]           ; Load move list pointer
-         LEA     ebx,[ebx+1]            ; Increment past link bytes
-         LEA     ebx,[ebx+1]
-UM1:     MOV     al,byte ptr [ebx]      ; Get "from" position
-         MOV     byte ptr [M1],al       ; Save
-         LEA     ebx,[ebx+1]            ; Increment pointer
-         MOV     al,byte ptr [ebx]      ; Get "to" position
-         MOV     byte ptr [M2],al       ; Save
-         LEA     ebx,[ebx+1]            ; Increment pointer
-         MOV     dh,byte ptr [ebx]      ; Get captured piece/flags
-         MOV     esi,[M2]               ; Load "to" pos board index
-         MOV     dl,byte ptr [esi+BOARD] ; Get piece moved
-         TEST    dh,20h                 ; Was it a Pawn promotion ?
-         JNZ     UM15                   ; Yes - jump
-         MOV     al,dl                  ; Get piece moved
-         AND     al,7                   ; Clear flag bits
-         CMP     al,QUEEN               ; Was it a Queen ?
-         JZ      UM20                   ; Yes - jump
-         CMP     al,KING                ; Was it a King ?
-         JZ      UM30                   ; Yes - jump
-UM5:     TEST    dh,10h                 ; Is this 1st move for piece ?
-         JNZ     UM16                   ; Yes - jump
-UM6:     MOV     edi,[M1]               ; Load "from" pos board index
-         MOV     byte ptr [edi+BOARD],dl ; Return to previous board pos
-         MOV     al,dh                  ; Get captured piece, if any
-         AND     al,8FH                 ; Clear flags
-         MOV     byte ptr [esi+BOARD],al ; Return to board
-         TEST    dh,40h                 ; Was it a double move ?
-         JNZ     UM40                   ; Yes - jump
-         MOV     al,dh                  ; Get captured piece, if any
-         AND     al,7                   ; Clear flag bits
-         CMP     al,QUEEN               ; Was it a Queen ?
-         JZ      skip22                 ; No - return
+;UNMOVE: LD      bx,(MLPTRJ)            ; Load move list pointer
+UNMOVE:  MOV     bx,word ptr [ebp+MLPTRJ]
+;        INC     bx                     ; Increment past link bytes
+         LAHF
+         INC     bx
+         SAHF
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;UM1:    LD      al,(bx)                ; Get "from" position
+UM1:     MOV     al,byte ptr [ebp+ebx]
+;        LD      (M1),al                ; Save
+         MOV     byte ptr [ebp+M1],al
+;        INC     bx                     ; Increment pointer
+         LAHF
+         INC     bx
+         SAHF
+;        LD      al,(bx)                ; Get "to" position
+         MOV     al,byte ptr [ebp+ebx]
+;        LD      (M2),al                ; Save
+         MOV     byte ptr [ebp+M2],al
+;        INC     bx                     ; Increment pointer
+         LAHF
+         INC     bx
+         SAHF
+;        LD      dh,(bx)                ; Get captured piece/flags
+         MOV     dh,byte ptr [ebp+ebx]
+;        LD      si,(M2)                ; Load "to" pos board index
+         MOV     si,word ptr [ebp+M2]
+;        LD      dl,(si+BOARD)          ; Get piece moved
+         MOV     dl,byte ptr [ebp+esi+BOARD]
+;        BIT     5,dh                   ; Was it a Pawn promotion ?
+         TEST    dh,20h
+;        JR      NZ,UM15                ; Yes - jump
+         JNZ     UM15
+;        LD      al,dl                  ; Get piece moved
+         MOV     al,dl
+;        AND     al,7                   ; Clear flag bits
+         AND     al,7
+;        CMP     al,QUEEN               ; Was it a Queen ?
+         CMP     al,QUEEN
+;        JR      Z,UM20                 ; Yes - jump
+         JZ      UM20
+;        CMP     al,KING                ; Was it a King ?
+         CMP     al,KING
+;        JR      Z,UM30                 ; Yes - jump
+         JZ      UM30
+;UM5:    BIT     4,dh                   ; Is this 1st move for piece ?
+UM5:     TEST    dh,10h
+;        JR      NZ,UM16                ; Yes - jump
+         JNZ     UM16
+;UM6:    LD      di,(M1)                ; Load "from" pos board index
+UM6:     MOV     di,word ptr [ebp+M1]
+;        LD      (di+BOARD),dl          ; Return to previous board pos
+         MOV     byte ptr [ebp+edi+BOARD],dl
+;        LD      al,dh                  ; Get captured piece, if any
+         MOV     al,dh
+;        AND     al,8FH                 ; Clear flags
+         AND     al,8FH
+;        LD      (si+BOARD),al          ; Return to board
+         MOV     byte ptr [ebp+esi+BOARD],al
+;        BIT     6,dh                   ; Was it a double move ?
+         TEST    dh,40h
+;        JR      NZ,UM40                ; Yes - jump
+         JNZ     UM40
+;        LD      al,dh                  ; Get captured piece, if any
+         MOV     al,dh
+;        AND     al,7                   ; Clear flag bits
+         AND     al,7
+;        CMP     al,QUEEN               ; Was it a Queen ?
+         CMP     al,QUEEN
+;        RET     NZ                     ; No - return
+         JZ      skip22
          RET
 skip22:
 ;X p57
-         MOV     ebx,offset POSQ        ; Address of saved Queen pos
-         TEST    dh,80h                 ; Is Queen white ?
-         JZ      UM10                   ; Yes - jump
-         LEA     ebx,[ebx+1]            ; Increment to black Queen pos
-UM10:    MOV     al,byte ptr [M2]       ; Queen's previous position
-         MOV     byte ptr [ebx],al      ; Save
-         RET                            ; Return
-UM15:    LAHF                           ; Restore Queen to Pawn
+;        LD      bx,POSQ                ; Address of saved Queen pos
+         MOV     bx,POSQ
+;        BIT     7,dh                   ; Is Queen white ?
+         TEST    dh,80h
+;        JR      Z,UM10                 ; Yes - jump
+         JZ      UM10
+;        INC     bx                     ; Increment to black Queen pos
+         LAHF
+         INC     bx
+         SAHF
+;UM10:   LD      al,(M2)                ; Queen's previous position
+UM10:    MOV     al,byte ptr [ebp+M2]
+;        LD      (bx),al                ; Save
+         MOV     byte ptr [ebp+ebx],al
+;        RET                            ; Return
+         RET
+;UM15:   RES     2,dl                   ; Restore Queen to Pawn
+UM15:    LAHF
          AND     dl,0fbh
          SAHF
-         JMP     UM5                    ; Jump
-UM16:    LAHF                           ; Clear piece moved flag
+;        JMP     UM5                    ; Jump
+         JMP     UM5
+;UM16:   RES     3,dl                   ; Clear piece moved flag
+UM16:    LAHF
          AND     dl,0f7h
          SAHF
-         JMP     UM6                    ; Jump
-UM20:    MOV     ebx,offset POSQ        ; Addr of saved Queen position
-UM21:    TEST    dl,80h                 ; Is Queen white ?
-         JZ      UM22                   ; Yes - jump
-         LEA     ebx,[ebx+1]            ; Increment to black Queen pos
-UM22:    MOV     al,byte ptr [M1]       ; Get previous position
-         MOV     byte ptr [ebx],al      ; Save
-         JMP     UM5                    ; Jump
-UM30:    MOV     ebx,offset POSK        ; Address of saved King pos
-         TEST    dh,40h                 ; Was it a castle ?
-         JZ      UM21                   ; No - jump
-         LAHF                           ; Clear castled flag
+;        JMP     UM6                    ; Jump
+         JMP     UM6
+;UM20:   LD      bx,POSQ                ; Addr of saved Queen position
+UM20:    MOV     bx,POSQ
+;UM21:   BIT     7,dl                   ; Is Queen white ?
+UM21:    TEST    dl,80h
+;        JR      Z,UM22                 ; Yes - jump
+         JZ      UM22
+;        INC     bx                     ; Increment to black Queen pos
+         LAHF
+         INC     bx
+         SAHF
+;UM22:   LD      al,(M1)                ; Get previous position
+UM22:    MOV     al,byte ptr [ebp+M1]
+;        LD      (bx),al                ; Save
+         MOV     byte ptr [ebp+ebx],al
+;        JMP     UM5                    ; Jump
+         JMP     UM5
+;UM30:   LD      bx,POSK                ; Address of saved King pos
+UM30:    MOV     bx,POSK
+;        BIT     6,dh                   ; Was it a castle ?
+         TEST    dh,40h
+;        JR      Z,UM21                 ; No - jump
+         JZ      UM21
+;        RES     4,dl                   ; Clear castled flag
+         LAHF
          AND     dl,0efh
          SAHF
-         JMP     UM21                   ; Jump
-UM40:    MOV     ebx,[MLPTRJ]           ; Load move list pointer
-         MOV     edx,8                  ; Increment to next move
-         LEA     ebx,[ebx+edx]
-         JMP     UM1                    ; Jump (2nd part of dbl move)
+;        JMP     UM21                   ; Jump
+         JMP     UM21
+;UM40:   LD      bx,(MLPTRJ)            ; Load move list pointer
+UM40:    MOV     bx,word ptr [ebp+MLPTRJ]
+;        LD      dx,8                   ; Increment to next move
+         MOV     dx,8
+;        ADD     bx,dx
+         LAHF
+         ADD     bx,dx
+         SAHF
+;        JMP     UM1                    ; Jump (2nd part of dbl move)
+         JMP     UM1
 
 ;X p58
 ;***********************************************************
@@ -1878,31 +3077,84 @@ UM40:    MOV     ebx,[MLPTRJ]           ; Load move list pointer
 ;
 ; ARGUMENTS: -- None
 ;***********************************************************
-SORTM:   MOV     ecx,[MLPTRI]           ; Move list begin pointer
-         MOV     edx,0                  ; Initialize working pointers
-SR5:    MOV     ebx,ecx
-        MOV     ecx,dword ptr [ebx]     ; Link to next move
-        MOV     dword ptr [ebx],edx     ; Store to link in list
-        CMP     ecx,0                   ; End of list ?
-         JNZ     skip23                 ; Yes - return
+;SORTM:  LD      cx,(MLPTRI)            ; Move list begin pointer
+SORTM:   MOV     cx,word ptr [ebp+MLPTRI]
+;        LD      dx,0                   ; Initialize working pointers
+         MOV     dx,0
+;SR5:    LD      bh,ch
+SR5:     MOV     bh,ch
+;        LD      bl,cl
+         MOV     bl,cl
+;        LD      cl,(bx)                ; Link to next move
+         MOV     cl,byte ptr [ebp+ebx]
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        LD      ch,(bx)
+         MOV     ch,byte ptr [ebp+ebx]
+;        LD      (bx),dh                ; Store to link in list
+         MOV     byte ptr [ebp+ebx],dh
+;        DEC     bx
+         LAHF
+         DEC     bx
+         SAHF
+;        LD      (bx),dl
+         MOV     byte ptr [ebp+ebx],dl
+;        XOR     al,al                  ; End of list ?
+         XOR     al,al
+;        CMP     al,ch
+         CMP     al,ch
+;        RET     Z                      ; Yes - return
+         JNZ     skip23
          RET
 skip23:
-SR10:    MOV     [MLPTRJ],ecx           ; Save list pointer
-         CALL    EVAL                   ; Evaluate move
-         MOV     ebx,[MLPTRI]           ; Begining of move list
-         MOV     ecx,[MLPTRJ]           ; Restore list pointer
-SR15:   MOV     edx,dword ptr [ebx]     ; Next move for compare
-        CMP     edx,0                   ; At end of list ?
-         JZ      SR25                   ; Yes - jump
-         PUSH    edx                    ; Transfer move pointer
+;SR10:   LD      (MLPTRJ),cx            ; Save list pointer
+SR10:    MOV     word ptr [ebp+MLPTRJ],cx
+;        CALL    EVAL                   ; Evaluate move
+         CALL    EVAL
+;        LD      bx,(MLPTRI)            ; Begining of move list
+         MOV     bx,word ptr [ebp+MLPTRI]
+;        LD      cx,(MLPTRJ)            ; Restore list pointer
+         MOV     cx,word ptr [ebp+MLPTRJ]
+;SR15:   LD      dl,(bx)                ; Next move for compare
+SR15:    MOV     dl,byte ptr [ebp+ebx]
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        LD      dh,(bx)
+         MOV     dh,byte ptr [ebp+ebx]
+;        XOR     al,al                  ; At end of list ?
+         XOR     al,al
+;        CMP     al,dh
+         CMP     al,dh
+;        JR      Z,SR25                 ; Yes - jump
+         JZ      SR25
+;        PUSH    dx                     ; Transfer move pointer
+         PUSH    edx
+;        POP     si
          POP     esi
-         MOV     al,byte ptr [VALM]     ; Get new move value
-         CMP     al,byte ptr [esi+MLVAL] ; Less than list value ?
-         JNC     SR30                   ; No - jump
-SR25:   MOV     dword ptr [ebx],ecx ; Link new move into list
-         JMP     SR5                    ; Jump
-SR30:    XCHG    ebx,edx                ; Swap pointers
-         JMP     SR15                   ; Jump
+;        LD      al,(VALM)              ; Get new move value
+         MOV     al,byte ptr [ebp+VALM]
+;        CMP     al,(si+MLVAL)          ; Less than list value ?
+         CMP     al,byte ptr [ebp+esi+MLVAL]
+;        JR      NC,SR30                ; No - jump
+         JNC     SR30
+;SR25:   LD      (bx),ch                ; Link new move into list
+SR25:    MOV     byte ptr [ebp+ebx],ch
+;        DEC     bx
+         LAHF
+         DEC     bx
+         SAHF
+;        LD      (bx),cl
+         MOV     byte ptr [ebp+ebx],cl
+;        JMP     SR5                    ; Jump
+         JMP     SR5
+;SR30:   EX      dx,bx                  ; Swap pointers
+SR30:    XCHG    bx,dx
+;        JMP     SR15                   ; Jump
+         JMP     SR15
 
 ;X p59
 ;**********************************************************
@@ -1923,17 +3175,28 @@ SR30:    XCHG    ebx,edx                ; Swap pointers
 ;
 ; ARGUMENTS: -- None
 ;**********************************************************
-EVAL:    CALL    MOVE                   ; Make move on the board array
-         CALL    INCHK                  ; Determine if move is legal
-         AND     al,al                  ; Legal move ?
-         JZ      EV5                    ; Yes - jump
-         XOR     al,al                  ; Score of zero
-         MOV     byte ptr [VALM],al     ; For illegal move
-         JMP     EV10                   ; Jump
-EV5:     CALL    PINFND                 ; Compile pinned list
-         CALL    POINTS                 ; Assign points to move
-EV10:    CALL    UNMOVE                 ; Restore board array
-         RET                            ; Return
+;EVAL:   CALL    MOVE                   ; Make move on the board array
+EVAL:    CALL    MOVE
+;        CALL    INCHK                  ; Determine if move is legal
+         CALL    INCHK
+;        AND     al,al                  ; Legal move ?
+         AND     al,al
+;        JR      Z,EV5                  ; Yes - jump
+         JZ      EV5
+;        XOR     al,al                  ; Score of zero
+         XOR     al,al
+;        LD      (VALM),al              ; For illegal move
+         MOV     byte ptr [ebp+VALM],al
+;        JMP     EV10                   ; Jump
+         JMP     EV10
+;EV5:    CALL    PINFND                 ; Compile pinned list
+EV5:     CALL    PINFND
+;        CALL    POINTS                 ; Assign points to move
+         CALL    POINTS
+;EV10:   CALL    UNMOVE                 ; Restore board array
+EV10:    CALL    UNMOVE
+;        RET                            ; Return
+         RET
 
 ;X p60
 ;**********************************************************
@@ -1954,173 +3217,346 @@ EV10:    CALL    UNMOVE                 ; Restore board array
 ;
 ; ARGUMENTS: -- None
 ;**********************************************************
-FNDMOV:  MOV     al,byte ptr [MOVENO]   ; Current move number
-         CMP     al,1                   ; First move ?
-         JNZ     skip24                 ; Yes - execute book opening
+;FNDMOV: LD      al,(MOVENO)            ; Current move number
+FNDMOV:  MOV     al,byte ptr [ebp+MOVENO]
+;        CMP     al,1                   ; First move ?
+         CMP     al,1
+;        CALL    Z,BOOK                 ; Yes - execute book opening
+         JNZ     skip24
          CALL    BOOK
 skip24:
-         XOR     al,al                  ; Initialize ply number to zero
-         MOV     byte ptr [NPLY],al
-         MOV     ebx,0                  ; Initialize best move to zero
-         MOV     [BESTM],ebx
-         MOV     ebx,offset MLIST       ; Initialize ply list pointers
-         MOV     [MLNXT],ebx
-         MOV     ebx,offset PLYIX-PTRSIZ
-         MOV     [MLPTRI],ebx
-         MOV     al,byte ptr [KOLOR]    ; Initialize color
-         MOV     byte ptr [COLOR],al
-         MOV     ebx,offset SCORE       ; Initialize score index
-         MOV     [SCRIX],ebx
-         MOV     al,byte ptr [PLYMAX]   ; Get max ply number
-         ADD     al,2                   ; Add 2
-         MOV     ch,al                  ; Save as counter
-         XOR     al,al                  ; Zero out score table
-back05:  MOV     byte ptr [ebx],al
-         LEA     ebx,[ebx+1]
+;        XOR     al,al                  ; Initialize ply number to zero
+         XOR     al,al
+;        LD      (NPLY),al
+         MOV     byte ptr [ebp+NPLY],al
+;        LD      bx,0                   ; Initialize best move to zero
+         MOV     bx,0
+;        LD      (BESTM),bx
+         MOV     word ptr [ebp+BESTM],bx
+;        LD      bx,MLIST               ; Initialize ply list pointers
+         MOV     bx,MLIST
+;        LD      (MLNXT),bx
+         MOV     word ptr [ebp+MLNXT],bx
+;        LD      bx,PLYIX-PTRSIZ
+         MOV     bx,PLYIX-PTRSIZ
+;        LD      (MLPTRI),bx
+         MOV     word ptr [ebp+MLPTRI],bx
+;        LD      al,(KOLOR)             ; Initialize color
+         MOV     al,byte ptr [ebp+KOLOR]
+;        LD      (COLOR),al
+         MOV     byte ptr [ebp+COLOR],al
+;        LD      bx,SCORE               ; Initialize score index
+         MOV     bx,SCORE
+;        LD      (SCRIX),bx
+         MOV     word ptr [ebp+SCRIX],bx
+;        LD      al,(PLYMAX)            ; Get max ply number
+         MOV     al,byte ptr [ebp+PLYMAX]
+;        ADD     al,2                   ; Add 2
+         ADD     al,2
+;        LD      ch,al                  ; Save as counter
+         MOV     ch,al
+;        XOR     al,al                  ; Zero out score table
+         XOR     al,al
+;back05: LD      (bx),al
+back05:  MOV     byte ptr [ebp+ebx],al
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        DJNZ    back05
          LAHF
          DEC ch
          JNZ     back05
          SAHF
-         MOV     byte ptr [BC0],al      ; Zero ply 0 board control
-         MOV     byte ptr [MV0],al      ; Zero ply 0 material
-         CALL    PINFND                 ; Compile pin list
-         CALL    POINTS                 ; Evaluate board at ply 0
-         MOV     al,byte ptr [BRDC]     ; Get board control points
-         MOV     byte ptr [BC0],al      ; Save
-         MOV     al,byte ptr [MTRL]     ; Get material count
-         MOV     byte ptr [MV0],al      ; Save
-FM5:     MOV     ebx,offset NPLY        ; Address of ply counter
-         INC     byte ptr [ebx]         ; Increment ply count
+;        LD      (BC0),al               ; Zero ply 0 board control
+         MOV     byte ptr [ebp+BC0],al
+;        LD      (MV0),al               ; Zero ply 0 material
+         MOV     byte ptr [ebp+MV0],al
+;        CALL    PINFND                 ; Compile pin list
+         CALL    PINFND
+;        CALL    POINTS                 ; Evaluate board at ply 0
+         CALL    POINTS
+;        LD      al,(BRDC)              ; Get board control points
+         MOV     al,byte ptr [ebp+BRDC]
+;        LD      (BC0),al               ; Save
+         MOV     byte ptr [ebp+BC0],al
+;        LD      al,(MTRL)              ; Get material count
+         MOV     al,byte ptr [ebp+MTRL]
+;        LD      (MV0),al               ; Save
+         MOV     byte ptr [ebp+MV0],al
+;FM5:    LD      bx,NPLY                ; Address of ply counter
+FM5:     MOV     bx,NPLY
+;        INC     (bx)                   ; Increment ply count
+         INC     byte ptr [ebp+ebx]
 ;X p61
-         XOR     al,al                  ; Initialize mate flag
-         MOV     byte ptr [MATEF],al
-         CALL    GENMOV                 ; Generate list of moves
-         MOV     al,byte ptr [NPLY]     ; Current ply counter
-         MOV     ebx,offset PLYMAX      ; Address of maximum ply number
-         CMP     al,byte ptr [ebx]      ; At max ply ?
-         JNC     skip25                 ; No - call sort
+;        XOR     al,al                  ; Initialize mate flag
+         XOR     al,al
+;        LD      (MATEF),al
+         MOV     byte ptr [ebp+MATEF],al
+;        CALL    GENMOV                 ; Generate list of moves
+         CALL    GENMOV
+;        LD      al,(NPLY)              ; Current ply counter
+         MOV     al,byte ptr [ebp+NPLY]
+;        LD      bx,PLYMAX              ; Address of maximum ply number
+         MOV     bx,PLYMAX
+;        CMP     al,(bx)                ; At max ply ?
+         CMP     al,byte ptr [ebp+ebx]
+;        CALL    C,SORTM                ; No - call sort
+         JNC     skip25
          CALL    SORTM
 skip25:
-         MOV     ebx,[MLPTRI]           ; Load ply index pointer
-         MOV     [MLPTRJ],ebx           ; Save as last move pointer
-FM15:    MOV     ebx,[MLPTRJ]           ; Load last move pointer
-         MOV     dl,byte ptr [ebx]      ; Get next move pointer
-         LEA     ebx,[ebx+1]
-         MOV     dh,byte ptr [ebx]
+;        LD      bx,(MLPTRI)            ; Load ply index pointer
+         MOV     bx,word ptr [ebp+MLPTRI]
+;        LD      (MLPTRJ),bx            ; Save as last move pointer
+         MOV     word ptr [ebp+MLPTRJ],bx
+;FM15:   LD      bx,(MLPTRJ)            ; Load last move pointer
+FM15:    MOV     bx,word ptr [ebp+MLPTRJ]
+;        LD      dl,(bx)                ; Get next move pointer
+         MOV     dl,byte ptr [ebp+ebx]
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        LD      dh,(bx)
+         MOV     dh,byte ptr [ebp+ebx]
+;        LD      al,dh
          MOV     al,dh
-         AND     al,al                  ; End of move list ?
-         JZ      FM25                   ; Yes - jump
-         MOV     [MLPTRJ],edx           ; Save current move pointer
-         MOV     ebx,[MLPTRI]           ; Save in ply pointer list
-         MOV     byte ptr [ebx],dl
-         LEA     ebx,[ebx+1]
-         MOV     byte ptr [ebx],dh
-         MOV     al,byte ptr [NPLY]     ; Current ply counter
-         MOV     ebx,offset PLYMAX      ; Maximum ply number ?
-         CMP     al,byte ptr [ebx]      ; Compare
-         JC      FM18                   ; Jump if not max
-         CALL    MOVE                   ; Execute move on board array
-         CALL    INCHK                  ; Check for legal move
-         AND     al,al                  ; Is move legal
-         JZ      rel017                 ; Yes - jump
-         CALL    UNMOVE                 ; Restore board position
-         JMP     FM15                   ; Jump
-rel017:  MOV     al,byte ptr [NPLY]     ; Get ply counter
-         MOV     ebx,offset PLYMAX      ; Max ply number
-         CMP     al,byte ptr [ebx]      ; Beyond max ply ?
-         JNZ     FM35                   ; Yes - jump
-         MOV     al,byte ptr [COLOR]    ; Get current color
-         XOR     al,80H                 ; Get opposite color
-         CALL    INCHK1                 ; Determine if King is in check
-         AND     al,al                  ; In check ?
-         JZ      FM35                   ; No - jump
-         JMP     FM19                   ; Jump (One more ply for check)
-FM18:    MOV     esi,[MLPTRJ]           ; Load move pointer
-         MOV     al,byte ptr [esi+MLVAL] ; Get move score
-         AND     al,al                  ; Is it zero (illegal move) ?
-         JZ      FM15                   ; Yes - jump
-         CALL    MOVE                   ; Execute move on board array
-FM19:    MOV     ebx,offset COLOR       ; Toggle color
+;        AND     al,al                  ; End of move list ?
+         AND     al,al
+;        JR      Z,FM25                 ; Yes - jump
+         JZ      FM25
+;        LD      (MLPTRJ),dx            ; Save current move pointer
+         MOV     word ptr [ebp+MLPTRJ],dx
+;        LD      bx,(MLPTRI)            ; Save in ply pointer list
+         MOV     bx,word ptr [ebp+MLPTRI]
+;        LD      (bx),dl
+         MOV     byte ptr [ebp+ebx],dl
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        LD      (bx),dh
+         MOV     byte ptr [ebp+ebx],dh
+;        LD      al,(NPLY)              ; Current ply counter
+         MOV     al,byte ptr [ebp+NPLY]
+;        LD      bx,PLYMAX              ; Maximum ply number ?
+         MOV     bx,PLYMAX
+;        CMP     al,(bx)                ; Compare
+         CMP     al,byte ptr [ebp+ebx]
+;        JR      C,FM18                 ; Jump if not max
+         JC      FM18
+;        CALL    MOVE                   ; Execute move on board array
+         CALL    MOVE
+;        CALL    INCHK                  ; Check for legal move
+         CALL    INCHK
+;        AND     al,al                  ; Is move legal
+         AND     al,al
+;        JR      Z,rel017               ; Yes - jump
+         JZ      rel017
+;        CALL    UNMOVE                 ; Restore board position
+         CALL    UNMOVE
+;        JMP     FM15                   ; Jump
+         JMP     FM15
+;rel017: LD      al,(NPLY)              ; Get ply counter
+rel017:  MOV     al,byte ptr [ebp+NPLY]
+;        LD      bx,PLYMAX              ; Max ply number
+         MOV     bx,PLYMAX
+;        CMP     al,(bx)                ; Beyond max ply ?
+         CMP     al,byte ptr [ebp+ebx]
+;        JR      NZ,FM35                ; Yes - jump
+         JNZ     FM35
+;        LD      al,(COLOR)             ; Get current color
+         MOV     al,byte ptr [ebp+COLOR]
+;        XOR     al,80H                 ; Get opposite color
+         XOR     al,80H
+;        CALL    INCHK1                 ; Determine if King is in check
+         CALL    INCHK1
+;        AND     al,al                  ; In check ?
+         AND     al,al
+;        JR      Z,FM35                 ; No - jump
+         JZ      FM35
+;        JMP     FM19                   ; Jump (One more ply for check)
+         JMP     FM19
+;FM18:   LD      si,(MLPTRJ)            ; Load move pointer
+FM18:    MOV     si,word ptr [ebp+MLPTRJ]
+;        LD      al,(si+MLVAL)          ; Get move score
+         MOV     al,byte ptr [ebp+esi+MLVAL]
+;        AND     al,al                  ; Is it zero (illegal move) ?
+         AND     al,al
+;        JR      Z,FM15                 ; Yes - jump
+         JZ      FM15
+;        CALL    MOVE                   ; Execute move on board array
+         CALL    MOVE
+;FM19:   LD      bx,COLOR               ; Toggle color
+FM19:    MOV     bx,COLOR
+;        LD      al,80H
          MOV     al,80H
-         XOR     al,byte ptr [ebx]
-         MOV     byte ptr [ebx],al      ; Save new color
+;        XOR     al,(bx)
+         XOR     al,byte ptr [ebp+ebx]
+;        LD      (bx),al                ; Save new color
+         MOV     byte ptr [ebp+ebx],al
 ;X p62
-         TEST    al,80h                 ; Is it white ?
-         JNZ     rel018                 ; No - jump
-         MOV     ebx,offset MOVENO      ; Increment move number
-         INC     byte ptr [ebx]
-rel018:  MOV     ebx,[SCRIX]            ; Load score table pointer
-         MOV     al,byte ptr [ebx]      ; Get score two plys above
-         LEA     ebx,[ebx+1]            ; Increment to current ply
-         LEA     ebx,[ebx+1]
-         MOV     byte ptr [ebx],al      ; Save score as initial value
-         LEA     ebx,[ebx-1]            ; Decrement pointer
-         MOV     [SCRIX],ebx            ; Save it
-         JMP     FM5                    ; Jump
-FM25:    MOV     al,byte ptr [MATEF]    ; Get mate flag
-         AND     al,al                  ; Checkmate or stalemate ?
-         JNZ     FM30                   ; No - jump
-         MOV     al,byte ptr [CKFLG]    ; Get check flag
-         AND     al,al                  ; Was King in check ?
-         MOV     al,80H                 ; Pre-set stalemate score
-         JZ      FM36                   ; No - jump (stalemate)
-         MOV     al,byte ptr [MOVENO]   ; Get move number
-         MOV     byte ptr [PMATE],al    ; Save
-         MOV     al,0FFH                ; Pre-set checkmate score
-         JMP     FM36                   ; Jump
-FM30:    MOV     al,byte ptr [NPLY]     ; Get ply counter
-         CMP     al,1                   ; At top of tree ?
-         JNZ     skip26                 ; Yes - return
+;        BIT     7,al                   ; Is it white ?
+         TEST    al,80h
+;        JR      NZ,rel018              ; No - jump
+         JNZ     rel018
+;        LD      bx,MOVENO              ; Increment move number
+         MOV     bx,MOVENO
+;        INC     (bx)
+         INC     byte ptr [ebp+ebx]
+;rel018: LD      bx,(SCRIX)             ; Load score table pointer
+rel018:  MOV     bx,word ptr [ebp+SCRIX]
+;        LD      al,(bx)                ; Get score two plys above
+         MOV     al,byte ptr [ebp+ebx]
+;        INC     bx                     ; Increment to current ply
+         LAHF
+         INC     bx
+         SAHF
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        LD      (bx),al                ; Save score as initial value
+         MOV     byte ptr [ebp+ebx],al
+;        DEC     bx                     ; Decrement pointer
+         LAHF
+         DEC     bx
+         SAHF
+;        LD      (SCRIX),bx             ; Save it
+         MOV     word ptr [ebp+SCRIX],bx
+;        JMP     FM5                    ; Jump
+         JMP     FM5
+;FM25:   LD      al,(MATEF)             ; Get mate flag
+FM25:    MOV     al,byte ptr [ebp+MATEF]
+;        AND     al,al                  ; Checkmate or stalemate ?
+         AND     al,al
+;        JR      NZ,FM30                ; No - jump
+         JNZ     FM30
+;        LD      al,(CKFLG)             ; Get check flag
+         MOV     al,byte ptr [ebp+CKFLG]
+;        AND     al,al                  ; Was King in check ?
+         AND     al,al
+;        LD      al,80H                 ; Pre-set stalemate score
+         MOV     al,80H
+;        JR      Z,FM36                 ; No - jump (stalemate)
+         JZ      FM36
+;        LD      al,(MOVENO)            ; Get move number
+         MOV     al,byte ptr [ebp+MOVENO]
+;        LD      (PMATE),al             ; Save
+         MOV     byte ptr [ebp+PMATE],al
+;        LD      al,0FFH                ; Pre-set checkmate score
+         MOV     al,0FFH
+;        JMP     FM36                   ; Jump
+         JMP     FM36
+;FM30:   LD      al,(NPLY)              ; Get ply counter
+FM30:    MOV     al,byte ptr [ebp+NPLY]
+;        CMP     al,1                   ; At top of tree ?
+         CMP     al,1
+;        RET     Z                      ; Yes - return
+         JNZ     skip26
          RET
 skip26:
-         CALL    ASCEND                 ; Ascend one ply in tree
-         MOV     ebx,[SCRIX]            ; Load score table pointer
-         LEA     ebx,[ebx+1]            ; Increment to current ply
-         LEA     ebx,[ebx+1]
-         MOV     al,byte ptr [ebx]      ; Get score
-         LEA     ebx,[ebx-1]            ; Restore pointer
-         LEA     ebx,[ebx-1]
-         JMP     FM37                   ; Jump
-FM35:    CALL    PINFND                 ; Compile pin list
-         CALL    POINTS                 ; Evaluate move
-         CALL    UNMOVE                 ; Restore board position
-         MOV     al,byte ptr [VALM]     ; Get value of move
-FM36:    MOV     ebx,offset MATEF       ; Set mate flag
+;        CALL    ASCEND                 ; Ascend one ply in tree
+         CALL    ASCEND
+;        LD      bx,(SCRIX)             ; Load score table pointer
+         MOV     bx,word ptr [ebp+SCRIX]
+;        INC     bx                     ; Increment to current ply
          LAHF
-         OR      byte ptr [ebx],1
+         INC     bx
          SAHF
-         MOV     ebx,[SCRIX]            ; Load score table pointer
-FM37:    CMP     al,byte ptr [ebx]      ; Compare to score 2 ply above
-         JC      FM40                   ; Jump if less
-         JZ      FM40                   ; Jump if equal
-         NEG     al                     ; Negate score
-         LEA     ebx,[ebx+1]            ; Incr score table pointer
-         CMP     al,byte ptr [ebx]      ; Compare to score 1 ply above
-         JC      FM15                   ; Jump if less than
-         JZ      FM15                   ; Jump if equal
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        LD      al,(bx)                ; Get score
+         MOV     al,byte ptr [ebp+ebx]
+;        DEC     bx                     ; Restore pointer
+         LAHF
+         DEC     bx
+         SAHF
+;        DEC     bx
+         LAHF
+         DEC     bx
+         SAHF
+;        JMP     FM37                   ; Jump
+         JMP     FM37
+;FM35:   CALL    PINFND                 ; Compile pin list
+FM35:    CALL    PINFND
+;        CALL    POINTS                 ; Evaluate move
+         CALL    POINTS
+;        CALL    UNMOVE                 ; Restore board position
+         CALL    UNMOVE
+;        LD      al,(VALM)              ; Get value of move
+         MOV     al,byte ptr [ebp+VALM]
+;FM36:   LD      bx,MATEF               ; Set mate flag
+FM36:    MOV     bx,MATEF
+;        SET     0,(bx)
+         LAHF
+         OR      byte ptr [ebp+ebx],1
+         SAHF
+;        LD      bx,(SCRIX)             ; Load score table pointer
+         MOV     bx,word ptr [ebp+SCRIX]
+;FM37:   CMP     al,(bx)                ; Compare to score 2 ply above
+FM37:    CMP     al,byte ptr [ebp+ebx]
+;        JR      C,FM40                 ; Jump if less
+         JC      FM40
+;        JR      Z,FM40                 ; Jump if equal
+         JZ      FM40
+;        NEG                            ; Negate score
+         NEG     al
+;        INC     bx                     ; Incr score table pointer
+         LAHF
+         INC     bx
+         SAHF
+;        CMP     al,(bx)                ; Compare to score 1 ply above
+         CMP     al,byte ptr [ebp+ebx]
+;        JMP     C,FM15                 ; Jump if less than
+         JC      FM15
+;        JMP     Z,FM15                 ; Jump if equal
+         JZ      FM15
 ;X p63
-         MOV     byte ptr [ebx],al      ; Save as new score 1 ply above
-         MOV     al,byte ptr [NPLY]     ; Get current ply counter
-         CMP     al,1                   ; At top of tree ?
-         JNZ     FM15                   ; No - jump
-         MOV     ebx,[MLPTRJ]           ; Load current move pointer
-         MOV     [BESTM],ebx            ; Save as best move.pointer
-         MOV     al,byte ptr [SCORE+1]  ; Get best move score
-         CMP     al,0FFH                ; Was it a checkmate ?
-         JNZ     FM15                   ; No - jump
-         MOV     ebx,offset PLYMAX      ; Get maximum ply number
-         DEC     byte ptr [ebx]         ; Subtract 2
-         DEC     byte ptr [ebx]
-         MOV     al,byte ptr [KOLOR]    ; Get computer's color
-         TEST    al,80h                 ; Is it white ?
-         JNZ     skip27                 ; Yes - return
+;        LD      (bx),al                ; Save as new score 1 ply above
+         MOV     byte ptr [ebp+ebx],al
+;        LD      al,(NPLY)              ; Get current ply counter
+         MOV     al,byte ptr [ebp+NPLY]
+;        CMP     al,1                   ; At top of tree ?
+         CMP     al,1
+;        JMP     NZ,FM15                ; No - jump
+         JNZ     FM15
+;        LD      bx,(MLPTRJ)            ; Load current move pointer
+         MOV     bx,word ptr [ebp+MLPTRJ]
+;        LD      (BESTM),bx             ; Save as best move.pointer
+         MOV     word ptr [ebp+BESTM],bx
+;        LD      al,(SCORE+1)           ; Get best move score
+         MOV     al,byte ptr [ebp+SCORE+1]
+;        CMP     al,0FFH                ; Was it a checkmate ?
+         CMP     al,0FFH
+;        JMP     NZ,FM15                ; No - jump
+         JNZ     FM15
+;        LD      bx,PLYMAX              ; Get maximum ply number
+         MOV     bx,PLYMAX
+;        DEC     (bx)                   ; Subtract 2
+         DEC     byte ptr [ebp+ebx]
+;        DEC     (bx)
+         DEC     byte ptr [ebp+ebx]
+;        LD      al,(KOLOR)             ; Get computer's color
+         MOV     al,byte ptr [ebp+KOLOR]
+;        BIT     7,al                   ; Is it white ?
+         TEST    al,80h
+;        RET     Z                      ; Yes - return
+         JNZ     skip27
          RET
 skip27:
-         MOV     ebx,offset PMATE       ; Checkmate move number
-         DEC     byte ptr [ebx]         ; Decrement
-         RET                            ; Return
-FM40:    CALL    ASCEND                 ; Ascend one ply in tree
-         JMP     FM15                   ; Jump
+;        LD      bx,PMATE               ; Checkmate move number
+         MOV     bx,PMATE
+;        DEC     (bx)                   ; Decrement
+         DEC     byte ptr [ebp+ebx]
+;        RET                            ; Return
+         RET
+;FM40:   CALL    ASCEND                 ; Ascend one ply in tree
+FM40:    CALL    ASCEND
+;        JMP     FM15                   ; Jump
+         JMP     FM15
 
 ;X p64
 ;**********************************************************
@@ -2135,33 +3571,70 @@ FM40:    CALL    ASCEND                 ; Ascend one ply in tree
 ;
 ; ARGUMENTS: -- None
 ;**********************************************************
-ASCEND:  MOV     ebx,offset COLOR       ; Toggle color
+;ASCEND: LD      bx,COLOR               ; Toggle color
+ASCEND:  MOV     bx,COLOR
+;        LD      al,80H
          MOV     al,80H
-         XOR     al,byte ptr [ebx]
-         MOV     byte ptr [ebx],al      ; Save new color
-         TEST    al,80h                 ; Is it white ?
-         JZ      rel019                 ; Yes - jump
-         MOV     ebx,offset MOVENO      ; Decrement move number
-         DEC     byte ptr [ebx]
-rel019:  MOV     ebx,[SCRIX]            ; Load score table index
-         LEA     ebx,[ebx-1]            ; Decrement
-         MOV     [SCRIX],ebx            ; Save
-         MOV     ebx,offset NPLY        ; Decrement ply counter
-         DEC     byte ptr [ebx]
-         MOV     ebx,[MLPTRI]           ; Load ply list pointer
-         LEA     ebx,[ebx-1]            ; Load pointer to move list to
-         MOV     dh,byte ptr [ebx]
-         LEA     ebx,[ebx-1]
-         MOV     dl,byte ptr [ebx]
-         MOV     [MLNXT],edx            ; Update move list avail ptr
-         LEA     ebx,[ebx-1]            ; Get ptr to next move to undo
-         MOV     dh,byte ptr [ebx]
-         LEA     ebx,[ebx-1]
-         MOV     dl,byte ptr [ebx]
-         MOV     [MLPTRI],ebx           ; Save new ply list pointer
-         MOV     [MLPTRJ],edx           ; Save next move pointer
-         CALL    UNMOVE                 ; Restore board to previous pl
-         RET                            ; Return
+;        XOR     al,(bx)
+         XOR     al,byte ptr [ebp+ebx]
+;        LD      (bx),al                ; Save new color
+         MOV     byte ptr [ebp+ebx],al
+;        BIT     7,al                   ; Is it white ?
+         TEST    al,80h
+;        JR      Z,rel019               ; Yes - jump
+         JZ      rel019
+;        LD      bx,MOVENO              ; Decrement move number
+         MOV     bx,MOVENO
+;        DEC     (bx)
+         DEC     byte ptr [ebp+ebx]
+;rel019: LD      bx,(SCRIX)             ; Load score table index
+rel019:  MOV     bx,word ptr [ebp+SCRIX]
+;        DEC     bx                     ; Decrement
+         LAHF
+         DEC     bx
+         SAHF
+;        LD      (SCRIX),bx             ; Save
+         MOV     word ptr [ebp+SCRIX],bx
+;        LD      bx,NPLY                ; Decrement ply counter
+         MOV     bx,NPLY
+;        DEC     (bx)
+         DEC     byte ptr [ebp+ebx]
+;        LD      bx,(MLPTRI)            ; Load ply list pointer
+         MOV     bx,word ptr [ebp+MLPTRI]
+;        DEC     bx                     ; Load pointer to move list to
+         LAHF
+         DEC     bx
+         SAHF
+;        LD      dh,(bx)
+         MOV     dh,byte ptr [ebp+ebx]
+;        DEC     bx
+         LAHF
+         DEC     bx
+         SAHF
+;        LD      dl,(bx)
+         MOV     dl,byte ptr [ebp+ebx]
+;        LD      (MLNXT),dx             ; Update move list avail ptr
+         MOV     word ptr [ebp+MLNXT],dx
+;        DEC     bx                     ; Get ptr to next move to undo
+         LAHF
+         DEC     bx
+         SAHF
+;        LD      dh,(bx)
+         MOV     dh,byte ptr [ebp+ebx]
+;        DEC     bx
+         LAHF
+         DEC     bx
+         SAHF
+;        LD      dl,(bx)
+         MOV     dl,byte ptr [ebp+ebx]
+;        LD      (MLPTRI),bx            ; Save new ply list pointer
+         MOV     word ptr [ebp+MLPTRI],bx
+;        LD      (MLPTRJ),dx            ; Save next move pointer
+         MOV     word ptr [ebp+MLPTRJ],dx
+;        CALL    UNMOVE                 ; Restore board to previous pl
+         CALL    UNMOVE
+;        RET                            ; Return
+         RET
 
 ;X p65
 ;**********************************************************
@@ -2176,51 +3649,88 @@ rel019:  MOV     ebx,[SCRIX]            ; Load score table index
 ;
 ; ARGUMENTS: -- None
 ;**********************************************************
-BOOK:    POP     eax                    ; Abort return to FNDMOV
+;BOOK:   POP     af                     ; Abort return to FNDMOV
+BOOK:    POP     eax
          sahf
-         MOV     ebx,offset SCORE+1     ; Zero out score
-         MOV     byte ptr [ebx],0       ; Zero out score table
-         MOV     ebx,offset BMOVES-PTRSIZ ; Init best move ptr to book
-         MOV     [BESTM],ebx
-         MOV     ebx,offset BESTM       ; Initialize address of pointer
-         MOV     al,byte ptr [KOLOR]    ; Get computer's color
-         AND     al,al                  ; Is it white ?
-         JNZ     BM5                    ; No - jump
-         Z80_LDAR                       ; Load refresh reg (random no)
-         TEST    al,1                   ; Test random bit
-         JNZ     skip28                 ; Return if zero (P-K4)
+;        LD      bx,SCORE+1             ; Zero out score
+         MOV     bx,SCORE+1
+;        LD      (bx),0                 ; Zero out score table
+         MOV     byte ptr [ebp+ebx],0
+;        LD      bx,BMOVES-PTRSIZ       ; Init best move ptr to book
+         MOV     bx,BMOVES-PTRSIZ
+;        LD      (BESTM),bx
+         MOV     word ptr [ebp+BESTM],bx
+;        LD      bx,BESTM               ; Initialize address of pointer
+         MOV     bx,BESTM
+;        LD      al,(KOLOR)             ; Get computer's color
+         MOV     al,byte ptr [ebp+KOLOR]
+;        AND     al,al                  ; Is it white ?
+         AND     al,al
+;        JR      NZ,BM5                 ; No - jump
+         JNZ     BM5
+;        LDAR                           ; Load refresh reg (random no)
+         Z80_LDAR
+;        BIT     0,al                   ; Test random bit
+         TEST    al,1
+;        RET     Z                      ; Return if zero (P-K4)
+         JNZ     skip28
          RET
 skip28:
-         INC     byte ptr [ebx]         ; P-Q4
-         INC     byte ptr [ebx]
-         INC     byte ptr [ebx]
-         RET                            ; Return
-BM5:     INC     byte ptr [ebx]         ; Increment to black moves
-         INC     byte ptr [ebx]
-         INC     byte ptr [ebx]
-         INC     byte ptr [ebx]
-         INC     byte ptr [ebx]
-         INC     byte ptr [ebx]
-         MOV     esi,[MLPTRJ]           ; Pointer to opponents 1st move
-         MOV     al,byte ptr [esi+MLFRP] ; Get "from" position
-         CMP     al,22                  ; Is it a Queen Knight move ?
-         JZ      BM9                    ; Yes - Jump
-         CMP     al,27                  ; Is it a King Knight move ?
-         JZ      BM9                    ; Yes - jump
-         CMP     al,34                  ; Is it a Queen Pawn ?
-         JZ      BM9                    ; Yes - jump
-         JNC     skip29                 ; If Queen side Pawn opening -
+;        INC     (bx)                   ; P-Q4
+         INC     byte ptr [ebp+ebx]
+;        INC     (bx)
+         INC     byte ptr [ebp+ebx]
+;        INC     (bx)
+         INC     byte ptr [ebp+ebx]
+;        RET                            ; Return
+         RET
+;BM5:    INC     (bx)                   ; Increment to black moves
+BM5:     INC     byte ptr [ebp+ebx]
+;        INC     (bx)
+         INC     byte ptr [ebp+ebx]
+;        INC     (bx)
+         INC     byte ptr [ebp+ebx]
+;        INC     (bx)
+         INC     byte ptr [ebp+ebx]
+;        INC     (bx)
+         INC     byte ptr [ebp+ebx]
+;        INC     (bx)
+         INC     byte ptr [ebp+ebx]
+;        LD      si,(MLPTRJ)            ; Pointer to opponents 1st move
+         MOV     si,word ptr [ebp+MLPTRJ]
+;        LD      al,(si+MLFRP)          ; Get "from" position
+         MOV     al,byte ptr [ebp+esi+MLFRP]
+;        CMP     al,22                  ; Is it a Queen Knight move ?
+         CMP     al,22
+;        JR      Z,BM9                  ; Yes - Jump
+         JZ      BM9
+;        CMP     al,27                  ; Is it a King Knight move ?
+         CMP     al,27
+;        JR      Z,BM9                  ; Yes - jump
+         JZ      BM9
+;        CMP     al,34                  ; Is it a Queen Pawn ?
+         CMP     al,34
+;        JR      Z,BM9                  ; Yes - jump
+         JZ      BM9
+;        RET     C                      ; If Queen side Pawn opening -
+         JNC     skip29
          RET
 skip29:
                                 ; return (P-K4)
-         CMP     al,35                  ; Is it a King Pawn ?
-         JNZ     skip30                 ; Yes - return (P-K4)
+;        CMP     al,35                  ; Is it a King Pawn ?
+         CMP     al,35
+;        RET     Z                      ; Yes - return (P-K4)
+         JNZ     skip30
          RET
 skip30:
-BM9:     INC     byte ptr [ebx]         ; (P-Q4)
-         INC     byte ptr [ebx]
-         INC     byte ptr [ebx]
-         RET                            ; Return to CPTRMV
+;BM9:    INC     (bx)                   ; (P-Q4)
+BM9:     INC     byte ptr [ebp+ebx]
+;        INC     (bx)
+         INC     byte ptr [ebp+ebx]
+;        INC     (bx)
+         INC     byte ptr [ebp+ebx]
+;        RET                            ; Return to CPTRMV
+         RET
 
         
 ;X p66
@@ -2344,64 +3854,116 @@ BM9:     INC     byte ptr [ebx]         ; (P-Q4)
 ;
 ; ARGUMENTS: -- None
 ;**********************************************************
-CPTRMV:  CALL    FNDMOV                 ; Select best move
-         MOV     ebx,[BESTM]            ; Move list pointer variable
-         MOV     [MLPTRJ],ebx           ; Pointer to move data
-         MOV     al,byte ptr [SCORE+1]  ; To check for mates
-         CMP     al,1                   ; Mate against computer ?
-         JNZ     CP0C                   ; No - jump
-         MOV     cl,1                   ; Computer mate flag
-         CALL    FCDMAT                 ; Full checkmate ?
-CP0C:    CALL    MOVE                   ; Produce move on board array
-         CALL    EXECMV                 ; Make move on graphics board
+;CPTRMV: CALL    FNDMOV                 ; Select best move
+CPTRMV:  CALL    FNDMOV
+;        LD      bx,(BESTM)             ; Move list pointer variable
+         MOV     bx,word ptr [ebp+BESTM]
+;        LD      (MLPTRJ),bx            ; Pointer to move data
+         MOV     word ptr [ebp+MLPTRJ],bx
+;        LD      al,(SCORE+1)           ; To check for mates
+         MOV     al,byte ptr [ebp+SCORE+1]
+;        CMP     al,1                   ; Mate against computer ?
+         CMP     al,1
+;        JR      NZ,CP0C                ; No - jump
+         JNZ     CP0C
+;        LD      cl,1                   ; Computer mate flag
+         MOV     cl,1
+;        CALL    FCDMAT                 ; Full checkmate ?
+         CALL    FCDMAT
+;CP0C:   CALL    MOVE                   ; Produce move on board array
+CP0C:    CALL    MOVE
+;        CALL    EXECMV                 ; Make move on graphics board
+         CALL    EXECMV
                                 ; and return info about it
-         MOV     al,ch                  ; Special move flags
-         AND     al,al                  ; Special ?
-         JNZ     CP10                   ; Yes - jump
-         MOV     dh,dl                  ; "To" position of the move
-         CALL    BITASN                 ; Convert to Ascii
-         MOV     [MVEMSG_2],ebx         ;todo MVEMSG+3        ; Put in move message
-         MOV     dh,cl                  ; "From" position of the move
-         CALL    BITASN                 ; Convert to Ascii
-         MOV     [MVEMSG],ebx           ; Put in move message
-         PRTBLK  MVEMSG,5               ; Output text of move
-         JMP     CP1C                   ; Jump
-CP10:    TEST    ch,2                   ; King side castle ?
-         JZ      rel020                 ; No - jump
-         PRTBLK  O.O,5                  ; Output "O-O"
-         JMP     CP1C                   ; Jump
-rel020:  TEST    ch,4                   ; Queen side castle ?
-         JZ      rel021                 ; No - jump
+;        LD      al,ch                  ; Special move flags
+         MOV     al,ch
+;        AND     al,al                  ; Special ?
+         AND     al,al
+;        JR      NZ,CP10                ; Yes - jump
+         JNZ     CP10
+;        LD      dh,dl                  ; "To" position of the move
+         MOV     dh,dl
+;        CALL    BITASN                 ; Convert to Ascii
+         CALL    BITASN
+;        LD      (MVEMSG_2),bx          ;todo MVEMSG+3        ; Put in move message
+         MOV     word ptr [ebp+MVEMSG_2],bx
+;        LD      dh,cl                  ; "From" position of the move
+         MOV     dh,cl
+;        CALL    BITASN                 ; Convert to Ascii
+         CALL    BITASN
+;        LD      (MVEMSG),bx            ; Put in move message
+         MOV     word ptr [ebp+MVEMSG],bx
+;        PRTBLK  MVEMSG,5               ; Output text of move
+         PRTBLK  MVEMSG,5
+;        JR      CP1C                   ; Jump
+         JMP     CP1C
+;CP10:   BIT     1,ch                   ; King side castle ?
+CP10:    TEST    ch,2
+;        JR      Z,rel020               ; No - jump
+         JZ      rel020
+;        PRTBLK  O.O,5                  ; Output "O-O"
+         PRTBLK  O.O,5
+;        JR      CP1C                   ; Jump
+         JMP     CP1C
+;rel020: BIT     2,ch                   ; Queen side castle ?
+rel020:  TEST    ch,4
+;        JR      Z,rel021               ; No - jump
+         JZ      rel021
 ;X p74
-         PRTBLK  O.O.O,5                ;  Output "O-O-O"
-         JMP     CP1C                   ; Jump
-rel021:  PRTBLK  P.PEP,5                ; Output "PxPep" - En passant
-CP1C:    MOV     al,byte ptr [COLOR]    ; Should computer call check ?
+;        PRTBLK  O.O.O,5                ;  Output "O-O-O"
+         PRTBLK  O.O.O,5
+;        JR      CP1C                   ; Jump
+         JMP     CP1C
+;rel021: PRTBLK  P.PEP,5                ; Output "PxPep" - En passant
+rel021:  PRTBLK  P.PEP,5
+;CP1C:   LD      al,(COLOR)             ; Should computer call check ?
+CP1C:    MOV     al,byte ptr [ebp+COLOR]
+;        LD      ch,al
          MOV     ch,al
-         XOR     al,80H                 ; Toggle color
-         MOV     byte ptr [COLOR],al
-         CALL    INCHK                  ; Check for check
-         AND     al,al                  ; Is enemy in check ?
-         MOV     al,ch                  ; Restore color
-         MOV     byte ptr [COLOR],al
-         JZ      CP24                   ; No - return
-         CARRET                         ; New line
-         MOV     al,byte ptr [SCORE+1]  ; Check for player mated
-         CMP     al,0FFH                ; Forced mate ?
-         JZ      skip31                 ; No - Tab to computer column
+;        XOR     al,80H                 ; Toggle color
+         XOR     al,80H
+;        LD      (COLOR),al
+         MOV     byte ptr [ebp+COLOR],al
+;        CALL    INCHK                  ; Check for check
+         CALL    INCHK
+;        AND     al,al                  ; Is enemy in check ?
+         AND     al,al
+;        LD      al,ch                  ; Restore color
+         MOV     al,ch
+;        LD      (COLOR),al
+         MOV     byte ptr [ebp+COLOR],al
+;        JR      Z,CP24                 ; No - return
+         JZ      CP24
+;        CARRET                         ; New line
+         CARRET
+;        LD      al,(SCORE+1)           ; Check for player mated
+         MOV     al,byte ptr [ebp+SCORE+1]
+;        CMP     al,0FFH                ; Forced mate ?
+         CMP     al,0FFH
+;        CALL    NZ,TBCPMV              ; No - Tab to computer column
+         JZ      skip31
          CALL    TBCPMV
 skip31:
-         PRTBLK  CKMSG,5                ; Output "check"
-         MOV     ebx,offset LINECT      ; Address of screen line count
-         INC     byte ptr [ebx]         ; Increment for message
-CP24:    MOV     al,byte ptr [SCORE+1]  ; Check again for mates
-         CMP     al,0FFH                ; Player mated ?
-         JZ      skip32                 ; No - return
+;        PRTBLK  CKMSG,5                ; Output "check"
+         PRTBLK  CKMSG,5
+;        LD      bx,LINECT              ; Address of screen line count
+         MOV     bx,LINECT
+;        INC     (bx)                   ; Increment for message
+         INC     byte ptr [ebp+ebx]
+;CP24:   LD      al,(SCORE+1)           ; Check again for mates
+CP24:    MOV     al,byte ptr [ebp+SCORE+1]
+;        CMP     al,0FFH                ; Player mated ?
+         CMP     al,0FFH
+;        RET     NZ                     ; No - return
+         JZ      skip32
          RET
 skip32:
-         MOV     cl,0                   ; Set player mate flag
-         CALL    FCDMAT                 ; Full checkmate ?
-         RET                            ; Return
+;        LD      cl,0                   ; Set player mate flag
+         MOV     cl,0
+;        CALL    FCDMAT                 ; Full checkmate ?
+         CALL    FCDMAT
+;        RET                            ; Return
+         RET
 
 
 ;X p75
@@ -2497,16 +4059,26 @@ skip32:
 ; ARGUMENTS: -- Board index input in register D and the Ascii
 ;               square name is output in register pair HL.
 ;*****************************************************************
-BITASN:  SUB     al,al                  ; Get ready for division
+;BITASN: SUB     al,al                  ; Get ready for division
+BITASN:  SUB     al,al
+;        LD      dl,10
          MOV     dl,10
-         CALL    DIVIDE                 ; Divide
-         DEC     dh                     ; Get rank on 1-8 basis
-         ADD     al,60H                 ; Convert file to Ascii (a-h)
-         MOV     bl,al                  ; Save
-         MOV     al,dh                  ; Rank
-         ADD     al,30H                 ; Convert rank to Ascii (1-8)
-         MOV     bh,al                  ; Save
-         RET                            ; Return
+;        CALL    DIVIDE                 ; Divide
+         CALL    DIVIDE
+;        DEC     dh                     ; Get rank on 1-8 basis
+         DEC     dh
+;        ADD     al,60H                 ; Convert file to Ascii (a-h)
+         ADD     al,60H
+;        LD      bl,al                  ; Save
+         MOV     bl,al
+;        LD      al,dh                  ; Rank
+         MOV     al,dh
+;        ADD     al,30H                 ; Convert rank to Ascii (1-8)
+         ADD     al,30H
+;        LD      bh,al                  ; Save
+         MOV     bh,al
+;        RET                            ; Return
+         RET
 
 ;X p79
 ;*****************************************************************
@@ -2547,27 +4119,48 @@ BITASN:  SUB     al,al                  ; Get ready for division
 ;               outputs the board index in register A. Register
 ;               B = 0 if ok. Register B = Register A if invalid.
 ;**********************************************************
-ASNTBI:  MOV     al,bl                  ; Ascii rank (1 - 8)
-         SUB     al,30H                 ; Rank 1 - 8
-         CMP     al,1                   ; Check lower bound
-         JS      AT04                   ; Jump if invalid
-         CMP     al,9                   ; Check upper bound
-         JNC     AT04                   ; Jump if invalid
-         INC     al                     ; Rank 2 - 9
-         MOV     dh,al                  ; Ready for multiplication
+;ASNTBI: LD      al,bl                  ; Ascii rank (1 - 8)
+ASNTBI:  MOV     al,bl
+;        SUB     al,30H                 ; Rank 1 - 8
+         SUB     al,30H
+;        CMP     al,1                   ; Check lower bound
+         CMP     al,1
+;        JMP     M,AT04                 ; Jump if invalid
+         JS      AT04
+;        CMP     al,9                   ; Check upper bound
+         CMP     al,9
+;        JR      NC,AT04                ; Jump if invalid
+         JNC     AT04
+;        INC     al                     ; Rank 2 - 9
+         INC     al
+;        LD      dh,al                  ; Ready for multiplication
+         MOV     dh,al
+;        LD      dl,10
          MOV     dl,10
-         CALL    MLTPLY                 ; Multiply
-         MOV     al,bh                  ; Ascii file letter (a - h)
-         SUB     al,40H                 ; File 1 - 8
-         CMP     al,1                   ; Check lower bound
-         JS      AT04                   ; Jump if invalid
-         CMP     al,9                   ; Check upper bound
-         JNC     AT04                   ; Jump if invalid
-         ADD     al,dh                  ; File+Rank(20-90)=Board index
-         MOV     ch,0                   ; Ok flag
-         RET                            ; Return
-AT04:    MOV     ch,al                  ; Invalid flag
-         RET                            ; Return
+;        CALL    MLTPLY                 ; Multiply
+         CALL    MLTPLY
+;        LD      al,bh                  ; Ascii file letter (a - h)
+         MOV     al,bh
+;        SUB     al,40H                 ; File 1 - 8
+         SUB     al,40H
+;        CMP     al,1                   ; Check lower bound
+         CMP     al,1
+;        JMP     M,AT04                 ; Jump if invalid
+         JS      AT04
+;        CMP     al,9                   ; Check upper bound
+         CMP     al,9
+;        JR      NC,AT04                ; Jump if invalid
+         JNC     AT04
+;        ADD     al,dh                  ; File+Rank(20-90)=Board index
+         ADD     al,dh
+;        LD      ch,0                   ; Ok flag
+         MOV     ch,0
+;        RET                            ; Return
+         RET
+;AT04:   LD      ch,al                  ; Invalid flag
+AT04:    MOV     ch,al
+;        RET                            ; Return
+         RET
 
 ;X p81
 ;*************************************************************
@@ -2585,43 +4178,80 @@ AT04:    MOV     ch,al                  ; Invalid flag
 ; ARGUMENTS: -- Returns flag in register A, 0 for valid and 1 for
 ;               invalid move.
 ;*************************************************************
-VALMOV:  MOV     ebx,[MLPTRJ]           ; Save last move pointer
-         PUSH    ebx                    ; Save register
-         MOV     al,byte ptr [KOLOR]    ; Computers color
-         XOR     al,80H                 ; Toggle color
-         MOV     byte ptr [COLOR],al    ; Store
-         MOV     ebx,offset PLYIX-2     ; Load move list index
-         MOV     [MLPTRI],ebx
-         MOV     ebx,offset MLIST+1024  ; Next available list pointer
-         MOV     [MLNXT],ebx
-         CALL    GENMOV                 ; Generate opponents moves
-         MOV     esi,offset MLIST+1024  ; Index to start of moves
-VA5:     MOV     al,byte ptr [MVEMSG]   ; "From" position
-         CMP     al,byte ptr [esi+MLFRP] ; Is it in list ?
-         JNZ     VA6                    ; No - jump
-         MOV     al,byte ptr [MVEMSG+1] ; "To" position
-         CMP     al,byte ptr [esi+MLTOP] ; Is it in list ?
-         JZ      VA7                    ; Yes - jump
-VA6:     MOV     dl,byte ptr [esi+MLPTR] ; Pointer to next list move
-         MOV     dh,byte ptr [esi+MLPTR+1]
-         XOR     al,al                  ; At end of list ?
+;VALMOV: LD      bx,(MLPTRJ)            ; Save last move pointer
+VALMOV:  MOV     bx,word ptr [ebp+MLPTRJ]
+;        PUSH    bx                     ; Save register
+         PUSH    ebx
+;        LD      al,(KOLOR)             ; Computers color
+         MOV     al,byte ptr [ebp+KOLOR]
+;        XOR     al,80H                 ; Toggle color
+         XOR     al,80H
+;        LD      (COLOR),al             ; Store
+         MOV     byte ptr [ebp+COLOR],al
+;        LD      bx,PLYIX-2             ; Load move list index
+         MOV     bx,PLYIX-2
+;        LD      (MLPTRI),bx
+         MOV     word ptr [ebp+MLPTRI],bx
+;        LD      bx,MLIST+1024          ; Next available list pointer
+         MOV     bx,MLIST+1024
+;        LD      (MLNXT),bx
+         MOV     word ptr [ebp+MLNXT],bx
+;        CALL    GENMOV                 ; Generate opponents moves
+         CALL    GENMOV
+;        LD      si,MLIST+1024          ; Index to start of moves
+         MOV     si,MLIST+1024
+;VA5:    LD      al,(MVEMSG)            ; "From" position
+VA5:     MOV     al,byte ptr [ebp+MVEMSG]
+;        CMP     al,(si+MLFRP)          ; Is it in list ?
+         CMP     al,byte ptr [ebp+esi+MLFRP]
+;        JR      NZ,VA6                 ; No - jump
+         JNZ     VA6
+;        LD      al,(MVEMSG+1)          ; "To" position
+         MOV     al,byte ptr [ebp+MVEMSG+1]
+;        CMP     al,(si+MLTOP)          ; Is it in list ?
+         CMP     al,byte ptr [ebp+esi+MLTOP]
+;        JR      Z,VA7                  ; Yes - jump
+         JZ      VA7
+;VA6:    LD      dl,(si+MLPTR)          ; Pointer to next list move
+VA6:     MOV     dl,byte ptr [ebp+esi+MLPTR]
+;        LD      dh,(si+MLPTR+1)
+         MOV     dh,byte ptr [ebp+esi+MLPTR+1]
+;        XOR     al,al                  ; At end of list ?
+         XOR     al,al
+;        CMP     al,dh
          CMP     al,dh
-         JZ      VA10                   ; Yes - jump
-         PUSH    edx                    ; Move to X register
+;        JR      Z,VA10                 ; Yes - jump
+         JZ      VA10
+;        PUSH    dx                     ; Move to X register
+         PUSH    edx
+;        POP     si
          POP     esi
-         JMP     VA5                    ; Jump
-VA7:     MOV     [MLPTRJ],esi           ; Save opponents move pointer
-         CALL    MOVE                   ; Make move on board array
-         CALL    INCHK                  ; Was it a legal move ?
+;        JR      VA5                    ; Jump
+         JMP     VA5
+;VA7:    LD      (MLPTRJ),si            ; Save opponents move pointer
+VA7:     MOV     word ptr [ebp+MLPTRJ],si
+;        CALL    MOVE                   ; Make move on board array
+         CALL    MOVE
+;        CALL    INCHK                  ; Was it a legal move ?
+         CALL    INCHK
+;        AND     al,al
          AND     al,al
-         JNZ     VA9                    ; No - jump
-VA8:     POP     ebx                    ; Restore saved register
-         RET                            ; Return
-VA9:     CALL    UNMOVE                 ; Un-do move on board array
-VA10:    MOV     al,1                   ; Set flag for invalid move
-         POP     ebx                    ; Restore saved register
-         MOV     [MLPTRJ],ebx           ; Save move pointer
-         RET                            ; Return
+;        JR      NZ,VA9                 ; No - jump
+         JNZ     VA9
+;VA8:    POP     bx                     ; Restore saved register
+VA8:     POP     ebx
+;        RET                            ; Return
+         RET
+;VA9:    CALL    UNMOVE                 ; Un-do move on board array
+VA9:     CALL    UNMOVE
+;VA10:   LD      al,1                   ; Set flag for invalid move
+VA10:    MOV     al,1
+;        POP     bx                     ; Restore saved register
+         POP     ebx
+;        LD      (MLPTRJ),bx            ; Save move pointer
+         MOV     word ptr [ebp+MLPTRJ],bx
+;        RET                            ; Return
+         RET
 
 ;X p82
 ;*************************************************************
@@ -2751,36 +4381,71 @@ VA10:    MOV     al,1                   ; Set flag for invalid move
 ;
 ; ARGUMENTS: -- None
 ;*************************************************************
-ROYALT:  MOV     ebx,offset POSK        ; Start of Royalty array
-         MOV     ch,4                   ; Clear all four positions
-back06:  MOV     byte ptr [ebx],0
-         LEA     ebx,[ebx+1]
+;ROYALT: LD      bx,POSK                ; Start of Royalty array
+ROYALT:  MOV     bx,POSK
+;        LD      ch,4                   ; Clear all four positions
+         MOV     ch,4
+;back06: LD      (bx),0
+back06:  MOV     byte ptr [ebp+ebx],0
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        DJNZ    back06
          LAHF
          DEC ch
          JNZ     back06
          SAHF
-         MOV     al,21                  ; First board position
-RY04:    MOV     byte ptr [M1],al       ; Set up board index
-         MOV     ebx,offset POSK        ; Address of King position
-         MOV     esi,[M1]
-         MOV     al,byte ptr [esi+BOARD] ; Fetch board contents
-         TEST    al,80h                 ; Test color bit
-         JZ      rel023                 ; Jump if white
-         LEA     ebx,[ebx+1]            ; Offset for black
-rel023:  AND     al,7                   ; Delete flags, leave piece
-         CMP     al,KING                ; King ?
-         JZ      RY08                   ; Yes - jump
-         CMP     al,QUEEN               ; Queen ?
-         JNZ     RY0C                   ; No - jump
-         LEA     ebx,[ebx+1]            ; Queen position
-         LEA     ebx,[ebx+1]            ; Plus offset
-RY08:    MOV     al,byte ptr [M1]       ; Index
-         MOV     byte ptr [ebx],al      ; Save
-RY0C:    MOV     al,byte ptr [M1]       ; Current position
-         INC     al                     ; Next position
-         CMP     al,99                  ; Done.?
-         JNZ     RY04                   ; No - jump
-         RET                            ; Return
+;        LD      al,21                  ; First board position
+         MOV     al,21
+;RY04:   LD      (M1),al                ; Set up board index
+RY04:    MOV     byte ptr [ebp+M1],al
+;        LD      bx,POSK                ; Address of King position
+         MOV     bx,POSK
+;        LD      si,(M1)
+         MOV     si,word ptr [ebp+M1]
+;        LD      al,(si+BOARD)          ; Fetch board contents
+         MOV     al,byte ptr [ebp+esi+BOARD]
+;        BIT     7,al                   ; Test color bit
+         TEST    al,80h
+;        JR      Z,rel023               ; Jump if white
+         JZ      rel023
+;        INC     bx                     ; Offset for black
+         LAHF
+         INC     bx
+         SAHF
+;rel023: AND     al,7                   ; Delete flags, leave piece
+rel023:  AND     al,7
+;        CMP     al,KING                ; King ?
+         CMP     al,KING
+;        JR      Z,RY08                 ; Yes - jump
+         JZ      RY08
+;        CMP     al,QUEEN               ; Queen ?
+         CMP     al,QUEEN
+;        JR      NZ,RY0C                ; No - jump
+         JNZ     RY0C
+;        INC     bx                     ; Queen position
+         LAHF
+         INC     bx
+         SAHF
+;        INC     bx                     ; Plus offset
+         LAHF
+         INC     bx
+         SAHF
+;RY08:   LD      al,(M1)                ; Index
+RY08:    MOV     al,byte ptr [ebp+M1]
+;        LD      (bx),al                ; Save
+         MOV     byte ptr [ebp+ebx],al
+;RY0C:   LD      al,(M1)                ; Current position
+RY0C:    MOV     al,byte ptr [ebp+M1]
+;        INC     al                     ; Next position
+         INC     al
+;        CMP     al,99                  ; Done.?
+         CMP     al,99
+;        JR      NZ,RY04                ; No - jump
+         JNZ     RY04
+;        RET                            ; Return
+         RET
 
 ;X p89
 ;*************************************************************
@@ -2844,34 +4509,59 @@ RY0C:    MOV     al,byte ptr [M1]       ; Current position
 ;ARGUMENTS: --  Returns the Norm address in register pair
 ;               HL.
 ;**********************************************************
-CONVRT:  PUSH    ecx                    ; Save registers
+;CONVRT: PUSH    cx                     ; Save registers
+CONVRT:  PUSH    ecx
+;        PUSH    dx
          PUSH    edx
+;        PUSH    af
          lahf
          PUSH    eax
-         MOV     al,byte ptr [BRDPOS]   ; Get board index
-         MOV     dh,al                  ; Set up dividend
+;        LD      al,(BRDPOS)            ; Get board index
+         MOV     al,byte ptr [ebp+BRDPOS]
+;        LD      dh,al                  ; Set up dividend
+         MOV     dh,al
+;        SUB     al,al
          SUB     al,al
-         MOV     dl,10                  ; Divisor
-         CALL    DIVIDE                 ; Index into rank and file
+;        LD      dl,10                  ; Divisor
+         MOV     dl,10
+;        CALL    DIVIDE                 ; Index into rank and file
+         CALL    DIVIDE
                         ; file (1-8) & rank (2-9)
-         DEC     dh                     ; For rank (1-8)
-         DEC     al                     ; For file (0-7)
-         MOV     cl,dh                  ; Save
-         MOV     dh,6                   ; Multiplier
-         MOV     dl,al                  ; File number is multiplicand
-         CALL    MLTPLY                 ; Giving file displacement
-         MOV     al,dh                  ; Save
-         ADD     al,10H                 ; File norm address
-         MOV     bl,al                  ; Low order address byte
-         MOV     al,8                   ; Rank adjust
-         SUB     al,cl                  ; Rank displacement
-         ADD     al,0C0H                ; Rank Norm address
-         MOV     bh,al                  ; High order addres byte
-         POP     eax                    ; Restore registers
+;        DEC     dh                     ; For rank (1-8)
+         DEC     dh
+;        DEC     al                     ; For file (0-7)
+         DEC     al
+;        LD      cl,dh                  ; Save
+         MOV     cl,dh
+;        LD      dh,6                   ; Multiplier
+         MOV     dh,6
+;        LD      dl,al                  ; File number is multiplicand
+         MOV     dl,al
+;        CALL    MLTPLY                 ; Giving file displacement
+         CALL    MLTPLY
+;        LD      al,dh                  ; Save
+         MOV     al,dh
+;        ADD     al,10H                 ; File norm address
+         ADD     al,10H
+;        LD      bl,al                  ; Low order address byte
+         MOV     bl,al
+;        LD      al,8                   ; Rank adjust
+         MOV     al,8
+;        SUB     al,cl                  ; Rank displacement
+         SUB     al,cl
+;        ADD     al,0C0H                ; Rank Norm address
+         ADD     al,0C0H
+;        LD      bh,al                  ; High order addres byte
+         MOV     bh,al
+;        POP     af                     ; Restore registers
+         POP     eax
          sahf
+;        POP     dx
          POP     edx
+;        POP     cx
          POP     ecx
-         RET                            ; Return
+;        RET                            ; Return
+         RET
 
 ;X p94
 ;**********************************************************
@@ -2879,20 +4569,32 @@ CONVRT:  PUSH    ecx                    ; Save registers
 ;   inputs hi=A lo=D, divide by E   (al, dh) divide by dl
 ;   output D (dh) remainder in A (al)
 ;**********************************************************
+;DIVIDE: PUSH    cx
 DIVIDE:  PUSH    ecx
+;        LD      ch,8
          MOV     ch,8
+;DD04:   SLA     dh
 DD04:    SHL     dh,1
+;        RLA
          RCL     al,1
+;        SUB     al,dl
          SUB     al,dl
+;        JMP     M,rel027
          JS      rel027
+;        INC     dh
          INC     dh
+;        JR      rel024
          JMP     rel024
+;rel027: ADD     al,dl
 rel027:  ADD     al,dl
+;rel024: DJNZ    DD04
 rel024:  LAHF
          DEC ch
          JNZ     DD04
          SAHF
+;        POP     cx
          POP     ecx
+;        RET
          RET
 
 ;**********************************************************
@@ -2900,19 +4602,30 @@ rel024:  LAHF
 ;   inputs D, E         (dh, dl)
 ;   output hi=A lo=D    (al, dh)
 ;**********************************************************
+;MLTPLY: PUSH    cx
 MLTPLY:  PUSH    ecx
+;        SUB     al,al
          SUB     al,al
+;        LD      ch,8
          MOV     ch,8
+;ML04:   BIT     0,dh
 ML04:    TEST    dh,1
+;        JR      Z,rel025
          JZ      rel025
+;        ADD     al,dl
          ADD     al,dl
+;rel025: SRA     al
 rel025:  SAR     al,1
+;        RR      dh
          RCR     dh,1
+;        DJNZ    ML04
          LAHF
          DEC ch
          JNZ     ML04
          SAHF
+;        POP     cx
          POP     ecx
+;        RET
          RET
 
 ;X p95
@@ -2958,46 +4671,80 @@ rel025:  SAR     al,1
 ; ARGUMENTS: -- Flags set in the B register as described
 ;               above.
 ;**********************************************************
-EXECMV:  PUSH    esi                    ; Save registers
+;EXECMV: PUSH    si                     ; Save registers
+EXECMV:  PUSH    esi
+;        PUSH    af
          lahf
          PUSH    eax
-         MOV     esi,[MLPTRJ]           ; Index into move list
-         MOV     cl,byte ptr [esi+MLFRP] ; Move list "from" position
-         MOV     dl,byte ptr [esi+MLTOP] ; Move list "to" position
-         CALL    MAKEMV                 ; Produce move
-         MOV     dh,byte ptr [esi+MLFLG] ; Move list flags
+;        LD      si,(MLPTRJ)            ; Index into move list
+         MOV     si,word ptr [ebp+MLPTRJ]
+;        LD      cl,(si+MLFRP)          ; Move list "from" position
+         MOV     cl,byte ptr [ebp+esi+MLFRP]
+;        LD      dl,(si+MLTOP)          ; Move list "to" position
+         MOV     dl,byte ptr [ebp+esi+MLTOP]
+;        CALL    MAKEMV                 ; Produce move
+         CALL    MAKEMV
+;        LD      dh,(si+MLFLG)          ; Move list flags
+         MOV     dh,byte ptr [ebp+esi+MLFLG]
+;        LD      ch,0
          MOV     ch,0
-         TEST    dh,40h                 ; Double move ?
-         JZ      EX14                   ; No - jump
-         MOV     edx,MOVSIZ             ; Move list entry width
-         LEA     esi,[esi+edx]          ; Increment MLPTRJ
-         MOV     cl,byte ptr [esi+MLFRP] ; Second "from" position
-         MOV     dl,byte ptr [esi+MLTOP] ; Second "to" position
-         MOV     al,dl                  ; Get "to" position
-         CMP     al,cl                  ; Same as "from" position ?
-         JNZ     EX04                   ; No - jump
-         INC     ch                     ; Set en passant flag
-         JMP     EX10                   ; Jump
-EX04:    CMP     al,1AH                 ; White O-O ?
-         JNZ     EX08                   ; No - jump
-         LAHF                           ; Set O-O flag
+;        BIT     6,dh                   ; Double move ?
+         TEST    dh,40h
+;        JR      Z,EX14                 ; No - jump
+         JZ      EX14
+;        LD      dx,MOVSIZ              ; Move list entry width
+         MOV     dx,MOVSIZ
+;        ADD     si,dx                  ; Increment MLPTRJ
+         LAHF
+         ADD     si,dx
+         SAHF
+;        LD      cl,(si+MLFRP)          ; Second "from" position
+         MOV     cl,byte ptr [ebp+esi+MLFRP]
+;        LD      dl,(si+MLTOP)          ; Second "to" position
+         MOV     dl,byte ptr [ebp+esi+MLTOP]
+;        LD      al,dl                  ; Get "to" position
+         MOV     al,dl
+;        CMP     al,cl                  ; Same as "from" position ?
+         CMP     al,cl
+;        JR      NZ,EX04                ; No - jump
+         JNZ     EX04
+;        INC     ch                     ; Set en passant flag
+         INC     ch
+;        JR      EX10                   ; Jump
+         JMP     EX10
+;EX04:   CMP     al,1AH                 ; White O-O ?
+EX04:    CMP     al,1AH
+;        JR      NZ,EX08                ; No - jump
+         JNZ     EX08
+;        SET     1,ch                   ; Set O-O flag
+         LAHF
          OR      ch,2
          SAHF
-         JMP     EX10                   ; Jump
-EX08:    CMP     al,60H                 ; Black 0-0 ?
-         JNZ     EX0C                   ; No - jump
-         LAHF                           ; Set 0-0 flag
+;        JR      EX10                   ; Jump
+         JMP     EX10
+;EX08:   CMP     al,60H                 ; Black 0-0 ?
+EX08:    CMP     al,60H
+;        JR      NZ,EX0C                ; No - jump
+         JNZ     EX0C
+;        SET     1,ch                   ; Set 0-0 flag
+         LAHF
          OR      ch,2
          SAHF
-         JMP     EX10                   ; Jump
-EX0C:    LAHF                           ; Set 0-0-0 flag
+;        JR      EX10                   ; Jump
+         JMP     EX10
+;EX0C:   SET     2,ch                   ; Set 0-0-0 flag
+EX0C:    LAHF
          OR      ch,4
          SAHF
-EX10:    CALL    MAKEMV                 ; Make 2nd move on board
-EX14:    POP     eax                    ; Restore registers
+;EX10:   CALL    MAKEMV                 ; Make 2nd move on board
+EX10:    CALL    MAKEMV
+;EX14:   POP     af                     ; Restore registers
+EX14:    POP     eax
          sahf
+;        POP     si
          POP     esi
-         RET                            ; Return
+;        RET                            ; Return
+         RET
 
 ;X p98
 ;**********************************************************
@@ -3029,27 +4776,28 @@ _shim_function PROC
     push    esi
     push    edi
     mov     ebx,[ebp+8]
-    mov     dword ptr [ebx],offset BOARDA
-
+    lea     ebp,base_address
+    lea     eax,[ebp+BOARDA]
+    mov     dword ptr [ebx],eax
 
 
 ;   SUB     A               ; Code of White is zero
     sub al,al
 ;   STA     COLOR           ; White always moves first
-    mov byte ptr [COLOR],al
+    mov byte ptr [ebp+COLOR],al
 ;   STA     KOLOR           ; Bring in computer's color
-    mov byte ptr [KOLOR],al
+    mov byte ptr [ebp+KOLOR],al
 ;   CALL    INTERR          ; Players color/search depth
 ;   call    INTERR
-    mov byte ptr [PLYMAX],1
-    mov al,0
+    mov byte ptr [ebp+PLYMAX],1
 ;   CALL    INITBD          ; Initialize board array
+    mov al,0
     call    SARGON
 ;   MVI     A,1             ; Move number is 1 at at start
     mov al,1
     add al,2 ;avoid book move
 ;   STA     MOVENO          ; Save
-    mov byte ptr [MOVENO],al
+    mov byte ptr [ebp+MOVENO],al
 ;   CALL    CPTRMV          ; Make and write computers move
     mov al,1
     call    SARGON
