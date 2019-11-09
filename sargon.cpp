@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -11,12 +12,15 @@
 #include <set>
 #include <algorithm>
 #include "util.h"
+#include "thc.h"
 #include "translate.h"
 
 static void convert( std::string fin, std::string asm_fout,  std::string report_fout );
+unsigned char *gen_sargon_format_position( const char *fen );
 
 struct shim_parameters
 {
+    uint32_t command;
     unsigned char *board;
 };
 
@@ -27,18 +31,6 @@ extern "C" {
 int main( int argc, const char *argv[] )
 {
     util::tests();
-#if 1
-    convert("sargon-step6.asm","output-step6.asm", "report-step6.txt");
-    shim_parameters sh;
-    shim_function( &sh );
-    const unsigned char *p = sh.board;
-    printf( "Board layout\n" );
-    for( int i=0; i<12; i++ )
-    {
-        for( int j=0; j<10; j++ )
-            printf( "%02x%c", *p++, j+1<10?' ':'\n' );
-    }
-#endif
 
 #if 0
     convert("sargon-step6.asm","output-step6.asm", "report-step6.txt");
@@ -57,7 +49,189 @@ int main( int argc, const char *argv[] )
     }
     convert(argv[1],argv[2],argv[3]);
 #endif
+
+/*
+
+Test position 2
+
+FEN r2n2k1/5ppp/b5q1/1P3N2/8/8/3Q1PPP/3R2K1 w - - 0 1
+
+r..n..k.
+.....ppp
+b.....q.
+.P...N..
+........
+........
+...Q.PPP
+...R..K.
+
+White to play has three forcing wins, requiring
+increasing depth for increasing reward;
+
+Immediate capture of bishop b5xa6 (wins a piece) [1 ply]
+Royal fork Nf5-e7 (wins queen) [3 ply]
+Back rank mate Qd2xd8+ [4 ply maybe]
+
+To make the back rank mate a little harder, move the
+Pb5 and ba6 to Pb3 and ba4 so bishop can postpone mate
+by one move.
+
+ff ff ff ff ff ff ff ff ff ff
+ff ff ff ff ff ff ff ff ff ff
+ff 00 00 00 0c 00 00 0e 00 ff
+ff 00 00 00 0d 00 01 01 01 ff
+ff 00 00 00 00 00 00 00 00 ff
+ff 00 00 00 00 00 00 00 00 ff
+ff 00 09 00 00 00 0a 00 00 ff
+ff 8b 00 00 00 00 00 8d 00 ff
+ff 00 00 00 00 00 81 81 81 ff
+ff 8c 00 00 8a 00 00 8e 00 ff
+ff ff ff ff ff ff ff ff ff ff
+ff ff ff ff ff ff ff ff ff ff
+
+
+*/
+
+#if 1
+    // CTWBFK = "Chess Tactics Workbook For Kids'
+    const char *pos1 = "r2n2k1/5ppp/b5q1/1P3N2/8/8/3Q1PPP/3R2K1 w - - 0 1";             // Test position #1 above
+    const char *pos2 = "2r1nrk1/5pbp/1p2p1p1/8/p2B4/PqNR2P1/1P3P1P/1Q1R2K1 w - - 0 1";  // CTWBFK Pos 30, page 41 - solution Nc3-d5
+    unsigned char *test_position = gen_sargon_format_position( pos2 );
+
+    //convert("sargon-step6.asm","output-step6.asm", "report-step6.txt");
+    shim_parameters sh;
+    sh.command = 0;
+    shim_function( &sh );
+    unsigned char *p = sh.board;
+    unsigned char board_position[120] =
+    {
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x00, 0x0e, 0x00, 0xff,
+        0xff, 0x00, 0x00, 0x00, 0x0d, 0x00, 0x01, 0x01, 0x01, 0xff,
+        0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff,
+        0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff,
+        0xff, 0x00, 0x09, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0xff,
+        0xff, 0x8b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8d, 0x01, 0xff,
+        0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x81, 0x81, 0x00, 0xff,
+        0xff, 0x8c, 0x00, 0x00, 0x00, 0x8a, 0x00, 0x8e, 0x00, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+    };
+
+#if 0
+    printf( "Board layout after board initialised\n" );
+    for( int i=0; i<12; i++ )
+    {
+        for( int j=0; j<10; j++ )
+            printf( "%02x%c", *p++, j+1<10?' ':'\n' );
+    }
+#endif
+
+    unsigned char *q = p + (0x247-0x134);
+    memcpy( p, test_position, sizeof(board_position) );
+
+    sh.command = 1;
+    shim_function( &sh );
+    printf( "Board layout after computer move made\n" );
+    for( int i=0; i<12; i++ )
+    {
+        for( int j=0; j<10; j++ )
+            printf( "%02x%c", *p++, j+1<10?' ':'\n' );
+    }
+    printf( "\nMove is: %c%c-%c%c\n", q[0],q[1],q[2],q[3] );
+
+#endif
     return 0;
+}
+
+unsigned char *gen_sargon_format_position( const char *fen )
+{
+    static unsigned char board_position[120] =
+    {
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0x04, 0x02, 0x03, 0x05, 0x06, 0x03, 0x02, 0x04, 0xff,  // <-- White back row, a1 at left end, h1 at right end
+        0xff, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0xff,  // <-- White pawns
+        0xff, 0xa3, 0xb3, 0xc3, 0xd3, 0xe3, 0xf3, 0x00, 0x00, 0xff,  // <-- note 'a3' etc just documents square convention
+        0xff, 0xa4, 0xb4, 0xc4, 0xd4, 0xe4, 0xf4, 0x00, 0x00, 0xff,  // <-- but g and h files are 0x00 = empty
+        0xff, 0xa5, 0xb5, 0xc5, 0xd5, 0xe5, 0xf5, 0x00, 0x00, 0xff,
+        0xff, 0xa6, 0xb6, 0xc6, 0xd6, 0xe6, 0xf6, 0x00, 0x00, 0xff,
+        0xff, 0x81, 0x81, 0x81, 0x81, 0x81, 0x81, 0x81, 0x81, 0xff,  // <-- Black pawns
+        0xff, 0x84, 0x82, 0x83, 0x85, 0x86, 0x83, 0x82, 0x84, 0xff,  // <-- Black back row
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+    };
+
+    thc::ChessPosition cr;
+    cr.Forsyth( fen );
+    memset( board_position, 0xff, sizeof(board_position) );
+    unsigned char *dst_base = board_position + 28;  // square h1
+    char *src_base = &cr.squares[thc::h1];
+    for( int i=0; i<8; i++ )
+    {
+        unsigned char *dst = dst_base + i*10;
+        char *src = src_base - i*8;
+        for( int j=0; j<8; j++ )
+        {
+            char c = *src--;
+            unsigned char b = 0;
+            switch( c )
+            {
+                case 'p':   b = 0x81;   break;
+                case 'n':   b = 0x82;   break;
+                case 'b':   b = 0x83;   break;
+                case 'r':   b = 0x84;   break;
+                case 'q':   b = 0x85;   break;
+                case 'k':   b = 0x86;   break;
+                case 'P':   b = 0x01;   break;
+                case 'N':   b = 0x02;   break;
+                case 'B':   b = 0x03;   break;
+                case 'R':   b = 0x04;   break;
+                case 'Q':   b = 0x05;   break;
+                case 'K':   b = 0x06;   break;
+            }
+            bool moved=true;
+            if( i==0 )
+            {
+                if( j==0 && c=='R' && cr.wking_allowed() )
+                    moved = false; 
+                if( (j==1||j==6) && c=='N' )
+                    moved = false; 
+                if( (j==2||j==5) && c=='B' )
+                    moved = false; 
+                if( j==3 && c=='K' && (cr.wking_allowed()||cr.wqueen_allowed()) )
+                    moved = false; 
+                if( j==4 && c=='Q' )
+                    moved = false; 
+                if( j==7 && c=='R' && cr.wqueen_allowed() )
+                    moved = false; 
+            }
+            else if( i==1 && c=='P' )
+                moved = false; 
+            else if( i==6 && c=='p' )
+                moved = false; 
+            else if( i==7 )
+            {
+                if( j==0 && c=='r' && cr.bking_allowed() )
+                    moved = false; 
+                if( (j==1||j==6) && c=='n' )
+                    moved = false; 
+                if( (j==2||j==5) && c=='b' )
+                    moved = false; 
+                if( j==3 && c=='k' && (cr.bking_allowed()||cr.bqueen_allowed()) )
+                    moved = false; 
+                if( j==4 && c=='q' )
+                    moved = false; 
+                if( j==7 && c=='r' && cr.bqueen_allowed() )
+                    moved = false; 
+            }
+            if( moved && b!=0 )
+                b += 8;
+            *dst-- = b;
+        }
+    }
+    return board_position;
 }
 
 enum statement_typ {empty, discard, illegal, comment_only, comment_only_indented, directive, equate, normal};
@@ -637,5 +811,35 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
             util::putline(out,s);
         }
     }
+}
+
+/*
+ *  Sadly we need this junk to get thc.h and thc.cpp to compile and link
+ */
+
+#ifndef KILL_DEBUG_COMPLETELY
+int core_printf( const char *fmt, ... )
+{
+    int ret=0;
+	va_list args;
+	va_start( args, fmt );
+    char buf[1000];
+    char *p = buf;
+    vsnprintf( p, sizeof(buf)-2-(p-buf), fmt, args ); 
+    fputs(buf,stdout);
+    va_end(args);
+    return ret;
+}
+#endif
+
+void ReportOnProgress
+(
+    bool    init,
+    int     multipv,
+    std::vector<thc::Move> &pv,
+    int     score_cp,
+    int     depth
+)
+{
 }
 

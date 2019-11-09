@@ -442,10 +442,10 @@ MLVAL   =       PTRSIZ+3
         .BLKB   100
         
         .IF_X86
-shadow_eax  dd   0
-shadow_ebx  dd   0
-shadow_ecx  dd   0
-shadow_edx  dd   0
+shadow_ax  dw   0
+shadow_bx  dw   0
+shadow_cx  dw   0
+shadow_dx  dw   0
 _DATA    ENDS
         .ENDIF
         
@@ -473,14 +473,14 @@ CARRET   MACRO                          ;todo
          
 Z80_EXAF MACRO
          lahf
-         xchg    eax,shadow_eax
+         xchg    ax,shadow_ax
          sahf
          ENDM
 
 Z80_EXX  MACRO
-         xchg    ebx,shadow_ebx
-         xchg    ecx,shadow_ecx
-         xchg    edx,shadow_edx
+         xchg    bx,shadow_bx
+         xchg    cx,shadow_cx
+         xchg    dx,shadow_dx
          ENDM
 
 Z80_RLD  MACRO                          ;a=kx (hl)=yz -> a=ky (hl)=zx
@@ -1284,7 +1284,12 @@ PC1:    CCIR            ; Search list for position
         CMP     D       ; Same as attacking direction ?
         JRNZ    PC5     ; No - jump
 PC3:    EXAF            ; Restore search parameters
+        .IF_Z80
         JPE     PC1     ; Jump if search not complete
+        .ELSE
+        cmp     cx,0    ; Don't have Z80 overflow flag sadly
+        jnz     PC1     ; Jump if search not complete
+        .ENDIF
         RET             ; Return
 PC5:    POP     PSW     ; Abnormal exit
         POP     D       ; Restore regs.
@@ -3675,9 +3680,13 @@ _shim_function PROC
     mov     ebx,[ebp+8]
     lea     ebp,base_address
     lea     eax,[ebp+BOARDA]
-    mov     dword ptr [ebx],eax
-
-
+    mov     dword ptr [ebx+4],eax
+    cmp     dword ptr [ebx],0   ;command = 0?
+    jz      sf_00               ;yes, init board
+    cmp     dword ptr [ebx],1   ;command = 1?
+    jz      sf_01               ;yes, calculate move
+    jmp     sf_end
+sf_00:
 ;   SUB     A               ; Code of White is zero
     sub al,al
 ;   STA     COLOR           ; White always moves first
@@ -3690,6 +3699,8 @@ _shim_function PROC
 ;   CALL    INITBD          ; Initialize board array
     mov al,0
     call    SARGON
+    jmp     sf_end
+sf_01:
 ;   MVI     A,1             ; Move number is 1 at at start
     mov al,1
     add al,2 ;avoid book move
@@ -3698,6 +3709,7 @@ _shim_function PROC
 ;   CALL    CPTRMV          ; Make and write computers move
     mov al,1
     call    SARGON
+sf_end:
     pop     edi
     pop     esi
     pop     ebp
