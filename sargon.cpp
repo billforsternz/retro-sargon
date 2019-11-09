@@ -102,7 +102,8 @@ ff ff ff ff ff ff ff ff ff ff
     shim_parameters sh;
     sh.command = 0;
     shim_function( &sh );
-    unsigned char *p = sh.board;
+    unsigned char *sargon_board = sh.board;
+    unsigned char *sargon_move_made = sargon_board + (0x247-0x134);
     unsigned char board_position[120] =
     {
         0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -119,26 +120,26 @@ ff ff ff ff ff ff ff ff ff ff
         0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
     };
 
-#if 0
     printf( "Board layout after board initialised\n" );
+    unsigned char *p = sargon_board;
     for( int i=0; i<12; i++ )
     {
         for( int j=0; j<10; j++ )
             printf( "%02x%c", *p++, j+1<10?' ':'\n' );
     }
-#endif
 
-    unsigned char *q = p + (0x247-0x134);
-    memcpy( p, test_position, sizeof(board_position) );
+    memcpy( sargon_board, test_position, sizeof(board_position) );
 
     sh.command = 1;
     shim_function( &sh );
     printf( "Board layout after computer move made\n" );
+    p = sargon_board;
     for( int i=0; i<12; i++ )
     {
         for( int j=0; j<10; j++ )
             printf( "%02x%c", *p++, j+1<10?' ':'\n' );
     }
+    unsigned char *q = sargon_move_made;
     printf( "\nMove is: %c%c-%c%c\n", q[0],q[1],q[2],q[3] );
 
 #endif
