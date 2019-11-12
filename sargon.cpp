@@ -17,6 +17,7 @@
 
 static void convert( std::string fin, std::string asm_fout,  std::string report_fout );
 unsigned char *gen_sargon_format_position( const char *fen );
+void show_board_layout( const unsigned char *sargon_board, std::string msg );
 
 struct shim_parameters
 {
@@ -96,7 +97,11 @@ ff ff ff ff ff ff ff ff ff ff
     // CTWBFK = "Chess Tactics Workbook For Kids'
     const char *pos1 = "r2n2k1/5ppp/b5q1/1P3N2/8/8/3Q1PPP/3R2K1 w - - 0 1";             // Test position #1 above
     const char *pos2 = "2r1nrk1/5pbp/1p2p1p1/8/p2B4/PqNR2P1/1P3P1P/1Q1R2K1 w - - 0 1";  // CTWBFK Pos 30, page 41 - solution Nc3-d5
-    unsigned char *test_position = gen_sargon_format_position( pos2 );
+    const char *pos3 = "5k2/3KR3/4B3/8/3P4/8/8/6q1 w - - 0 1";                          // CTWBFK Pos 34, page 62 - solution Re7-f7+
+    const char *pos4 = "3r2k1/1pq2ppp/pb1pp1b1/8/3B4/2N5/PPP1QPPP/4R1K1 w - - 0 1";     // CTWBFK Pos 7, page 102 - solution Nc3-d5
+                                                                                        //  Sargon currently fails on this one - Plays Bd4xb6 instead
+                                                                                        //  a -2 move instead of a +2 move, with reasonable depth
+    unsigned char *test_position = gen_sargon_format_position( pos4 );
 
     //convert("sargon-step6.asm","output-step6.asm", "report-step6.txt");
     shim_parameters sh;
@@ -120,28 +125,14 @@ ff ff ff ff ff ff ff ff ff ff
         0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
     };
 
-    printf( "Board layout after board initialised\n" );
-    unsigned char *p = sargon_board;
-    for( int i=0; i<12; i++ )
-    {
-        for( int j=0; j<10; j++ )
-            printf( "%02x%c", *p++, j+1<10?' ':'\n' );
-    }
-
+    show_board_layout( sargon_board, "Board layout after board initialised" );
     memcpy( sargon_board, test_position, sizeof(board_position) );
-
+    show_board_layout( sargon_board, "Board layout after test position set" );
     sh.command = 1;
     shim_function( &sh );
-    printf( "Board layout after computer move made\n" );
-    p = sargon_board;
-    for( int i=0; i<12; i++ )
-    {
-        for( int j=0; j<10; j++ )
-            printf( "%02x%c", *p++, j+1<10?' ':'\n' );
-    }
+    show_board_layout( sargon_board, "Board layout after computer move made" );
     unsigned char *q = sargon_move_made;
     printf( "\nMove is: %c%c-%c%c\n", q[0],q[1],q[2],q[3] );
-
 #endif
     return 0;
 }
@@ -234,6 +225,18 @@ unsigned char *gen_sargon_format_position( const char *fen )
     }
     return board_position;
 }
+
+void show_board_layout( const unsigned char *sargon_board, std::string msg )
+{
+    printf( "%s\n", msg.c_str() );
+    const unsigned char *p = sargon_board;
+    for( int i=0; i<12; i++ )
+    {
+        for( int j=0; j<10; j++ )
+            printf( "%02x%c", *p++, j+1<10?' ':'\n' );
+    }
+}
+
 
 enum statement_typ {empty, discard, illegal, comment_only, comment_only_indented, directive, equate, normal};
 

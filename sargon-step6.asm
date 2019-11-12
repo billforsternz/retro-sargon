@@ -3675,6 +3675,9 @@ PUBLIC	_shim_function
 _shim_function PROC
     push    ebp
     mov     ebp,esp
+    push    ebx
+    push    ecx
+    push    edx
     push    esi
     push    edi
     mov     ebx,[ebp+8]
@@ -3695,7 +3698,7 @@ sf_00:
     mov byte ptr [ebp+KOLOR],al
 ;   CALL    INTERR          ; Players color/search depth
 ;   call    INTERR
-    mov byte ptr [ebp+PLYMAX],1
+    mov byte ptr [ebp+PLYMAX],5
 ;   CALL    INITBD          ; Initialize board array
     mov al,0
     call    SARGON
@@ -3712,6 +3715,9 @@ sf_01:
 sf_end:
     pop     edi
     pop     esi
+    pop     edx
+    pop     ecx
+    pop     ebx
     pop     ebp
 	ret
 _shim_function ENDP

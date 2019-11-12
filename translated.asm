@@ -4773,6 +4773,9 @@ PUBLIC	_shim_function
 _shim_function PROC
     push    ebp
     mov     ebp,esp
+    push    ebx
+    push    ecx
+    push    edx
     push    esi
     push    edi
     mov     ebx,[ebp+8]
@@ -4810,6 +4813,9 @@ sf_01:
 sf_end:
     pop     edi
     pop     esi
+    pop     edx
+    pop     ecx
+    pop     ebx
     pop     ebp
 	ret
 _shim_function ENDP
