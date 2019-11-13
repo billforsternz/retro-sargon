@@ -1103,10 +1103,10 @@ skip6:
          JP      rel003
 ;        NEG                            ; Else take absolute value
          NEG     al
-;        CMP     al,10                  ; Is difference 10 ?
-         CMP     al,10
-;rel003: RET     NZ                     ; No - return
-rel003:  JZ      skip7
+;rel003: CMP     al,10                  ; Is difference 10 ?
+rel003:  CMP     al,10
+;        RET     NZ                     ; No - return
+         JZ      skip7
          RET
 skip7:
 ;        LD      bx,P2                  ; Address of flags
@@ -1412,11 +1412,18 @@ rel004:  XCHG    bx,dx
          MOV     word ptr [ebp+MLNXT],bx
 ;        RET                            ; Return
          RET
-;AM10:   ;MVI     M,0     ; Abort entry on table ovflow
-AM10:                                   ;MVI     M,0     ; Abort entry on table ovflow
-        ;INX     H
-        ;MVI     M,0       ;TODO fix this
-        ;DCX     H
+;AM10:   LD      (bx),0                 ; Abort entry on table ovflow
+AM10:    MOV     byte ptr [ebp+ebx],0
+;        INC     bx
+         LAHF
+         INC     bx
+         SAHF
+;        LD      (bx),0                 ;TODO fix this or at least look at it
+         MOV     byte ptr [ebp+ebx],0
+;        DEC     bx
+         LAHF
+         DEC     bx
+         SAHF
 ;        RET
          RET
 
@@ -2286,10 +2293,10 @@ XC19:    TEST    cl,1
          JZ      rel010
 ;        NEG                            ; Negate value for attacker
          NEG     al
-;        ADD     al,dl                  ; Total points lost
-         ADD     al,dl
-;rel010: LD      dl,al                  ; Save total
-rel010:  MOV     dl,al
+;rel010: ADD     al,dl                  ; Total points lost
+rel010:  ADD     al,dl
+;        LD      dl,al                  ; Save total
+         MOV     dl,al
 ;        EXAF                           ; Restore previous defender
          Z80_EXAF
 ;        RET     Z                      ; Return if none

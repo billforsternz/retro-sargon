@@ -791,8 +791,8 @@ rel002: CPI     61      ; On en passant capture rank ?
         SUB     M       ; Find difference
         JP      rel003  ; Positive ? Yes - Jump
         NEG             ; Else take absolute value
-        CPI     10      ; Is difference 10 ?
-rel003: RNZ             ; No - return
+rel003: CPI     10      ; Is difference 10 ?
+		RNZ             ; No - return
         LXI     H,P2    ; Address of flags
         SET     6,M     ; Set double move flag
         CALL    ADMOVE  ; Add Pawn move to move list
@@ -969,10 +969,10 @@ rel004: XCHG            ; Address of move area
         INX     H
         SHLD    MLNXT   ; Save address for next move
         RET             ; Return
-AM10:   ;MVI     M,0     ; Abort entry on table ovflow
-        ;INX     H
-        ;MVI     M,0       ;TODO fix this
-        ;DCX     H
+AM10:   MVI     M,0     ; Abort entry on table ovflow
+        INX     H
+        MVI     M,0     ;TODO fix this or at least look at it
+        DCX     H
         RET
 
 ;X p37
@@ -1462,8 +1462,8 @@ XC18:   EXAF            ; Save Defender
 XC19:   BIT     0,C     ; Attacker or defender ?
         JRZ     rel010  ; Jump if defender
         NEG             ; Negate value for attacker
-        ADD     E       ; Total points lost
-rel010: MOV     E,A     ; Save total
+rel010: ADD     E       ; Total points lost
+        MOV     E,A     ; Save total
         EXAF            ; Restore previous defender
         RZ              ; Return if none
         MOV     B,L     ; Prev attckr becomes defender
