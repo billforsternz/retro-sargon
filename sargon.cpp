@@ -13,11 +13,16 @@
 #include <algorithm>
 #include "util.h"
 #include "thc.h"
+#include "sargon-constants.h"
 #include "translate.h"
 
-static void convert( std::string fin, std::string asm_fout,  std::string report_fout );
-unsigned char *gen_sargon_format_position( const char *fen );
+static void convert( std::string fin, std::string asm_fout,  std::string report_fout, std::string h_constants_fout );
+
+unsigned char *sargon_format_position_create( const char *fen );
+std::string sargon_format_position_read( thc::ChessPosition &cp, const char *msg=0 );
 void show_board_layout( const unsigned char *sargon_board, std::string msg );
+void peek();
+void diagnostics();
 
 struct shim_parameters
 {
@@ -27,6 +32,41 @@ struct shim_parameters
 
 extern "C" {
     int shim_function( shim_parameters *parm );
+    void test_inspect();
+}
+
+// For peeking
+static const unsigned char *sargon_mem_base;
+const int BOARD_SIZE    = 120;
+
+/*
+const int BOARD_OFFSET  = 0x0134;
+#if 0
+const int MLPTRI = 0x021b;
+const int MLPTRJ = 0x021d;
+const int MLLST  = 0x0223;
+const int MLNXT  = 0x0225;
+const int COLOR  = 0x0228;
+const int MVEMSG = 0x0247;
+#else
+const int MLPTRI = 0x021f;
+const int MLPTRJ = 0x0221;
+const int MLLST  = 0x0227;
+const int MLNXT  = 0x0229;
+const int COLOR  = 0x022c;
+const int MVEMSG = 0x024b;
+#endif
+*/
+
+extern "C" {
+    void inspector( const char *msg )
+    {
+        printf( "Sargon diagnostics callback %s\n", msg );
+        if( msg[0] == '*' )
+            peek();
+        else
+            diagnostics();
+    }
 }
 
 int main( int argc, const char *argv[] )
@@ -34,7 +74,11 @@ int main( int argc, const char *argv[] )
     util::tests();
 
 #if 0
-    convert("sargon-step6.asm","output-step6.asm", "report-step6.txt");
+    test_inspect();
+#endif
+
+#if 0
+    convert("sargon-step6.asm","output-step6.asm", "report-step6.txt", "sargon-constants.h" );
 #endif
 
 #if 0
@@ -96,48 +140,49 @@ ff ff ff ff ff ff ff ff ff ff
 #if 1
     // CTWBFK = "Chess Tactics Workbook For Kids'
     const char *pos1 = "r2n2k1/5ppp/b5q1/1P3N2/8/8/3Q1PPP/3R2K1 w - - 0 1";             // Test position #1 above
+    const char *pos1a = "r2n2k1/5pp1/b5qp/1P3N2/8/8/3Q1PPP/3R2K1 w - - 0 1";            // Slight mod, h7-h6 so it's not mate, yet Sargon still plays Qd2xNd8 with ply max = 1
+                                                                                        //  and an easy piece capture on a6 available. Why?
+    const char *pos1b = "r2n2k1/5pp1/b5qp/1P6/8/5N2/3Q1PPP/3R2K1 w - - 0 1";            //  Still does it even if we make N safe on f3 - at max ply 1 and 2
+    const char *pos1c = "r2n4/5ppk/b5qp/1P6/8/5N2/3Q1PPP/3R2K1 w - - 0 1";              //  Even with king on h7 (so no check), still does it at max ply 1 (but not 2)
+    const char *pos1d = "r2n4/5ppk/b5qp/8/1P6/5N2/3Q1PPP/2R3K1 w - - 0 1";              //  With king on h7 (so no check), pawn back to b4 (so no capture in reserve)
+                                                                                        //   and rook on c1 (so giving up Q for N - not Q for N+R) Sargon plays Qxd8
+                                                                                        //   at max ply 1 - so maybe it just thinks it is winning N and doesn't account
+                                                                                        //   for defending rook at all.
     const char *pos2 = "2r1nrk1/5pbp/1p2p1p1/8/p2B4/PqNR2P1/1P3P1P/1Q1R2K1 w - - 0 1";  // CTWBFK Pos 30, page 41 - solution Nc3-d5
     const char *pos3 = "5k2/3KR3/4B3/8/3P4/8/8/6q1 w - - 0 1";                          // CTWBFK Pos 34, page 62 - solution Re7-f7+
     const char *pos4 = "3r2k1/1pq2ppp/pb1pp1b1/8/3B4/2N5/PPP1QPPP/4R1K1 w - - 0 1";     // CTWBFK Pos 7, page 102 - solution Nc3-d5
                                                                                         //  Sargon currently fails on this one - Plays Bd4xb6 instead
                                                                                         //  a -2 move instead of a +2 move, with reasonable depth
-    unsigned char *test_position = gen_sargon_format_position( pos4 );
+                                                                                        //  Now fixed! after adding call to ROYALT() after setting position
+    const char *pos5 = "r4r2/6kp/2pqppp1/p1R5/b2P4/4QN2/1P3PPP/2R3K1 w - - 0 1";        // CTWBFK Pos 29, page 77 - solution Qe3-a3. Quite difficult!
+    unsigned char *test_position = sargon_format_position_create( pos5 );
 
     //convert("sargon-step6.asm","output-step6.asm", "report-step6.txt");
     shim_parameters sh;
     sh.command = 0;
     shim_function( &sh );
     unsigned char *sargon_board = sh.board;
-    unsigned char *sargon_move_made = sargon_board + (0x247-0x134);
-    unsigned char board_position[120] =
-    {
-        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-        0xff, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x00, 0x0e, 0x00, 0xff,
-        0xff, 0x00, 0x00, 0x00, 0x0d, 0x00, 0x01, 0x01, 0x01, 0xff,
-        0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff,
-        0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff,
-        0xff, 0x00, 0x09, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0xff,
-        0xff, 0x8b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8d, 0x01, 0xff,
-        0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x81, 0x81, 0x00, 0xff,
-        0xff, 0x8c, 0x00, 0x00, 0x00, 0x8a, 0x00, 0x8e, 0x00, 0xff,
-        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
-    };
-
-    show_board_layout( sargon_board, "Board layout after board initialised" );
-    memcpy( sargon_board, test_position, sizeof(board_position) );
-    show_board_layout( sargon_board, "Board layout after test position set" );
+    sargon_mem_base = sargon_board - BOARDA;
+    const unsigned char *sargon_move_made = sargon_mem_base + MVEMSG;
+    thc::ChessPosition cp;
+    std::string s = sargon_format_position_read( cp, "Position after board initialised" );
+    printf( "%s\n", s.c_str() );
+    memcpy( sargon_board, test_position, BOARD_SIZE );
+    sh.command = 2;
+    shim_function( &sh );   // Adjust king and queen positions
+    s = sargon_format_position_read( cp, "Position after test position set" );
+    printf( "%s\n", s.c_str() );
     sh.command = 1;
     shim_function( &sh );
-    show_board_layout( sargon_board, "Board layout after computer move made" );
-    unsigned char *q = sargon_move_made;
-    printf( "\nMove is: %c%c-%c%c\n", q[0],q[1],q[2],q[3] );
+    s = sargon_format_position_read( cp, "Position after computer move made" );
+    printf( "%s", s.c_str() );
+    const unsigned char *q = sargon_move_made;
+    printf( "\nMove made is: %c%c-%c%c\n", q[0],q[1],q[2],q[3] );
 #endif
     return 0;
 }
 
-unsigned char *gen_sargon_format_position( const char *fen )
+unsigned char *sargon_format_position_create( const char *fen )
 {
     static unsigned char board_position[120] =
     {
@@ -226,6 +271,44 @@ unsigned char *gen_sargon_format_position( const char *fen )
     return board_position;
 }
 
+std::string sargon_format_position_read( thc::ChessPosition &cp, const char *msg )
+{
+    cp.Init();
+    const unsigned char *sargon_board = sargon_mem_base + BOARDA;
+    const unsigned char *src_base = sargon_board + 28;  // square h1
+    char *dst_base = &cp.squares[thc::h1];
+    for( int i=0; i<8; i++ )
+    {
+        const unsigned char *src = src_base + i*10;
+        char *dst = dst_base - i*8;
+        for( int j=0; j<8; j++ )
+        {
+            unsigned char b = *src--;
+            char c = ' ';
+            b &= 0x87;
+            switch( b )
+            {
+                case 0x81:   c = 'p';   break;
+                case 0x82:   c = 'n';   break;
+                case 0x83:   c = 'b';   break;
+                case 0x84:   c = 'r';   break;
+                case 0x85:   c = 'q';   break;
+                case 0x86:   c = 'k';   break;
+                case 0x01:   c = 'P';   break;
+                case 0x02:   c = 'N';   break;
+                case 0x03:   c = 'B';   break;
+                case 0x04:   c = 'R';   break;
+                case 0x05:   c = 'Q';   break;
+                case 0x06:   c = 'K';   break;
+            }
+            *dst-- = c;
+        }
+    }
+    cp.white = (*(sargon_mem_base+COLOR) == 0x00);
+    std::string s = cp.ToDebugStr(msg?msg:"");
+    return s;
+}
+
 void show_board_layout( const unsigned char *sargon_board, std::string msg )
 {
     printf( "%s\n", msg.c_str() );
@@ -234,6 +317,63 @@ void show_board_layout( const unsigned char *sargon_board, std::string msg )
     {
         for( int j=0; j<10; j++ )
             printf( "%02x%c", *p++, j+1<10?' ':'\n' );
+    }
+}
+
+unsigned int peekw(int offset)
+{
+    const unsigned char *addr = sargon_mem_base + offset;
+    const unsigned char lo = *addr++;
+    const unsigned char hi = *addr++;
+    unsigned int ret = hi;
+    ret = ret <<8;
+    ret += lo;
+    return ret;
+}
+
+unsigned char peekb(int offset)
+{
+    const unsigned char *addr = sargon_mem_base + offset;
+    unsigned int ret = *addr;
+    return ret;
+}
+
+void peek()
+{
+    printf( "MLPTRI = %04x\n", peekw(MLPTRI) );
+    printf( "MLPTRJ = %04x\n", peekw(MLPTRJ) );
+    printf( "MLLST  = %04x\n", peekw(MLLST) );
+    printf( "MLNXT  = %04x\n", peekw(MLNXT) );
+}
+
+std::string algebraic( unsigned int sq )
+{
+    std::string s = util::sprintf( "%d ??",sq);
+    if( sq >= 21 )
+    {
+        int rank = (sq-21)/10;     // eg a1=21 =0, h1=28=0, a2=31=1
+        int file = sq - (21 + (rank*10));
+        if( 0<=rank && rank<=7 && 0<=file && file<=7 )
+        {
+            s = util::sprintf( "%c%c", 'a'+file, '1'+rank );
+        }
+    }
+    return s;
+}
+
+void diagnostics()
+{
+    peek();
+    unsigned int p = peekw(MLPTRI);
+    printf( "MLPTRI chain\n" );
+    for( int i=0; i<50 && (p); i++ )
+    {
+        unsigned char from  = peekb(p+2);
+        unsigned char to    = peekb(p+3);
+        unsigned char flags = peekb(p+4);
+        unsigned char value = peekb(p+5);
+        p = peekw(p);
+        printf( "link=0x%04x, from=%s, to=%s flags=0x%02x value=%u\n", p, algebraic(from).c_str(), algebraic(to).c_str(), flags, value );
     }
 }
 
@@ -258,7 +398,7 @@ struct name_plus_parameters
     std::set<std::vector<std::string>> parameters;
 };
 
-static void convert( std::string fin, std::string asm_fout , std::string report_fout )
+static void convert( std::string fin, std::string asm_fout , std::string report_fout, std::string h_constants_fout )
 {
     std::ifstream in(fin);
     if( !in )
@@ -278,6 +418,12 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
         printf( "Error; Cannot open file %s for writing\n", asm_fout.c_str() );
         return;
     }
+    std::ofstream h_out(h_constants_fout);
+    if( !h_out )
+    {
+        printf( "Error; Cannot open file %s for writing\n", h_constants_fout.c_str() );
+        return;
+    }
     std::set<std::string> labels;
     std::map< std::string, std::vector<std::string> > equates;
     std::map< std::string, std::set<std::vector<std::string>> > instructions;
@@ -285,10 +431,10 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
     translate_init();
 
     // Each source line can optionally be transformed to Z80 mnemonics (or hybrid Z80 plus X86 registers mnemonics)
-    enum { transform_none, transform_z80, transform_hybrid } transform_switch = transform_hybrid;
+    enum { transform_none, transform_z80, transform_hybrid } transform_switch = transform_none;
 
     // After optional transformation, the original line can be kept, discarded or commented out
-    enum { original_keep, original_comment_out, original_discard } original_switch = original_comment_out;
+    enum { original_keep, original_comment_out, original_discard } original_switch = original_discard;
 
     // Generated equivalent code can optionally be generated, in various flavours
     enum { generate_x86, generate_z80, generate_hybrid, generate_none } generate_switch = generate_x86;
@@ -643,7 +789,11 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
             else if( stmt.label != "" && stmt.instruction=="" )
             {
                 if( data_mode )
+                {
                     asm_line_out = util::sprintf( "%s\tEQU\t%s", stmt.label.c_str(), str_location.c_str() );
+                    std::string c_include_line_out = util::sprintf( "const int %s = 0x%04x;", stmt.label.c_str(), track_location  );
+                    util::putline( h_out, c_include_line_out );
+                }
                 else
                     asm_line_out = stmt.label + ":";
                 if( stmt.comment != "" )
@@ -668,12 +818,7 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
                                       stmt.instruction == ".BYTE" || stmt.instruction == ".WORD")
                       )
                     {
-                        if( stmt.instruction == ".LOC" )
-                        {
-                            printf( "Error, .LOC not supported. Line: [%s]\n", line_original.c_str() );
-                            show_original = true;
-                        }
-                        else if( stmt.parameters.size() == 0 )
+                        if( stmt.parameters.size() == 0 )
                         {
                             printf( "Error, at least one parameter required. Line: [%s]\n", line_original.c_str() );
                             show_original = true;
@@ -689,8 +834,55 @@ static void convert( std::string fin, std::string asm_fout , std::string report_
                                 first = false;
                                 parameter_list += s;
                             }
+                            if( stmt.instruction == ".LOC" )
+                            {
+                                asm_line_out += util::sprintf( ";\tORG\t%s", parameter_list.c_str() );
+                                std::string s=stmt.parameters[0];
+                                unsigned int len = s.length();
+                                unsigned int base = 10;
+                                if( len>0 && (s[len-1]=='H' || s[len-1]=='h') )
+                                {
+                                    len--;
+                                    s = s.substr(0,len);
+                                    base = 16;
+                                }
+                                unsigned int accum=0;
+                                bool err = (len<1);
+                                for( char c: s )
+                                {
+                                    accum *= base;
+                                    if( '0'<=c && c<='9' )
+                                        accum += (c-'0');
+                                    else if( base==16 && 'a'<=c && c<='f' )
+                                        accum += (10+c-'a');
+                                    else if( base==16 && 'A'<=c && c<='F' )
+                                        accum += (10+c-'A');
+                                    else
+                                    {
+                                        err = true;
+                                        break;
+                                    }
+                                }
+                                if( err )
+                                {
+                                    printf( "Error, .LOC parameter is unparseable. Line: [%s]\n", line_original.c_str() );
+                                    show_original = true;
+                                }
+                                else if( accum < track_location )
+                                {
+                                    printf( "Error, .LOC parameter attempts unsupported reposition earlier in memory. Line: [%s]\n", line_original.c_str() );
+                                    show_original = true;
+                                }
+                                else if( accum > track_location )
+                                {
+                                    asm_line_out += util::sprintf( "\n\tDB\t%d\tDUP (?)", accum - track_location );
+                                }
+                                track_location = accum;
+                            }
                             if( stmt.label != "" )
                             {
+                                std::string c_include_line_out = util::sprintf( "const int %s = 0x%04x;", stmt.label.c_str(), track_location  );
+                                util::putline( h_out, c_include_line_out );
                                 asm_line_out = util::sprintf( "%s\tEQU\t%s", stmt.label.c_str(), str_location.c_str() );
                                 if( stmt.comment != "" )
                                 {

@@ -204,7 +204,8 @@ POSQ:   .BYTE   14,94
 ;               hold the scores at each ply. It includes two
 ;               "dummy" entries for ply -1 and ply 0.
 ;**********************************************************
-SCORE:  .WORD   0,0,0,0,0,0
+        .LOC    200h
+SCORE:  .WORD   0,0,0,0,0,0,0,0,0,0,0
 
 ;**********************************************************
 ; PLYIX --      Ply Table. Contains pairs of pointers, a pair
@@ -261,7 +262,7 @@ PLYIX:  .WORD   0,0,0,0,0,0,0,0,0,0
 ;_TABLE   ENDS
 ;_DATA    SEGMENT
 ;        .ENDIF
-;        .LOC    START+0
+        .LOC   300h
 M1:     .WORD   TBASE
 M2:     .WORD   TBASE
 M3:     .WORD   TBASE
@@ -425,6 +426,7 @@ LINECT: .BYTE   0       ; Current line number
 
 ;X p28
 ;        .LOC    START+3F0H      ;X START+300H
+        .LOC    400h
 MLIST:  .BLKB   4096
 MLEND:  .WORD   0
         .IF_16BIT
@@ -455,6 +457,8 @@ _DATA    ENDS
         .CODE
         .IF_X86
 _TEXT   SEGMENT        
+EXTERN  _inspect: PROC
+
 ;
 ; Miscellaneous stubs
 ;
@@ -554,11 +558,22 @@ SARGON   PROC
          cmp al,0
          jnz  around1
          call INITBD
-         jmp  around2
-around1: cmp al,1
+         jmp  api_exit
+around1: 
+         cmp al,1
          jnz  around2
+         ;call _inspect
+         ;db   "* Before CPTRMV", 0
          call CPTRMV
-around2: pop ebp
+         jmp  api_exit
+around2:
+         cmp al,2
+         jnz  around3
+         call ROYALT
+         jmp  api_exit
+around3:
+api_exit:
+         pop ebp
          pop edi
          pop esi
          pop edx
@@ -2022,6 +2037,8 @@ FM5:    LXI     H,NPLY  ; Address of ply counter
         XRA     A       ; Initialize mate flag
         STA     MATEF
         CALL    GENMOV  ; Generate list of moves
+        ;CALL    _inspect
+        ;db      "After GENMOV called",0
         LDA     NPLY    ; Current ply counter
         LXI     H,PLYMAX        ; Address of maximum ply number
         CMP     M       ; At max ply ?
@@ -3688,6 +3705,8 @@ _shim_function PROC
     jz      sf_00               ;yes, init board
     cmp     dword ptr [ebx],1   ;command = 1?
     jz      sf_01               ;yes, calculate move
+    cmp     dword ptr [ebx],2   ;command = 2?
+    jz      sf_02               ;yes, adjust kings and queens
     jmp     sf_end
 sf_00:
 ;   SUB     A               ; Code of White is zero
@@ -3711,6 +3730,10 @@ sf_01:
     mov byte ptr [ebp+MOVENO],al
 ;   CALL    CPTRMV          ; Make and write computers move
     mov al,1
+    call    SARGON
+    jmp     sf_end
+sf_02:
+    mov al,2
     call    SARGON
 sf_end:
     pop     edi
