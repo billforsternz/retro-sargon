@@ -29,6 +29,8 @@ BPAWN    EQU     BLACK+PAWN
 ; TABLES SECTION
 ;**********************************************************
 _DATA   SEGMENT
+PUBLIC  _sargon_base_address
+_sargon_base_address:
 base_address:
          DB      256     DUP (?)
 TBASE    EQU     0100h
@@ -557,69 +559,137 @@ Z80_LDAR MACRO                          ;to get random number
          popf
          ENDM
 
+;Z80_CPIR_OLD MACRO
+;cpir_1:  cmp     al,byte ptr [ebp+ebx]  ;Compare
+;         lahf
+;         dec     cx                 ;Counter decrements regardless
+;         inc     bx                 ;Address increments regardless
+;         sahf
+;         jz      cpir_2             ;End with Z set = found
+;         jcxz    cpir_2             ;End with Z not set = not found
+;         jmp     cpir_1             ;Else loop back
+;cpir_2:
+;         ENDM
+
 Z80_CPIR MACRO
-         cmp     al,byte ptr [ebp+ebx]  ;Compare
-         lahf
-         dec     cx                 ;Counter decrements regardless
+;CPIR reference, from the Zilog Z80 Users Manual
+;A - (HL), HL => HL+1, BC => BC - 1
+;If decrementing causes BC to go to 0 or if A = (HL), the instruction is terminated.
+;P/V is set if BC - 1 does not equal 0; otherwise, it is reset.
+;
+;So result of the subtraction discarded, but flags are set, (although CY unaffected).
+;*BUT* P flag (P/V flag in Z80 parlance as it serves double duty as an overflow
+;flag after some instructions in that CPU) reflects the result of decrementing BC
+;rather than A - (HL)
+;
+;We support reflecting the result in the Z and P flags. The possibilities are
+;Z=1 P=1 (Z and PE)  -> first match found, counter hasn't expired
+;Z=1 P=0 (Z and PO)  -> match found in last position, counter has expired
+;Z=0 P=0 (NZ and PO) -> no match found, counter has expired
+;
+;Notes on the parity bit
+;
+;Parity bit in flags is set if number of 1s in lsb is even
+;Parity bit in flags is cleared if number of 1s in lsb is odd
+;Mnemonics to jump if flag set (parity even);
+;8080: JPE dest
+;Z80:  JMP PE,dest
+;X86:  JP  dest
+;Mnemonics to jump if flag clear (parity odd);
+;8080: JPO dest
+;Z80:  JMP PO,dest
+;X86:  JNP dest
+;AH format after LAHF = SF:ZF:0:AF:0:PF:1:CF (so bit 6=ZF, bit 2=PF)
+
+cpir_1:  dec     cx                 ;Counter decrements regardless
          inc     bx                 ;Address increments regardless
-         sahf
-         jz      $+7                ;End with Z set = found
-         jcxz    $+5                ;End with Z not set = not found
-         jmp     $-15               ;Else loop back
+         cmp     al,byte ptr [ebp+ebx-1]  ;Compare
+         jcxz    cpir_2             ;Handle CX eq 0 and ne 0 separately
+
+         ;CX is not zero (common case)
+         jnz    cpir_1              ;continue search (common case)
+         xor    ah,ah               ;End with Z (found) and PE (counter hadn't expired)
+         jmp    cpir_end
+
+         ;CX is zero
+cpir_2:  mov    ah,42h              ;If Z, end with Z (found) and PO (counter expired)
+                                    ;01000010  Z is bit 6 set, PO is bit 2 clear
+                                    ;PF bit clear means PO
+                                    ;note respecting bit 1 always set after lahf
+                                    ;(hard to organise combination of Z and PO except by
+                                    ;using sahf because 0 has even parity)
+         jz     cpir_3              ;
+         mov    ah,02h              ;If NZ, end with NZ (not found) and PO (counter expired)
+cpir_3:  sahf                       
+cpir_end:
          ENDM
          
 ;Wrap all code in a PROC to get source debugging
-SARGON   PROC
-         push eax
-         push ebx
-         push ecx
-         push edx
-         push esi
-         push edi
-         push ebp
-         
+PUBLIC   _sargon
+_sargon  PROC
+         push   eax
+         push   ebx
+         push   ecx
+         push   edx
+         push   esi
+         push   edi
+         push   ebp              ;sp -> ebp,edi,esi,edx,ecx,ebx,eax,ret_addr,parm1,parm2
+                                 ;      +0, +4 ,+8, +12,+16,+20,+24,+28,    ,+32  ,+36
+         mov    ebp,[esp+36]     ;parm2 = ptr to REGS
          ;We are going to use 32 bit registers as 16 bit ptrs - hi 16 bits should always be zero
-         lea  ebp,base_address
-         and  eax,0ffh  ; keep al only
-         xor  ebx,ebx
-         xor  ecx,ecx
-         xor  edx,edx
-         xor  esi,esi
-         xor  edi,edi
+         xor    eax,eax
+         xor    ebx,ebx
+         xor    ecx,ecx
+         xor    edx,edx
+         xor    esi,esi
+         xor    edi,edi
+         cmp    ebp,0
+         jz     reg_1
+         mov    ax, word ptr [ebp];
+         mov    bx, word ptr [ebp+2];
+         mov    cx, word ptr [ebp+4];
+         mov    dx, word ptr [ebp+6];
+         mov    si, word ptr [ebp+8];
+         mov    di, word ptr [ebp+10];
+reg_1:   lea    ebp,base_address
+         cmp    dword ptr [esp+32],1     ;parm1 = command code, 1=INITBD etc
+         jz     api_1_INITBD
+         cmp    dword ptr [esp+32],2
+         jz     api_2_ROYALT
+         cmp    dword ptr [esp+32],3
+         jz     api_3_CPTRMV
+         jmp    api_end
 
-         ;Experiments
-         ;mov edx,4563h
-         ;CALL MLTPLY    ;-> 45h * 63h = 1aafh in al,dh
-         ;mov al,1ah
-         ;mov edx,0af63h
-         ;CALL DIVIDE    ;-> 1aafh / 63h = 45h in dh, 0 remainder in al
-    
-         ;Implement a kind of system call API, at least for now
-         cmp al,0
-         jnz  around1
-         call INITBD
-         jmp  api_exit
-around1: 
-         cmp al,1
-         jnz  around2
-         ;call _inspect
-         ;db   "* Before CPTRMV", 0
-         call CPTRMV
-         jmp  api_exit
-around2:
-         cmp al,2
-         jnz  around3
-         call ROYALT
-         jmp  api_exit
-around3:
-api_exit:
-         pop ebp
-         pop edi
-         pop esi
-         pop edx
-         pop ecx
-         pop ebx
-         pop eax
+api_1_INITBD:
+         sahf
+         call   INITBD
+         jmp    api_end
+api_2_ROYALT:
+         sahf
+         call   ROYALT
+         jmp    api_end
+api_3_CPTRMV:
+         sahf
+         call   CPTRMV
+         jmp    api_end
+
+api_end: mov    ebp,[esp+36]     ;parm2 = ptr to REGS
+         cmp    ebp,0
+         jz     reg_2
+         lahf
+         mov    word ptr [ebp], ax 
+         mov    word ptr [ebp+2], bx 
+         mov    word ptr [ebp+4], cx 
+         mov    word ptr [ebp+6], dx 
+         mov    word ptr [ebp+8], si 
+         mov    word ptr [ebp+10], di 
+reg_2:   pop    ebp
+         pop    edi
+         pop    esi
+         pop    edx
+         pop    ecx
+         pop    ebx
+         pop    eax
          ret
         
 ;**********************************************************
@@ -1423,8 +1493,7 @@ skip13:
          CMP     al,dh                  ; Same as attacking direction ?
          JNZ     PC5                    ; No - jump
 PC3:     Z80_EXAF                       ; Restore search parameters
-        cmp     cx,0    ; Don't have Z80 overflow flag sadly
-        jnz     PC1     ; Jump if search not complete
+         JPE     PC1                    ; Jump if search not complete
          RET                            ; Return
 PC5:     POP     eax                    ; Abnormal exit
          sahf
@@ -3299,68 +3368,7 @@ EX14:    POP     eax                    ; Restore registers
 ;**********************************************************
 MAKEMV: RET             ; Stubbed out for now
 
-SARGON  ENDP
-;
-; SHIM from C code
-;
-PUBLIC	_shim_function
-_shim_function PROC
-    push    ebp
-    mov     ebp,esp
-    push    ebx
-    push    ecx
-    push    edx
-    push    esi
-    push    edi
-    mov     ebx,[ebp+8]
-    lea     ebp,base_address
-    lea     eax,[ebp+BOARDA]
-    mov     dword ptr [ebx+4],eax
-    cmp     dword ptr [ebx],0   ;command = 0?
-    jz      sf_00               ;yes, init board
-    cmp     dword ptr [ebx],1   ;command = 1?
-    jz      sf_01               ;yes, calculate move
-    cmp     dword ptr [ebx],2   ;command = 2?
-    jz      sf_02               ;yes, adjust kings and queens
-    jmp     sf_end
-sf_00:
-;   SUB     A               ; Code of White is zero
-    sub al,al
-;   STA     COLOR           ; White always moves first
-    mov byte ptr [ebp+COLOR],al
-;   STA     KOLOR           ; Bring in computer's color
-    mov byte ptr [ebp+KOLOR],al
-;   CALL    INTERR          ; Players color/search depth
-;   call    INTERR
-    mov byte ptr [ebp+PLYMAX],5
-;   CALL    INITBD          ; Initialize board array
-    mov al,0
-    call    SARGON
-    jmp     sf_end
-sf_01:
-;   MVI     A,1             ; Move number is 1 at at start
-    mov al,1
-    add al,2 ;avoid book move
-;   STA     MOVENO          ; Save
-    mov byte ptr [ebp+MOVENO],al
-;   CALL    CPTRMV          ; Make and write computers move
-    mov al,1
-    call    SARGON
-    jmp     sf_end
-sf_02:
-    mov al,2
-    call    SARGON
-sf_end:
-    pop     edi
-    pop     esi
-    pop     edx
-    pop     ecx
-    pop     ebx
-    pop     ebp
-	ret
-_shim_function ENDP
-
-_TEXT    ENDS
+_sargon ENDP
+_TEXT   ENDS
 END
-
-        
+       

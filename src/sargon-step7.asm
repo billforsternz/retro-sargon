@@ -519,15 +519,69 @@ Z80_LDAR MACRO                          ;to get random number
          popf
          ENDM
 
+;Z80_CPIR_OLD MACRO
+;cpir_1:  cmp     al,byte ptr [ebp+ebx]  ;Compare
+;         lahf
+;         dec     cx                 ;Counter decrements regardless
+;         inc     bx                 ;Address increments regardless
+;         sahf
+;         jz      cpir_2             ;End with Z set = found
+;         jcxz    cpir_2             ;End with Z not set = not found
+;         jmp     cpir_1             ;Else loop back
+;cpir_2:
+;         ENDM
+
 Z80_CPIR MACRO
-         cmp     al,byte ptr [ebp+ebx]  ;Compare
-         lahf
-         dec     cx                 ;Counter decrements regardless
+;CPIR reference, from the Zilog Z80 Users Manual
+;A - (HL), HL => HL+1, BC => BC - 1
+;If decrementing causes BC to go to 0 or if A = (HL), the instruction is terminated.
+;P/V is set if BC - 1 does not equal 0; otherwise, it is reset.
+;
+;So result of the subtraction discarded, but flags are set, (although CY unaffected).
+;*BUT* P flag (P/V flag in Z80 parlance as it serves double duty as an overflow
+;flag after some instructions in that CPU) reflects the result of decrementing BC
+;rather than A - (HL)
+;
+;We support reflecting the result in the Z and P flags. The possibilities are
+;Z=1 P=1 (Z and PE)  -> first match found, counter hasn't expired
+;Z=1 P=0 (Z and PO)  -> match found in last position, counter has expired
+;Z=0 P=0 (NZ and PO) -> no match found, counter has expired
+;
+;Notes on the parity bit
+;
+;Parity bit in flags is set if number of 1s in lsb is even
+;Parity bit in flags is cleared if number of 1s in lsb is odd
+;Mnemonics to jump if flag set (parity even);
+;8080: JPE dest
+;Z80:  JMP PE,dest
+;X86:  JP  dest
+;Mnemonics to jump if flag clear (parity odd);
+;8080: JPO dest
+;Z80:  JMP PO,dest
+;X86:  JNP dest
+;AH format after LAHF = SF:ZF:0:AF:0:PF:1:CF (so bit 6=ZF, bit 2=PF)
+
+cpir_1:  dec     cx                 ;Counter decrements regardless
          inc     bx                 ;Address increments regardless
-         sahf
-         jz      $+7                ;End with Z set = found
-         jcxz    $+5                ;End with Z not set = not found
-         jmp     $-15               ;Else loop back
+         cmp     al,byte ptr [ebp+ebx-1]  ;Compare
+         jcxz    cpir_2             ;Handle CX eq 0 and ne 0 separately
+
+         ;CX is not zero (common case)
+         jnz    cpir_1              ;continue search (common case)
+         xor    ah,ah               ;End with Z (found) and PE (counter hadn't expired)
+         jmp    cpir_end
+
+         ;CX is zero
+cpir_2:  mov    ah,42h              ;If Z, end with Z (found) and PO (counter expired)
+                                    ;01000010  Z is bit 6 set, PO is bit 2 clear
+                                    ;PF bit clear means PO
+                                    ;note respecting bit 1 always set after lahf
+                                    ;(hard to organise combination of Z and PO except by
+                                    ;using sahf because 0 has even parity)
+         jz     cpir_3              ;
+         mov    ah,02h              ;If NZ, end with NZ (not found) and PO (counter expired)
+cpir_3:  sahf                       
+cpir_end:
          ENDM
          
 ;Wrap all code in a PROC to get source debugging
@@ -1315,12 +1369,7 @@ PC1:    CCIR            ; Search list for position
         CMP     D       ; Same as attacking direction ?
         JRNZ    PC5     ; No - jump
 PC3:    EXAF            ; Restore search parameters
-        .IF_Z80
         JPE     PC1     ; Jump if search not complete
-        .ELSE
-        cmp     cx,0    ; Don't have Z80 overflow flag sadly
-        jnz     PC1     ; Jump if search not complete
-        .ENDIF
         RET             ; Return
 PC5:    POP     PSW     ; Abnormal exit
         POP     D       ; Restore regs.
