@@ -28,7 +28,7 @@ void convert( std::string fin, std::string asm_fout,  std::string report_fout, s
 int main( int argc, const char *argv[] )
 {
 #if 1
-    convert("../src/sargon-step7.asm","../src/output-step7.asm", "../src/report-step7.txt", "../src/sargon-constants.h" );
+    convert("../src/sargon-step7.asm","../src/output-step7.asm", "../report-step7.txt", "../src/sargon-asm-interface.h" );
 #endif
 
 #if 0
@@ -92,6 +92,34 @@ void convert( std::string fin, std::string asm_fout , std::string report_fout, s
         printf( "Error; Cannot open file %s for writing\n", h_constants_fout.c_str() );
         return;
     }
+
+    util::putline( h_out, "// Automatically generated file - C interface to Sargon assembly language" );
+    util::putline( h_out, "extern \"C\" {" );
+    util::putline( h_out, "" );
+    util::putline( h_out, "    // First byte of Sargon data"  );
+    util::putline( h_out, "    extern unsigned char sargon_base_address;" );
+    util::putline( h_out, "" );
+    util::putline( h_out, "    // Calls to sargon() can set and read back registers" );
+    util::putline( h_out, "    struct z80_registers" );
+    util::putline( h_out, "    {" );
+    util::putline( h_out, "        uint16_t af;    // x86 = lo al, hi flags" );
+    util::putline( h_out, "        uint16_t hl;    // x86 = bx" );
+    util::putline( h_out, "        uint16_t bc;    // x86 = cx" );
+    util::putline( h_out, "        uint16_t de;    // x86 = dx" );
+    util::putline( h_out, "        uint16_t ix;    // x86 = si" );
+    util::putline( h_out, "        uint16_t iy;    // x86 = di" );
+    util::putline( h_out, "    };" );
+    util::putline( h_out, "" );
+    util::putline( h_out, "    // Call Sargon from C, call selected functions, optionally can set input" );
+    util::putline( h_out, "    //  input registers (and/or inspect returned registers)" );
+    util::putline( h_out, "    void sargon( int api_command_code, z80_registers *registers=NULL );" );
+    util::putline( h_out, "" );
+    util::putline( h_out, "    // Sargon calls C, parameters serves double duty - saved registers on the" );
+    util::putline( h_out, "    //  stack, can optionally be inspected by C program" );
+    util::putline( h_out, "    void callback( uint32_t parameters );" );
+    util::putline( h_out, "" );
+    util::putline( h_out, "    // Data offsets for peeking and poking" );
+    bool api_constants_detected = false;
     std::set<std::string> labels;
     std::map< std::string, std::vector<std::string> > equates;
     std::map< std::string, std::set<std::vector<std::string>> > instructions;
@@ -110,12 +138,16 @@ void convert( std::string fin, std::string asm_fout , std::string report_fout, s
     // .IF controls let us switch between three modes (currently)
     enum { mode_normal, mode_pass_thru, mode_suspended } mode = mode_normal;
 
+    // We can enable (or disable) callback to C++ code
+    bool callback_enabled = true;
+
     unsigned int track_location = 0;
     for(;;)
     {
         std::string line;
         if( !std::getline(in,line) )
             break;
+        util::rtrim(line);
         std::string line_original = line;
         util::replace_all(line,"\t"," ");
         statement stmt;
@@ -125,7 +157,6 @@ void convert( std::string fin, std::string asm_fout , std::string report_fout, s
         stmt.instruction = "";
         stmt.parameters.clear();
         stmt.comment = "";
-        util::rtrim(line);
         bool done = false;
 
         // Discards
@@ -371,7 +402,42 @@ void convert( std::string fin, std::string asm_fout , std::string report_fout, s
         }
         if( mode==mode_pass_thru && !handled )
         {
-            util::putline( asm_out, line_original );
+
+            // special handling of lines like "api_n_X:"
+            //  generate C code "const int api_X = n;"
+            size_t len = line_original.length();
+            size_t idx = 0;
+            if( len>=8 && line_original.substr(0,4)=="api_" )
+            {
+                if( line_original[len-1]==':' && '0'<=line_original[4] && line_original[4]<='9' )
+                {
+                    if( line_original[5] == '_' )
+                        idx = 6;
+                    else if( '0'<=line_original[5] && line_original[5]<='9' && line_original[6] == '_' )
+                        idx = 7;
+                }
+            }
+            if( idx > 0 )
+            {
+                std::string name = line_original.substr(idx,len-idx-1); // eg "api_1_Y:" len=8, idx=6 -> "Y"
+                std::string nbr  = line_original.substr(4,idx==6?1:2);  // eg api_23_Y:" idx=7 -> "23"
+                std::string h_line_out = util::sprintf( "    const int api_%s = %s;", name.c_str(), nbr.c_str() );
+                if( !api_constants_detected )
+                {
+                    api_constants_detected = true;
+                    util::putline( h_out, "" );
+                    util::putline( h_out, "    // API constants" );
+                }
+                util::putline( h_out, h_line_out );
+            }
+
+            // special handling of line "callback_enabled EQU X" (len=22)
+            std::string line_out = line_original;
+            if( line_original=="callback_enabled EQU 0" && callback_enabled )
+                line_out = "callback_enabled EQU 1";
+            else if( line_original=="callback_enabled EQU 1" && !callback_enabled )
+                line_out = "callback_enabled EQU 0";
+            util::putline( asm_out, line_out );
             continue;
         }
 
@@ -459,7 +525,7 @@ void convert( std::string fin, std::string asm_fout , std::string report_fout, s
                 if( data_mode )
                 {
                     asm_line_out = util::sprintf( "%s\tEQU\t%s", stmt.label.c_str(), str_location.c_str() );
-                    std::string c_include_line_out = util::sprintf( "const int %s = 0x%04x;", stmt.label.c_str(), track_location  );
+                    std::string c_include_line_out = util::sprintf( "    const int %s = 0x%04x;", stmt.label.c_str(), track_location  );
                     util::putline( h_out, c_include_line_out );
                 }
                 else
@@ -543,13 +609,13 @@ void convert( std::string fin, std::string asm_fout , std::string report_fout, s
                                 }
                                 else if( accum > track_location )
                                 {
-                                    asm_line_out += util::sprintf( "\n\tDB\t%d\tDUP (?)", accum - track_location );
+                                    asm_line_out += util::sprintf( "\n\tDB\t%d\tDUP (?)\t;Padding bytes to ORG location", accum - track_location );
                                 }
                                 track_location = accum;
                             }
                             if( stmt.label != "" )
                             {
-                                std::string c_include_line_out = util::sprintf( "const int %s = 0x%04x;", stmt.label.c_str(), track_location  );
+                                std::string c_include_line_out = util::sprintf( "    const int %s = 0x%04x;", stmt.label.c_str(), track_location  );
                                 util::putline( h_out, c_include_line_out );
                                 asm_line_out = util::sprintf( "%s\tEQU\t%s", stmt.label.c_str(), str_location.c_str() );
                                 if( stmt.comment != "" )
@@ -634,6 +700,7 @@ void convert( std::string fin, std::string asm_fout , std::string report_fout, s
             util::putline( asm_out, asm_line_out );
         }
     }
+    util::putline( h_out, "};" );
 
     // Summary report
     util::putline(out,"\nLABELS\n");

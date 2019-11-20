@@ -22,57 +22,76 @@
 #include <algorithm>
 #include "util.h"
 #include "thc.h"
-#include "sargon-constants.h"
+#include "sargon-asm-interface.h"
 #include "translate.h"
 
-void sargon_tests();
 unsigned char *sargon_format_position_create( const char *fen );
 std::string sargon_format_position_read( thc::ChessPosition &cp, const char *msg=0 );
 void show_board_layout( const unsigned char *sargon_board, std::string msg );
 void peek();
 void diagnostics();
 void pokeb( int offset, unsigned char b );
-
-struct z80_registers
-{
-    uint16_t af;    // x86 = lo al, hi flags
-    uint16_t hl;    // x86 = bx
-    uint16_t bc;    // x86 = cx
-    uint16_t de;    // x86 = dx
-    uint16_t ix;    // x86 = si
-    uint16_t iy;    // x86 = di
-};
-
-extern "C" {
-    extern unsigned char sargon_base_address;
-    void test_inspect();
-    void sargon( int api_command_code, z80_registers *registers=NULL );
-}
+void sargon_tests();
 
 // For peeking
 static unsigned char *sargon_mem_base;
 const int BOARD_SIZE    = 120;
 
-extern "C" {
-    void inspector( const char *msg )
+std::map<std::string,unsigned long> func_counts;
+void count_functions( const char *msg )
+{
+    std::string s(msg);
+    auto it = func_counts.find(s);
+    if( it == func_counts.end() )
+        func_counts[s] = 1;
+    else
+        it->second++;
+}
+
+void on_exit_diagnostics()
+{
+    for( auto it = func_counts.begin(); it != func_counts.end(); ++it )
     {
-        printf( "Sargon diagnostics callback %s\n", msg );
-        if( msg[0] == '*' )
-            peek();
-        else
-            diagnostics();
+        printf( "Callback %s called %lu times\n", it->first.c_str(), it->second );
+    }
+}
+
+extern "C" {
+    void callback( uint32_t parameters )
+    {
+        uint32_t *sp = &parameters;
+        //printf( "edi on stack at %p = 0x%08x\n", &sp[0], sp[0] );
+        //printf( "esi on stack at %p = 0x%08x\n", &sp[1], sp[1] );
+        //printf( "ebp on stack at %p = 0x%08x\n", &sp[2], sp[2] );
+        //printf( "esp on stack at %p = 0x%08x\n", &sp[3], sp[3] );
+        //printf( "ebx on stack at %p = 0x%08x\n", &sp[4], sp[4] );
+        //printf( "edx on stack at %p = 0x%08x\n", &sp[5], sp[5] );
+        //printf( "ecx on stack at %p = 0x%08x\n", &sp[6], sp[6] );
+        //printf( "eax on stack at %p = 0x%08x\n", &sp[7], sp[7] );
+        sp--;
+        uint32_t ret_addr = *sp;
+        //printf( "ret addr = 0x%08x\n", ret_addr );
+        const unsigned char *code = (const unsigned char *)ret_addr;
+        //printf( "jmp code = 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x\n",
+        //    code[0], code[1], code[2], code[3], code[4], code[5], code[6], code[7] );
+
+        // expecting 0xeb = 2 byte opcode, (0xeb + 8 bit relative jump),
+        //  if others skip over 4 operand bytes
+        const char *msg = ( code[0]==0xeb ? (char *)(code+2) : (char *)(code+6) );
+        count_functions(msg);
+        //printf( "Sargon diagnostics callback %s\n", msg );
+        //if( msg[0] == '*' )
+        //    peek();
+        //else
+        //    diagnostics();
     }
 }
 
 int main( int argc, const char *argv[] )
 {
     util::tests();
-
-#if 0
-    test_inspect();
-#endif
-
     sargon_tests();
+    on_exit_diagnostics();
 }
 
 void sargon_tests()
@@ -145,16 +164,16 @@ ff ff ff ff ff ff ff ff ff ff
     pokeb(COLOR,0);
     pokeb(KOLOR,0);
     pokeb(PLYMAX,5);
-    sargon(1);  // INITBD
+    sargon(api_INITBD);
     thc::ChessPosition cp;
     std::string s = sargon_format_position_read( cp, "Position after board initialised" );
     printf( "%s\n", s.c_str() );
     memcpy( sargon_board, test_position, BOARD_SIZE );
-    sargon(2);  // ROYALT
+    sargon(api_ROYALT);
     s = sargon_format_position_read( cp, "Position after test position set" );
     printf( "%s\n", s.c_str() );
     pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
-    sargon(3);  // CPTRMV
+    sargon(api_CPTRMV);
     s = sargon_format_position_read( cp, "Position after computer move made" );
     printf( "%s", s.c_str() );
     const unsigned char *q = sargon_move_made;

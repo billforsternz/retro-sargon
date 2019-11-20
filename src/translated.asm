@@ -11,7 +11,7 @@
         .686P
         .XMM
         .model  flat
-        
+
 ;**********************************************************
 ; EQUATES
 ;**********************************************************
@@ -207,7 +207,7 @@ POSQ     EQU     01d0h
 ;               "dummy" entries for ply -1 and ply 0.
 ;**********************************************************
 ;        ORG     200h
-         DB      45      DUP (?)
+         DB      45      DUP (?)        ;Padding bytes to ORG location
 SCORE    EQU     0200h
          DW      0,0,0,0,0,0,0,0,0,0,0
 
@@ -268,7 +268,7 @@ PLYIX    EQU     0216h
 ;_DATA    SEGMENT
 ;        .ENDIF
 ;        ORG     300h
-         DB      194     DUP (?)
+         DB      194     DUP (?)        ;Padding bytes to ORG location
 M1       EQU     0300h
          DW      TBASE
 M2       EQU     0302h
@@ -475,7 +475,7 @@ LINECT   EQU     0346h                  ; Current line number
 ;X p28
 ;        .LOC    START+3F0H      ;X START+300H
 ;        ORG     400h
-         DB      185     DUP (?)
+         DB      185     DUP (?)        ;Padding bytes to ORG location
 MLIST    EQU     0400h
          DB      4096    DUP (?)
 MLEND    EQU     01400h
@@ -488,18 +488,18 @@ MLTOP    EQU     PTRSIZ+1
 MLFLG    EQU     PTRSIZ+2
 MLVAL    EQU     PTRSIZ+3
          DB      100     DUP (?)
-        
+
 shadow_ax  dw   0
 shadow_bx  dw   0
 shadow_cx  dw   0
 shadow_dx  dw   0
 _DATA    ENDS
-        
+
 ;**********************************************************
 ; PROGRAM CODE SECTION
 ;**********************************************************
-_TEXT   SEGMENT        
-EXTERN  _inspect: PROC
+_TEXT   SEGMENT
+EXTERN  _callback: PROC
 
 ;
 ; Miscellaneous stubs
@@ -514,9 +514,27 @@ CARRET   MACRO                          ;todo
          ENDM
 
 ;
+; Callback into C++ code (for debugging, report on progress etc.)
+;
+callback_enabled EQU 1
+         IF callback_enabled
+CALLBACK MACRO   txt
+LOCAL    cb_end
+         pushad             ;save all registers, also can be inspected by callback()
+         call   _callback
+         jmp    cb_end
+         db     txt,0
+cb_end:  popad
+         ENDM
+         ELSE
+CALLBACK MACRO   txt
+         ENDM
+         ENDIF
+
+;
 ; Z80 Opcode emulation
-;         
-         
+;
+
 Z80_EXAF MACRO
          lahf
          xchg    ax,shadow_ax
@@ -601,6 +619,10 @@ Z80_CPIR MACRO
 ;X86:  JNP dest
 ;AH format after LAHF = SF:ZF:0:AF:0:PF:1:CF (so bit 6=ZF, bit 2=PF)
 
+LOCAL    cpir_1
+LOCAL    cpir_2
+LOCAL    cpir_3
+LOCAL    cpir_end
 cpir_1:  dec     cx                 ;Counter decrements regardless
          inc     bx                 ;Address increments regardless
          cmp     al,byte ptr [ebp+ebx-1]  ;Compare
@@ -620,10 +642,10 @@ cpir_2:  mov    ah,42h              ;If Z, end with Z (found) and PO (counter ex
                                     ;using sahf because 0 has even parity)
          jz     cpir_3              ;
          mov    ah,02h              ;If NZ, end with NZ (not found) and PO (counter expired)
-cpir_3:  sahf                       
+cpir_3:  sahf
 cpir_end:
          ENDM
-         
+
 ;Wrap all code in a PROC to get source debugging
 PUBLIC   _sargon
 _sargon  PROC
@@ -677,12 +699,12 @@ api_end: mov    ebp,[esp+36]     ;parm2 = ptr to REGS
          cmp    ebp,0
          jz     reg_2
          lahf
-         mov    word ptr [ebp], ax 
-         mov    word ptr [ebp+2], bx 
-         mov    word ptr [ebp+4], cx 
-         mov    word ptr [ebp+6], dx 
-         mov    word ptr [ebp+8], si 
-         mov    word ptr [ebp+10], di 
+         mov    word ptr [ebp], ax
+         mov    word ptr [ebp+2], bx
+         mov    word ptr [ebp+4], cx
+         mov    word ptr [ebp+6], dx
+         mov    word ptr [ebp+8], si
+         mov    word ptr [ebp+10], di
 reg_2:   pop    ebp
          pop    edi
          pop    esi
@@ -691,7 +713,7 @@ reg_2:   pop    ebp
          pop    ebx
          pop    eax
          ret
-        
+
 ;**********************************************************
 ; BOARD SETUP ROUTINE
 ;**********************************************************
@@ -2303,8 +2325,7 @@ FM5:     MOV     bx,NPLY                ; Address of ply counter
          XOR     al,al                  ; Initialize mate flag
          MOV     byte ptr [ebp+MATEF],al
          CALL    GENMOV                 ; Generate list of moves
-        ;CALL    _inspect
-        ;db      "After GENMOV called",0
+         CALLBACK  "After GENMOV called"
          MOV     al,byte ptr [ebp+NPLY] ; Current ply counter
          MOV     bx,PLYMAX              ; Address of maximum ply number
          CMP     al,byte ptr [ebp+ebx]  ; At max ply ?
@@ -2562,7 +2583,7 @@ BM9:     INC     byte ptr [ebp+ebx]     ; (P-Q4)
          INC     byte ptr [ebp+ebx]
          RET                            ; Return to CPTRMV
 
-        
+
 ;X p66
 ;**********************************************************
 ; GRAPHICS DATA BASE
@@ -2868,7 +2889,7 @@ BITASN:  SUB     al,al                  ; Get ready for division
 ;
 ; ARGUMENTS: -- None
 ;*****************************************************************
-        
+
 
 ;X p80
 ;**********************************************************
@@ -3076,7 +3097,7 @@ VA10:    MOV     al,1                   ; Set flag for invalid move
 ;X p86
 ;X p87
 
-        
+
 ;X p88
 ;*************************************************************
 ; UPDATE POSITIONS OF ROYALTY
@@ -3371,4 +3392,4 @@ MAKEMV: RET             ; Stubbed out for now
 _sargon ENDP
 _TEXT   ENDS
 END
-       
+

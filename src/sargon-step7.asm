@@ -459,7 +459,7 @@ _DATA    ENDS
         .CODE
         .IF_X86
 _TEXT   SEGMENT        
-EXTERN  _inspect: PROC
+EXTERN  _callback: PROC
 
 ;
 ; Miscellaneous stubs
@@ -472,6 +472,24 @@ PRTBLK   MACRO   name,len               ;todo
          ENDM
 CARRET   MACRO                          ;todo
          ENDM
+         
+;
+; Callback into C++ code (for debugging, report on progress etc.)
+;
+callback_enabled EQU 1
+         IF callback_enabled
+CALLBACK MACRO   txt
+LOCAL    cb_end
+         pushad             ;save all registers, also can be inspected by callback()
+         call   _callback
+         jmp    cb_end
+         db     txt,0
+cb_end:  popad
+         ENDM
+         ELSE
+CALLBACK MACRO   txt
+         ENDM
+         ENDIF
 
 ;
 ; Z80 Opcode emulation
@@ -561,6 +579,10 @@ Z80_CPIR MACRO
 ;X86:  JNP dest
 ;AH format after LAHF = SF:ZF:0:AF:0:PF:1:CF (so bit 6=ZF, bit 2=PF)
 
+LOCAL    cpir_1
+LOCAL    cpir_2
+LOCAL    cpir_3
+LOCAL    cpir_end
 cpir_1:  dec     cx                 ;Counter decrements regardless
          inc     bx                 ;Address increments regardless
          cmp     al,byte ptr [ebp+ebx-1]  ;Compare
@@ -2102,8 +2124,7 @@ FM5:    LXI     H,NPLY  ; Address of ply counter
         XRA     A       ; Initialize mate flag
         STA     MATEF
         CALL    GENMOV  ; Generate list of moves
-        ;CALL    _inspect
-        ;db      "After GENMOV called",0
+        CALLBACK "After GENMOV called"
         LDA     NPLY    ; Current ply counter
         LXI     H,PLYMAX        ; Address of maximum ply number
         CMP     M       ; At max ply ?

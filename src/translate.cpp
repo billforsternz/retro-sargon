@@ -1210,6 +1210,7 @@ void translate_init()
     //
     xlat["CARRET"] = { "CARRET", "CARRET", NULL, none };
     xlat["PRTBLK"] = { "PRTBLK\t%s", "PRTBLK\t%s", NULL, echo };
+    //xlat["CALLBACK"] = { "CALLBACK\t%s", "CALLBACK\t%s", NULL, echo };
 
     //
     // Directives
