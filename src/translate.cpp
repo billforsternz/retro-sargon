@@ -891,47 +891,6 @@ bool translate_x86( const std::string &line, const std::string &instruction, con
     return true;
 }
 
-std::string detabify( const std::string &s )
-{
-    std::string ret;
-    int idx=0;
-    int len = s.length();
-    for( int i=0; i<len; i++ )
-    {
-        char c = s[i];
-        if( c == '\n' )
-        {
-            ret += c;
-            idx = 0;
-        }
-        else if( c == '\t' )
-        {
-            int comment_column = ( i+1<len && s[i+1]==';' ) ? 40 : 0;
-            int tab_stops[] = {9,17,25,33,41,49,100};
-            for( int j=0; j<sizeof(tab_stops)/sizeof(tab_stops[0]); j++ )
-            {
-                if( comment_column>0 || idx<tab_stops[j] )
-                {
-                    int col = comment_column>0 ? comment_column : tab_stops[j];
-                    if( idx >= col )
-                        col = idx+1;
-                    while( idx < col )
-                    {
-                        ret += ' ';
-                        idx++;
-                    }
-                    break;
-                }
-            }
-        }
-        else
-        {
-            ret += c;
-            idx++;
-        }
-    }
-    return ret;
-}
 
 
 void translate_init()
