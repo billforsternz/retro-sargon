@@ -1905,8 +1905,8 @@ rel013:  MOV     ch,al                  ; Save it
          JZ      rel014                 ; Yes - jump
          DEC     al                     ; Decrement it
          SHR     al,1                   ; Divide it by 2
-         SUB     al,ch                  ; Subtract points lost
-rel014:  MOV     bx,COLOR               ; Color of side just moved ???
+rel014:  SUB     al,ch                  ; Subtract points lost
+         MOV     bx,COLOR               ; Color of side just moved ???
          TEST    byte ptr [ebp+ebx],80h ; Is it white ?
          JZ      rel015                 ; Yes - jump
          NEG     al                     ; Negate for black
