@@ -23,27 +23,94 @@
 #include "util.h"
 #include "translate.h"
 
-void convert( std::string fin, std::string asm_fout,  std::string report_fout, std::string h_constants_fout );
+void convert( std::string fin, std::string asm_fout,  std::string report_fout, std::string asm_interface_fout );
+std::string detabify( const std::string &s );
+
+// Each source line can optionally be transformed to Z80 mnemonics (or hybrid Z80 plus X86 registers mnemonics)
+enum transform_t { transform_none, transform_z80, transform_hybrid };
+static transform_t transform_switch = transform_none;
+
+// After optional transformation, the original line can be kept, discarded or commented out
+enum original_t { original_keep, original_comment_out, original_discard };
+original_t original_switch = original_discard;
+
+// Generated equivalent code can optionally be generated, in various flavours
+enum generate_t { generate_x86, generate_z80, generate_hybrid, generate_none };
+generate_t generate_switch = generate_x86;
 
 int main( int argc, const char *argv[] )
 {
-#if 1
-    convert("../src/sargon-step7.asm","../src/output-step7.asm", "../report-step7.txt", "../src/sargon-asm-interface.h" );
-#endif
-
 #if 0
-    bool ok = (argc==4);
+    transform_switch = transform_z80;
+    generate_switch = generate_none;
+    original_switch = original_keep;
+    convert("../original/sargon3.asm","../original/sargon4.asm", "../original/sargon-step4.asm-report.txt", "../original/sargon-step4.asm-asm-interface.h" );
+    //convert("../src/sargon-step7.asm","../src/output-step7.asm", "../sargon-step7.asm-report.txt", "../src/sargon-step7.asm-asm-interface.h" );
+    return 0;
+#endif
+    const char *usage=
+    "Read, understand, convert sargon source code\n"
+    "Usage:\n"
+    " convert [switches] sargon.asm sargon-out.asm [report.txt] [asm-interface.h]\n"
+    "Switches:\n"
+    "Each source line can optionally be transformed to Z80 mnemonics (or hybrid Z80 plus X86 registers mnemonics)\n"
+    " so -transform_none or -transform_z80 or -transform_hybrid, default is -transform_none\n"
+    "After optional transformation, the original line can be kept, discarded or commented out\n"
+    " so -original_keep or -original_comment_out or -original_discard, default is -original_discard\n"
+    "Generated equivalent code can optionally be generated, in various flavours\n"
+    " so -generate_x86 or -generate_z80 or -generate_hybrid or -generate_none, default is -generate_x86\n"
+    "Note that all three output files will be generated, if the optional output filenames aren't\n"
+    "provided, names will be auto generated from the main output filename";
+    int argi = 1;
+    while( argc >= 2)
+    {
+        std::string arg( argv[argi] );
+        if( arg[0] != '-' )
+            break;
+        else
+        {
+            if( arg == "-transform_none" )
+                transform_switch = transform_none;
+            else if( arg == "-transform_z80" )
+                transform_switch = transform_z80;
+            else if( arg == "-transform_hybrid" )
+                transform_switch = transform_hybrid;
+            else if( arg == "-original_keep" )
+                original_switch = original_keep;
+            else if( arg == "-original_discard" )
+                original_switch =original_discard;
+            else if( arg == "-original_comment_out" )
+                original_switch = original_comment_out;
+            else if( arg == "-generate_x86" )
+                generate_switch = generate_x86;
+            else if( arg == "-generate_z80" )
+                generate_switch = generate_z80;
+            else if( arg == "-generate_hybrid" )
+                generate_switch = generate_hybrid;
+            else if( arg == "-generate_none" )
+                generate_switch = generate_none;
+            else
+            {
+                printf( "Unknown switch %s\n", arg.c_str() );
+                printf( "%s\n", usage );
+                return -1;
+            }
+        }
+        argc--;
+        argi++;
+    }
+    bool ok = (argc==3 || argc==4 || argc==5);
     if( !ok )
     {
-        printf(
-            "Read, understand, convert sargon source code\n"
-            "Usage:\n"
-            " convert sargon.asm sargon-out.asm report.txt\n"
-        );
+        printf( "%s\n", usage );
         return -1;
     }
-    convert(argv[1],argv[2],argv[3]);
-#endif
+    std::string fin ( argv[argi] );
+    std::string fout( argv[argi+1] );
+    std::string report_fout = argc>=4 ? argv[argi+2] : fout + "-report.txt";
+    std::string asm_interface_fout = argc>=5 ? argv[argi+3] : fout + "-asm-interface.h";
+    printf( "convert(%s,%s,%s,%s)\n", fin.c_str(), fout.c_str(), report_fout.c_str(), asm_interface_fout.c_str() );
+    convert(fin,fout,report_fout,asm_interface_fout);
 }
 
 enum statement_typ {empty, discard, illegal, comment_only, comment_only_indented, directive, equate, normal};
@@ -66,7 +133,7 @@ struct name_plus_parameters
     std::set<std::vector<std::string>> parameters;
 };
 
-void convert( std::string fin, std::string asm_fout , std::string report_fout, std::string h_constants_fout )
+void convert( std::string fin, std::string fout, std::string report_fout, std::string asm_interface_fout )
 {
     std::ifstream in(fin);
     if( !in )
@@ -74,22 +141,22 @@ void convert( std::string fin, std::string asm_fout , std::string report_fout, s
         printf( "Error; Cannot open file %s for reading\n", fin.c_str() );
         return;
     }
-    std::ofstream out(report_fout);
-    if( !out )
+    std::ofstream asm_out(fout);
+    if( !asm_out )
+    {
+        printf( "Error; Cannot open file %s for writing\n", fout.c_str() );
+        return;
+    }
+    std::ofstream report_out(report_fout);
+    if( !report_out )
     {
         printf( "Error; Cannot open file %s for writing\n", report_fout.c_str() );
         return;
     }
-    std::ofstream asm_out(asm_fout);
-    if( !asm_out )
-    {
-        printf( "Error; Cannot open file %s for writing\n", asm_fout.c_str() );
-        return;
-    }
-    std::ofstream h_out(h_constants_fout);
+    std::ofstream h_out(asm_interface_fout);
     if( !h_out )
     {
-        printf( "Error; Cannot open file %s for writing\n", h_constants_fout.c_str() );
+        printf( "Error; Cannot open file %s for writing\n", asm_interface_fout.c_str() );
         return;
     }
 
@@ -111,7 +178,7 @@ void convert( std::string fin, std::string asm_fout , std::string report_fout, s
     util::putline( h_out, "    };" );
     util::putline( h_out, "" );
     util::putline( h_out, "    // Call Sargon from C, call selected functions, optionally can set input" );
-    util::putline( h_out, "    //  input registers (and/or inspect returned registers)" );
+    util::putline( h_out, "    //  registers (and/or inspect returned registers)" );
     util::putline( h_out, "    void sargon( int api_command_code, z80_registers *registers=NULL );" );
     util::putline( h_out, "" );
     util::putline( h_out, "    // Sargon calls C, parameters serves double duty - saved registers on the" );
@@ -126,20 +193,11 @@ void convert( std::string fin, std::string asm_fout , std::string report_fout, s
     bool data_mode = true;
     translate_init();
 
-    // Each source line can optionally be transformed to Z80 mnemonics (or hybrid Z80 plus X86 registers mnemonics)
-    enum { transform_none, transform_z80, transform_hybrid } transform_switch = transform_none;
-
-    // After optional transformation, the original line can be kept, discarded or commented out
-    enum { original_keep, original_comment_out, original_discard } original_switch = original_discard;
-
-    // Generated equivalent code can optionally be generated, in various flavours
-    enum { generate_x86, generate_z80, generate_hybrid, generate_none } generate_switch = generate_x86;
+    // We can enable (or disable) callback to C++ code
+    bool callback_enabled = true;
 
     // .IF controls let us switch between three modes (currently)
     enum { mode_normal, mode_pass_thru, mode_suspended } mode = mode_normal;
-
-    // We can enable (or disable) callback to C++ code
-    bool callback_enabled = true;
 
     unsigned int track_location = 0;
     for(;;)
@@ -348,7 +406,7 @@ void convert( std::string fin, std::string asm_fout , std::string report_fout, s
             }
         }
         if( !done && mode==mode_normal )
-            util::putline(out,line_out);
+            util::putline(report_out,line_out);
 
         // My invented directives
         bool handled=false;
@@ -400,6 +458,8 @@ void convert( std::string fin, std::string asm_fout , std::string report_fout, s
                 handled = true;         
             }
         }
+
+        // Pass through new X86 code
         if( mode==mode_pass_thru && !handled )
         {
 
@@ -420,7 +480,7 @@ void convert( std::string fin, std::string asm_fout , std::string report_fout, s
             if( idx > 0 )
             {
                 std::string name = line_original.substr(idx,len-idx-1); // eg "api_1_Y:" len=8, idx=6 -> "Y"
-                std::string nbr  = line_original.substr(4,idx==6?1:2);  // eg api_23_Y:" idx=7 -> "23"
+                std::string nbr  = line_original.substr(4,idx==6?1:2);  // eg "api_23_Y:" idx=7 -> "23"
                 std::string h_line_out = util::sprintf( "    const int api_%s = %s;", name.c_str(), nbr.c_str() );
                 if( !api_constants_detected )
                 {
@@ -431,7 +491,7 @@ void convert( std::string fin, std::string asm_fout , std::string report_fout, s
                 util::putline( h_out, h_line_out );
             }
 
-            // special handling of line "callback_enabled EQU X" (len=22)
+            // special handling of line "callback_enabled EQU X"
             std::string line_out = line_original;
             if( line_original=="callback_enabled EQU 0" && callback_enabled )
                 line_out = "callback_enabled EQU 1";
@@ -703,12 +763,12 @@ void convert( std::string fin, std::string asm_fout , std::string report_fout, s
     util::putline( h_out, "};" );
 
     // Summary report
-    util::putline(out,"\nLABELS\n");
+    util::putline(report_out,"\nLABELS\n");
     for( const std::string &s: labels )
     {
-        util::putline(out,s);
+        util::putline(report_out,s);
     }
-    util::putline(out,"\nEQUATES\n");
+    util::putline(report_out,"\nEQUATES\n");
     for( const std::pair<std::string,std::vector<std::string>> &p: equates )
     {
         std::string s;
@@ -721,14 +781,14 @@ void convert( std::string fin, std::string asm_fout , std::string report_fout, s
             init = false;
             s += t;
         }
-        util::putline(out,s);
+        util::putline(report_out,s);
     }
-    util::putline(out,"\nINSTRUCTIONS\n");
+    util::putline(report_out,"\nINSTRUCTIONS\n");
     for( const std::pair<std::string,std::set<std::vector<std::string>> > &p: instructions )
     {
         std::string s;
         s += p.first;
-        util::putline(out,s);
+        util::putline(report_out,s);
         for( const std::vector<std::string> &v: p.second )
         {
             s = " >";
@@ -739,8 +799,52 @@ void convert( std::string fin, std::string asm_fout , std::string report_fout, s
                 init = false;
                 s += t;
             }
-            util::putline(out,s);
+            util::putline(report_out,s);
         }
     }
 }
 
+std::string detabify( const std::string &s )
+{
+    std::string ret;
+    int idx=0;
+    int len = s.length();
+    for( int i=0; i<len; i++ )
+    {
+        char c = s[i];
+        if( c == '\n' )
+        {
+            ret += c;
+            idx = 0;
+        }
+        else if( c == '\t' )
+        {
+            int comment_column   = ( i+1<len && s[i+1]==';' ) ? 32 : 0;
+            int tab_stops[]      = {8,16,24,32,40,48,100};
+            int tab_stops_wide[] = {9,17,25,33,41,49,100};
+            bool wide = (original_switch == original_comment_out);
+            int *stops = wide ? tab_stops_wide : tab_stops;
+            for( int j=0; j<sizeof(tab_stops)/sizeof(tab_stops[0]); j++ )
+            {
+                if( comment_column>0 || idx<stops[j] )
+                {
+                    int col = comment_column>0 ? comment_column : stops[j];
+                    if( idx >= col )
+                        col = idx+1;
+                    while( idx < col )
+                    {
+                        ret += ' ';
+                        idx++;
+                    }
+                    break;
+                }
+            }
+        }
+        else
+        {
+            ret += c;
+            idx++;
+        }
+    }
+    return ret;
+}
