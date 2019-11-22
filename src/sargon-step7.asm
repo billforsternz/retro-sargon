@@ -1749,8 +1749,8 @@ rel013: MOV     B,A     ; Save it
         JRZ     rel014  ; Yes - jump
         DCR     A       ; Decrement it
         SRLR    A       ; Divide it by 2
-        SUB     B       ; Subtract points lost
-rel014: LXI     H,COLOR ; Color of side just moved ???
+rel014: SUB     B       ; Subtract points lost
+        LXI     H,COLOR ; Color of side just moved ???
         BIT     7,M     ; Is it white ?
         JRZ     rel015  ; Yes - jump
         NEG             ; Negate for black
