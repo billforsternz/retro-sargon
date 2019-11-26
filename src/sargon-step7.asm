@@ -537,18 +537,6 @@ Z80_LDAR MACRO                          ;to get random number
          popf
          ENDM
 
-;Z80_CPIR_OLD MACRO
-;cpir_1:  cmp     al,byte ptr [ebp+ebx]  ;Compare
-;         lahf
-;         dec     cx                 ;Counter decrements regardless
-;         inc     bx                 ;Address increments regardless
-;         sahf
-;         jz      cpir_2             ;End with Z set = found
-;         jcxz    cpir_2             ;End with Z not set = not found
-;         jmp     cpir_1             ;Else loop back
-;cpir_2:
-;         ENDM
-
 Z80_CPIR MACRO
 ;CPIR reference, from the Zilog Z80 Users Manual
 ;A - (HL), HL => HL+1, BC => BC - 1
