@@ -31,6 +31,7 @@ void show_board_layout( const unsigned char *sargon_board, std::string msg );
 void peek();
 void diagnostics();
 void pokeb( int offset, unsigned char b );
+unsigned char peekb(int offset);
 void sargon_tests();
 
 // For peeking
@@ -156,14 +157,22 @@ ff ff ff ff ff ff ff ff ff ff
                                                                                         //  Now fixed! after adding call to ROYALT() after setting position
     const char *pos5 = "r4r2/6kp/2pqppp1/p1R5/b2P4/4QN2/1P3PPP/2R3K1 w - - 0 1";        // CTWBFK Pos 29, page 77 - solution Qe3-a3. Quite difficult!
     const char *pos6 = "2rq1r1k/3npp1p/3p1n1Q/pp1P2N1/8/2P4P/1P4P1/R4R1K w - - 0 1";    // CTWBFK Pos 11, page 68 - solution Rf1xf6. Sadly Sargon doesn't solve this one
-    unsigned char *test_position = sargon_format_position_create( pos5 );
+                                                                                        //  It now does! At PLYMAX=7, takes about 5 mins 45 secs
+    const char *pos7 = "8/8/q2pk3/2p5/8/3N4/8/4K2R w K - 0 1";      // White has Nc3xd5+ pulling victory from the jaws of defeat 
+                                                                    //  It's seen at PLYMAX=3, not seen at PLYMAX=2
+                                                                    //  It's a kind of 5 ply calculation (on the 5th half move White captures the queen
+                                                                    //  which is the only justification for the sac on the 1st half move) - so maybe
+                                                                    //  add 2 to convert PLYMAX to calculation depth
+    const char *pos8 = "3k4/8/8/7P/8/8/1p6/1K6 w - - 0 1";  // Pawn outside the square needs PLYMAX=5 to solve
+    const char *pos9 = "2k5/8/8/8/7P/8/1p6/1K6 w - - 0 1";  // Pawn one further step back needs, as expected PLYMAX=7 to solve
+    unsigned char *test_position = sargon_format_position_create( pos6 );
 
     sargon_mem_base = &sargon_base_address;
     unsigned char *sargon_board = sargon_mem_base + BOARDA;
     const unsigned char *sargon_move_made = sargon_mem_base + MVEMSG;
     pokeb(COLOR,0);
     pokeb(KOLOR,0);
-    pokeb(PLYMAX,5);
+    pokeb(PLYMAX,7);
     sargon(api_INITBD);
     thc::ChessPosition cp;
     std::string s = sargon_format_position_read( cp, "Position after board initialised" );
@@ -178,6 +187,17 @@ ff ff ff ff ff ff ff ff ff ff
     printf( "%s", s.c_str() );
     const unsigned char *q = sargon_move_made;
     printf( "\nMove made is: %c%c-%c%c\n", q[0],q[1],q[2],q[3] );
+    int offset = MLEND;
+    while( offset > 0 )
+    {
+        unsigned char b = peekb(offset);
+        if( b )
+        {
+            printf("Last non-zero in memory is addr=0x%04x data=0x%02x\n", offset, b );
+            break;
+        }
+        offset--;
+    }
 }
 
 unsigned char *sargon_format_position_create( const char *fen )
