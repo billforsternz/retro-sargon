@@ -40,12 +40,12 @@ generate_t generate_switch = generate_x86;
 
 int main( int argc, const char *argv[] )
 {
-#if 0
-    transform_switch = transform_z80;
-    generate_switch = generate_none;
-    original_switch = original_keep;
-    convert("../original/sargon3.asm","../original/sargon4.asm", "../original/sargon-step4.asm-report.txt", "../original/sargon-step4.asm-asm-interface.h" );
-    //convert("../src/sargon-step7.asm","../src/output-step7.asm", "../sargon-step7.asm-report.txt", "../src/sargon-step7.asm-asm-interface.h" );
+#if 1
+    //transform_switch = transform_z80;
+    //generate_switch = generate_none;
+    //original_switch = original_keep;
+    //convert("../original/sargon3.asm","../original/sargon4.asm", "../original/sargon-step4.asm-report.txt", "../original/sargon-step4.asm-asm-interface.h" );
+    convert("../src/sargon-step8.asm","../src/translated.asm","../src/translated.asm-report.txt","../src/translated.asm-asm-interface.h");
     return 0;
 #endif
     const char *usage=
@@ -501,6 +501,9 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
             continue;
         }
 
+        if( mode == mode_suspended  )
+            continue;
+
         // Generate assembly language output
         switch( stmt.typ )
         {
@@ -514,7 +517,7 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
         if( stmt.typ!=normal && stmt.typ!=equate )
             continue;
 
-        if( handled || mode == mode_suspended  || mode == mode_pass_thru )
+        if( handled || mode == mode_pass_thru )
             continue;
 
         // Optionally transform source lines to Z80 mnemonics
