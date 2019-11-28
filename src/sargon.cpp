@@ -146,50 +146,138 @@ void probe_test_prime( const thc::ChessPosition &cp )
 {
 
 /*
-0-----+-----1-----+-----3-----+-------5
-      |  1.a4     |   1...g5  |    2.b4
-      |           |           |     
-      |           |           +-------6
-      |           |                2.a5
-      |           |               
-      |           +-----4-----+-------7
-      |              1...h5   |    2.b4
-      |                       |     
-      |                       +-------8
-      |                            2.a5
-      |                           
-      +-----2-----+-----9-----+-------11
-         1.b4     |  1...g5   |     2.a4
-                  |           |     
-                  |           +-------12
-                  |                 2.b5
-                  |             
-                  +-----10----+-------13
-                     1...h5   |     2.a4
-                              |     
-                              +-------14
-                                    2.b5
+
+Example 1, no Alpha Beta pruning (move played is 1.b4, value 3.0)
+
+     <-MAX       <-MIN       <-MAX
+
+0-------+-----1-----+-----3-----+------5 
+0.0->3.0|   1.a4    |   1...g5  |    2.b4
+        | 6.0->2.0  |  6.0->5.0 |       5.0
+        |           |           |     <-5.0
+        |           |           |     
+        |           |           +------6 
+        |           |                2.a5
+        |           |                   4.0
+        |           |               
+        |           |               
+        |           +-----4-----+------7 
+        |              1...h5   |    2.b4
+        |              4.0->2.0 |       1.0
+        |                 <-2.0 |        
+        |                       |     
+        |                       +------8 
+        |                            2.a5
+        |                               2.0
+        |                             <-2.0
+        |                           
+        +------2----+-----9-----+------11
+            1.b4    |  1...g5   |    2.a4
+          6.0->3.0  |  6.0->4.0 |       4.0
+             <-3.0  |           |     <-4.0
+                    |           |    
+                    |           |    
+                    |           +------12
+                    |                2.b5
+                    |                   3.0
+                    |             
+                    |             
+                    |             
+                    +-----10----+------13
+                       1...h5   |    2.a4
+                       4.0->3.0 |       1.0
+                          <-3.0 |    
+                                |    
+                                |    
+                                +------14
+                                     2.b5
+                                        3.0
+                                      <-3.0
+
 
 */
-    unsigned int a4  = sargon_value_import(-3.0);
-    unsigned int b4  = sargon_value_import(3.0);
     values["root"]   = sargon_value_import(0.0);
-    values["a4"]     = a4;
-    values["a4g5"]   = a4;
-    values["a4g5b4"] = a4;
-    values["a4g5a5"] = a4;
-    values["a4h5"]   = a4;
-    values["a4h5b4"] = a4;
-    values["a4h5a5"] = a4;
-    values["b4"]     = b4;
-    values["b4g5"]   = b4;
-    values["b4g5a4"] = b4;
-    values["b4g5b5"] = b4;
-    values["b4h5"]   = b4;
-    values["b4h5a4"] = b4;
-    values["b4h5b5"] = b4;
+    values["a4"]     = sargon_value_import(6.0);
+    values["a4g5"]   = sargon_value_import(6.0);
+    values["a4g5b4"] = sargon_value_import(5.0);
+    values["a4g5a5"] = sargon_value_import(4.0);
+    values["a4h5"]   = sargon_value_import(4.0);
+    values["a4h5b4"] = sargon_value_import(1.0);
+    values["a4h5a5"] = sargon_value_import(2.0);
+    values["b4"]     = sargon_value_import(6.0);
+    values["b4g5"]   = sargon_value_import(6.0);
+    values["b4g5a4"] = sargon_value_import(4.0);
+    values["b4g5b5"] = sargon_value_import(3.0);
+    values["b4h5"]   = sargon_value_import(4.0);
+    values["b4h5a4"] = sargon_value_import(1.0);
+    values["b4h5b5"] = sargon_value_import(3.0);
+
+/*
+
+Example 2, Alpha Beta pruning (move played is 1.a4, value 5.0)
+
+     <-MAX       <-MIN       <-MAX
+
+0-------+-----1-----+-----3-----+------5 
+0.0->5.0|   1.a4    |   1...g5  |    2.b4
+        | 6.0->5.0  |  6.0->5.0 |       5.0
+        |    <-5.0  |     <-5.0 |     <-5.0
+        |           |           |     
+        |           |           +------6 
+        |           |                2.a5
+        |           |                   4.0
+        |           |               
+        |           |               
+        |           +-----4-----+------7 
+        |              1...h5   |    2.b4
+        |              4.0      |      11.0  Cutoff 11.0>5.0, guarantees 4,7,8 won't affect score of
+        |                       |            node 1 (nodes marked with * not evaluated)
+        |                       |     
+        |                       +------8*
+        |                                  
+        |                                  
+        |                                  
+        |                           
+        +------2----+-----9-----+------11
+            1.b4    |  1...g5   |    2.a4
+          6.0->4.0  |  6.0->4.0 |       4.0
+                    |     <-4.0 |     <-4.0
+                    |           |    
+                    |           |    
+                    |           +------12
+                    |                2.b5
+                    |                   3.0  Cutoff, at this point we can be sure node 2 is going to be
+                    |                        4.0 or lower, irrespective of nodes 10,13,14, therefore
+                    |                        node 2 cannot beat node 1
+                    |             
+                    +-----10----+------13*
+                       1...h5   |    2.a4
+                       4.0      |          
+                                |    
+                                |    
+                                |    
+                                +------14*
+                                     2.b5
+                                           
+                                           
 
 
+*/
+    values["root"]   = sargon_value_import(0.0);
+    values["a4"]     = sargon_value_import(6.0);
+    values["a4g5"]   = sargon_value_import(6.0);
+    values["a4g5b4"] = sargon_value_import(5.0);
+    values["a4g5a5"] = sargon_value_import(4.0);
+    values["a4h5"]   = sargon_value_import(4.0);
+    values["a4h5b4"] = sargon_value_import(11.0);
+    values["a4h5a5"] = sargon_value_import(2.0);
+    values["b4"]     = sargon_value_import(6.0);
+    values["b4g5"]   = sargon_value_import(6.0);
+    values["b4g5a4"] = sargon_value_import(4.0);
+    values["b4g5b5"] = sargon_value_import(3.0);
+    values["b4h5"]   = sargon_value_import(4.0);
+    values["b4h5a4"] = sargon_value_import(1.0);
+    values["b4h5b5"] = sargon_value_import(3.0);
 
     thc::Move mv;
     thc::ChessPosition base = cp;
