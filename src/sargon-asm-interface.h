@@ -21,7 +21,8 @@ extern "C" {
 
     // Sargon calls C, parameters serves double duty - saved registers on the
     //  stack, can optionally be inspected by C program
-    void callback( uint32_t parameters );
+    void callback( uint32_t edi, uint32_t esi, uint32_t ebp, uint32_t esp,
+                   uint32_t ebx, uint32_t edx, uint32_t ecx, uint32_t eax );
 
     // Data offsets for peeking and poking
     const int TBASE = 0x0100;

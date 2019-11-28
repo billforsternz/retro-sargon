@@ -781,6 +781,8 @@ MPIECE: XOR     al,byte ptr [ebp+ebx] ; Piece to move
         JNZ     rel001          ; No-Skip
         DEC     al              ; Decrement for black Pawns
 rel001: AND     al,7            ; Get piece type
+        cmp al,KING ;TODO Temp temp - suppress king moves for probe
+        jz  skip2   ;Temp temp
         MOV     byte ptr [ebp+T1],al ; Save piece type
         MOV     di,word ptr [ebp+T1] ; Load index to DCOUNT/DPOINT
         MOV     ch,byte ptr [ebp+edi+DCOUNT] ; Get direction count
@@ -1862,6 +1864,7 @@ rel026: MOV     al,6            ; Load board control limit
         JNZ     rel016          ; No - jump
         NEG     al              ; Negate for white
 rel016: ADD     al,80H          ; Rescale score (neutral = 80H
+        CALLBACK "end of POINTS()"
         MOV     byte ptr [ebp+VALM],al ; Save score
         MOV     si,word ptr [ebp+MLPTRJ] ; Load move list pointer
         MOV     byte ptr [ebp+esi+MLVAL],al ; Save score in move list

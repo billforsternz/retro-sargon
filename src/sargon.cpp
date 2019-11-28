@@ -31,6 +31,9 @@ void sargon_position_export( thc::ChessPosition &cp );
 // Write chess position into Sargon
 void sargon_position_import( const thc::ChessPosition &cp );
 
+// Sargon square convention -> string
+std::string algebraic( unsigned int sq );
+
 // Peek and poke at Sargon
 const unsigned char *peek(int offset);
 unsigned char peekb(int offset);
@@ -62,34 +65,287 @@ void on_exit_diagnostics()
     }
 }
 
+// Value seems to be 128 = 0.0
+// 128-30 = 3.0
+// 128+30 = -3.0
+double sargon_value_export( unsigned int value )
+{
+    double m = -3.0 / 30.0;
+    double c = 12.8;
+    double y = m * value + c;
+    return y;
+}
+
+unsigned int sargon_value_import( double value )
+{
+    if( value < -12.6 )
+        value = -12.6;
+    if( value > 12.6 )
+        value = 12.6;
+    double m = -10.0;
+    double c = 128.0;
+    double y = m * value + c;
+    return static_cast<unsigned int>(y);
+}
+
+static std::map<std::string,std::string> positions;
+static std::map<std::string,unsigned int> values;
+
 extern "C" {
-    void callback( uint32_t parameters )
+    void callback( uint32_t edi, uint32_t esi, uint32_t ebp, uint32_t esp,
+                   uint32_t ebx, uint32_t edx, uint32_t ecx, uint32_t eax )
     {
-        uint32_t *sp = &parameters;
-        //printf( "edi on stack at %p = 0x%08x\n", &sp[0], sp[0] );
-        //printf( "esi on stack at %p = 0x%08x\n", &sp[1], sp[1] );
-        //printf( "ebp on stack at %p = 0x%08x\n", &sp[2], sp[2] );
-        //printf( "esp on stack at %p = 0x%08x\n", &sp[3], sp[3] );
-        //printf( "ebx on stack at %p = 0x%08x\n", &sp[4], sp[4] );
-        //printf( "edx on stack at %p = 0x%08x\n", &sp[5], sp[5] );
-        //printf( "ecx on stack at %p = 0x%08x\n", &sp[6], sp[6] );
-        //printf( "eax on stack at %p = 0x%08x\n", &sp[7], sp[7] );
+        uint32_t *sp = &edi;
         sp--;
         uint32_t ret_addr = *sp;
-        //printf( "ret addr = 0x%08x\n", ret_addr );
         const unsigned char *code = (const unsigned char *)ret_addr;
-        //printf( "jmp code = 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x\n",
-        //    code[0], code[1], code[2], code[3], code[4], code[5], code[6], code[7] );
 
         // expecting 0xeb = 2 byte opcode, (0xeb + 8 bit relative jump),
         //  if others skip over 4 operand bytes
         const char *msg = ( code[0]==0xeb ? (char *)(code+2) : (char *)(code+6) );
-        count_functions(msg);
-        //printf( "Sargon diagnostics callback %s\n", msg );
-        //if( msg[0] == '*' )
-        //    dbg_ptrs();
-        //else
-        //    diagnostics();
+        if( std::string(msg) == "end of POINTS()" )
+        {
+            unsigned int p = peekw(MLPTRJ); // Load move list pointer
+            unsigned char from  = peekb(p+2);
+            unsigned char to    = peekb(p+3);
+            unsigned int value = eax&0xff;
+            thc::ChessPosition cp;
+            sargon_position_export( cp );
+            std::string sfrom = algebraic(from).c_str();
+            std::string sto   = algebraic(to).c_str();
+
+            std::string key = util::sprintf("%s%s -> %s", sfrom.c_str(), sto.c_str(), cp.squares );
+            auto it = positions.find(key);
+            if( it == positions.end() )
+                printf( "key not found (?): %s\n", key.c_str() );
+            else
+            {
+                printf( "position %s found\n", it->second.c_str() );
+                auto it2 = values.find(it->second);
+                if( it2 == values.end() )
+                    printf( "value not found (?): %s\n", it->second.c_str() );
+                else
+                {
+
+                    // MODIFY VALUE !
+                    value = it2->second;
+                    uint32_t *peax = &eax;
+                    *peax = value;
+                }
+            }
+            bool was_white = (sfrom[0]=='a' || sfrom[0]=='b');
+            cp.white = !was_white;
+            static int count;
+            std::string s = util::sprintf( "Position %d. Last move: from=%s, to=%s value=%.1f", count++, algebraic(from).c_str(), algebraic(to).c_str(), sargon_value_export(value) );
+            printf( "%s\n", cp.ToDebugStr(s.c_str()).c_str() );
+        }
+    }
+}
+
+void probe_test_prime( const thc::ChessPosition &cp )
+{
+
+/*
+0-----+-----1-----+-----3-----+-------5
+      |  1.a4     |   1...g5  |    2.b4
+      |           |           |     
+      |           |           +-------6
+      |           |                2.a5
+      |           |               
+      |           +-----4-----+-------7
+      |              1...h5   |    2.b4
+      |                       |     
+      |                       +-------8
+      |                            2.a5
+      |                           
+      +-----2-----+-----9-----+-------11
+         1.b4     |  1...g5   |     2.a4
+                  |           |     
+                  |           +-------12
+                  |                 2.b5
+                  |             
+                  +-----10----+-------13
+                     1...h5   |     2.a4
+                              |     
+                              +-------14
+                                    2.b5
+
+*/
+    unsigned int a4  = sargon_value_import(-3.0);
+    unsigned int b4  = sargon_value_import(3.0);
+    values["root"]   = sargon_value_import(0.0);
+    values["a4"]     = a4;
+    values["a4g5"]   = a4;
+    values["a4g5b4"] = a4;
+    values["a4g5a5"] = a4;
+    values["a4h5"]   = a4;
+    values["a4h5b4"] = a4;
+    values["a4h5a5"] = a4;
+    values["b4"]     = b4;
+    values["b4g5"]   = b4;
+    values["b4g5a4"] = b4;
+    values["b4g5b5"] = b4;
+    values["b4h5"]   = b4;
+    values["b4h5a4"] = b4;
+    values["b4h5b5"] = b4;
+
+
+
+    thc::Move mv;
+    thc::ChessPosition base = cp;
+    thc::ChessRules work = base;
+    std::string pos = std::string(work.squares);
+    const char *txt="0 ??0 ??";
+    std::string key = txt;
+    key += " -> ";
+    key += pos;
+    positions[key] = "root";
+
+    //  1.a4 g5 2.a5
+    work = base;
+    mv.TerseIn( &work, txt="a3a4" );
+    work.PlayMove( mv );
+    pos = std::string(work.squares);
+    key = txt;
+    key += " -> ";
+    key += pos;
+    positions[key] = "a4";
+    mv.TerseIn( &work, txt="g6g5" );
+    work.PlayMove( mv );
+    pos = std::string(work.squares);
+    key = txt;
+    key += " -> ";
+    key += pos;
+    positions[key] = "a4g5";
+    mv.TerseIn( &work, txt="a4a5" );
+    work.PlayMove( mv );
+    pos = std::string(work.squares);
+    key = txt;
+    key += " -> ";
+    key += pos;
+    positions[key] = "a4g5a5";
+
+    //  1.a4 g5 2.b4
+    work = base;
+    mv.TerseIn( &work, txt="a3a4" );
+    work.PlayMove( mv );
+    mv.TerseIn( &work, txt="g6g5" );
+    work.PlayMove( mv );
+    mv.TerseIn( &work, txt="b3b4" );
+    work.PlayMove( mv );
+    pos = std::string(work.squares);
+    key = txt;
+    key += " -> ";
+    key += pos;
+    positions[key] = "a4g5b4";
+
+    //  1.a4 h5 2.a5 
+    work = base;
+    mv.TerseIn( &work, txt="a3a4" );
+    work.PlayMove( mv );
+    mv.TerseIn( &work, txt="h6h5" );
+    work.PlayMove( mv );
+    pos = std::string(work.squares);
+    key = txt;
+    key += " -> ";
+    key += pos;
+    positions[key] = "a4h5";
+    mv.TerseIn( &work, txt="a4a5" );
+    work.PlayMove( mv );
+    pos = std::string(work.squares);
+    key = txt;
+    key += " -> ";
+    key += pos;
+    positions[key] = "a4h5a5";
+
+    //  1.a4 h5 2.b4
+    work = base;
+    mv.TerseIn( &work, txt="a3a4" );
+    work.PlayMove( mv );
+    mv.TerseIn( &work, txt="h6h5" );
+    work.PlayMove( mv );
+    mv.TerseIn( &work, txt="b3b4" );
+    work.PlayMove( mv );
+    pos = std::string(work.squares);
+    key = txt;
+    key += " -> ";
+    key += pos;
+    positions[key] = "a4h5b4";
+
+    //  1.b4 h5 2.b5 
+    work = base;
+    mv.TerseIn( &work, txt="b3b4" );
+    work.PlayMove( mv );
+    pos = std::string(work.squares);
+    key = txt;
+    key += " -> ";
+    key += pos;
+    positions[key] = "b4";
+    mv.TerseIn( &work, txt="h6h5" );
+    work.PlayMove( mv );
+    pos = std::string(work.squares);
+    key = txt;
+    key += " -> ";
+    key += pos;
+    positions[key] = "b4h5";
+    mv.TerseIn( &work, txt="b4b5" );
+    work.PlayMove( mv );
+    pos = std::string(work.squares);
+    key = txt;
+    key += " -> ";
+    key += pos;
+    positions[key] = "b4h5b5";
+
+    //  1.b4 h5 2.a4
+    work = base;
+    mv.TerseIn( &work, txt="b3b4" );
+    work.PlayMove( mv );
+    mv.TerseIn( &work, txt="h6h5" );
+    work.PlayMove( mv );
+    mv.TerseIn( &work, txt="a3a4" );
+    work.PlayMove( mv );
+    pos = std::string(work.squares);
+    key = txt;
+    key += " -> ";
+    key += pos;
+    positions[key] = "b4h5a4";
+
+    //  1.b4 g5 2.b5
+    work = base;
+    mv.TerseIn( &work, txt="b3b4" );
+    work.PlayMove( mv );
+    mv.TerseIn( &work, txt="g6g5" );
+    work.PlayMove( mv );
+    pos = std::string(work.squares);
+    key = txt;
+    key += " -> ";
+    key += pos;
+    positions[key] = "b4g5";
+    mv.TerseIn( &work, txt="b4b5" );
+    work.PlayMove( mv );
+    pos = std::string(work.squares);
+    key = txt;
+    key += " -> ";
+    key += pos;
+    positions[key] = "b4g5b5";
+
+    //  1.b4 g5 2.a4
+    work = base;
+    mv.TerseIn( &work, txt="b3b4" );
+    work.PlayMove( mv );
+    mv.TerseIn( &work, txt="g6g5" );
+    work.PlayMove( mv );
+    mv.TerseIn( &work, txt="a3a4" );
+    work.PlayMove( mv );
+    pos = std::string(work.squares);
+    key = txt;
+    key += " -> ";
+    key += pos;
+    positions[key] = "b4g5a4";
+
+    for( auto it = positions.begin(); it != positions.end(); ++it )
+    {
+        printf( "%s: %s\n", it->second.c_str(), it->first.c_str() );
     }
 }
 
@@ -124,7 +380,7 @@ In theory:
 Immediate capture of bishop b5xa6 (wins a piece) [1 ply]
 Royal fork Nf5-e7 (wins queen) [3 ply]
 Back rank mate Qd2xd8+ [4 ply maybe]
-In practice
+In practice:
 Mate found with PLYMAX 3 or greater
 Royal fork found with PLYMAX 1 or 2
 
@@ -158,11 +414,16 @@ depth, so royal fork for PLYMAX 1-4, mate if PLYMAX 5
                                                                     //  add 2 to convert PLYMAX to calculation depth
     const char *pos8 = "3k4/8/8/7P/8/8/1p6/1K6 w - - 0 1";  // Pawn outside the square needs PLYMAX=5 to solve
     const char *pos9 = "2k5/8/8/8/7P/8/1p6/1K6 w - - 0 1";  // Pawn one further step back needs, as expected PLYMAX=7 to solve
+    const char *pos_probe = "7k/8/6pp/8/8/PP6/8/K7 w - - 0 1";      // W king on a1 pawns a3 and b3, B king on h8 pawns g6 and h6 we are going
+                                                                    //  to use this very dumb position to probe Alpha Beta pruning etc. (we
+                                                                    //  will kill the kings so that each side has only two moves available
+                                                                    //  at each position)
     thc::ChessPosition cp;
-    cp.Forsyth(pos9);
+    cp.Forsyth(pos_probe);
+    probe_test_prime(cp);
     pokeb(COLOR,0);
     pokeb(KOLOR,0);
-    pokeb(PLYMAX,5);
+    pokeb(PLYMAX,3);
     sargon(api_INITBD);
     sargon_position_import(cp);
     sargon(api_ROYALT);
