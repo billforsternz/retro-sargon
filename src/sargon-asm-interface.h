@@ -22,7 +22,8 @@ extern "C" {
     // Sargon calls C, parameters serves double duty - saved registers on the
     //  stack, can optionally be inspected by C program
     void callback( uint32_t edi, uint32_t esi, uint32_t ebp, uint32_t esp,
-                   uint32_t ebx, uint32_t edx, uint32_t ecx, uint32_t eax );
+                   uint32_t ebx, uint32_t edx, uint32_t ecx, uint32_t eax,
+                   uint32_t eflags );
 
     // Data offsets for peeking and poking
     const int TBASE = 0x0100;
@@ -72,15 +73,12 @@ extern "C" {
     const int BMOVES = 0x0334;
     const int MVEMSG = 0x0340;
     const int MVEMSG_2 = 0x0342;
-    const int BRDPOS = 0x0344;
-    const int ANBDPS = 0x0345;
-    const int LINECT = 0x0346;
+    const int LINECT = 0x0344;
     const int MLIST = 0x0400;
-    const int MLEND = 0x1400;
+    const int MLEND = 0xee60;
 
     // API constants
     const int api_INITBD = 1;
     const int api_ROYALT = 2;
     const int api_CPTRMV = 3;
 };
-
