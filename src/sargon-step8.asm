@@ -378,9 +378,7 @@ BMOVES: .BYTE   35,55,10H
 ;*** TEMP TODO BEGIN
 MVEMSG:   .WORD 0
 MVEMSG_2: .WORD 0
-BRDPOS: .BLKB   1       ; Index into the board array
-ANBDPS: .BLKB   1       ; Additional index required for ANALYS
-LINECT: .BYTE   0       ; Current line number
+LINECT: .BYTE   0
 ;**** TEMP TODO END
 
         .LOC    400h
@@ -414,12 +412,10 @@ EXTERN  _callback: PROC
 ;
 FCDMAT:  RET
 TBCPMV:  RET
-INSPCE:  RET
-BLNKER:  RET
 MAKEMV:  RET
-PRTBLK   MACRO   name,len               ;todo
+PRTBLK   MACRO   name,len
          ENDM
-CARRET   MACRO                          ;todo
+CARRET   MACRO
          ENDM
 
 ;
@@ -429,11 +425,13 @@ callback_enabled EQU 1
          IF callback_enabled
 CALLBACK MACRO   txt
 LOCAL    cb_end
-         pushad             ;save all registers, also can be inspected by callback()
+         pushfd         ;save all registers, also can be inspected by callback()
+         pushad             
          call   _callback
          jmp    cb_end
          db     txt,0
 cb_end:  popad
+         popfd
          ENDM
          ELSE
 CALLBACK MACRO   txt
@@ -2771,7 +2769,6 @@ PL08:   LXI     H,LINECT        ; Address of screen line count
         PRTLIN  INVAL2,9        ; Output "TRY AGAIN"
         CALL    TBPLCL          ; Tab to players column
         JMP     PLYRMV          ; Jump
-        .ENDIF
         
 ;***********************************************************
 ; ASCII SQUARE NAME TO BOARD INDEX
@@ -2865,7 +2862,6 @@ VA10:   MVI     A,1             ; Set flag for invalid move
         SHLD    MLPTRJ          ; Save move pointer
         RET                     ; Return
 
-        .IF_Z80
 ;***********************************************************
 ; ACCEPT INPUT CHARACTER
 ;***********************************************************
@@ -3321,7 +3317,6 @@ IP2C:   POP     PSW             ; Restore registers
         POP     B
         POP     H
         RET
-        .ENDIF
         
 ;***********************************************************
 ; BOARD INDEX TO NORM ADDRESS SUBR.
@@ -3366,6 +3361,7 @@ CONVRT: PUSH    B               ; Save registers
         POP     D
         POP     B
         RET                     ; Return
+        .ENDIF
 
 ;***********************************************************
 ; POSITIVE INTEGER DIVISION
