@@ -24,7 +24,7 @@
 #include "translate.h"
 
 void convert( std::string fin, std::string asm_fout,  std::string report_fout, std::string asm_interface_fout );
-std::string detabify( const std::string &s );
+std::string detabify( const std::string &s, bool push_comment_to_right=false );
 
 // Each source line can optionally be transformed to Z80 mnemonics (or hybrid Z80 plus X86 registers mnemonics)
 enum transform_t { transform_none, transform_z80, transform_hybrid };
@@ -40,12 +40,12 @@ generate_t generate_switch = generate_x86;
 
 int main( int argc, const char *argv[] )
 {
-#if 1
+#if 0
     //transform_switch = transform_z80;
     //generate_switch = generate_none;
     //original_switch = original_keep;
     //convert("../original/sargon3.asm","../original/sargon4.asm", "../original/sargon-step4.asm-report.txt", "../original/sargon-step4.asm-asm-interface.h" );
-    convert("../src/sargon-step8.asm","../src/translated.asm","../src/translated.asm-report.txt","../src/translated.asm-asm-interface.h");
+    convert("../original/sargon5.asm","../original/t5-3.asm","../original/translated.asm-report.txt","../original/translated.asm-asm-interface.h");
     return 0;
 #endif
     const char *usage=
@@ -183,7 +183,9 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
     util::putline( h_out, "" );
     util::putline( h_out, "    // Sargon calls C, parameters serves double duty - saved registers on the" );
     util::putline( h_out, "    //  stack, can optionally be inspected by C program" );
-    util::putline( h_out, "    void callback( uint32_t parameters );" );
+    util::putline( h_out, "    void callback( uint32_t edi, uint32_t esi, uint32_t ebp, uint32_t esp," );
+    util::putline( h_out, "                   uint32_t ebx, uint32_t edx, uint32_t ecx, uint32_t eax," );
+    util::putline( h_out, "                   uint32_t eflags );" );
     util::putline( h_out, "" );
     util::putline( h_out, "    // Data offsets for peeking and poking" );
     bool api_constants_detected = false;
@@ -508,9 +510,18 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
         switch( stmt.typ )
         {
             case empty:
-            case comment_only:
-            case comment_only_indented:
+                line_original = "";
                 line_original = detabify(line_original);
+                util::putline( asm_out, line_original );
+                break;
+            case comment_only:
+                line_original = ";" + stmt.comment;
+                line_original = detabify(line_original);
+                util::putline( asm_out, line_original );
+                break;
+            case comment_only_indented:
+                line_original = "\t;" + stmt.comment;
+                line_original = detabify(line_original, generate_switch==generate_x86 );
                 util::putline( asm_out, line_original );
                 break;
         }
@@ -529,11 +540,10 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
                 bool transformed = translate_z80( line_original, stmt.instruction, stmt.parameters, transform_switch==transform_hybrid, out );
                 if( transformed )
                 {
-                    line_original = stmt.label;
                     if( stmt.label == "" )
                         line_original = "\t";
                     else
-                        line_original += (data_mode?"\t":":\t");
+                        line_original = stmt.label + ":\t";
                     line_original += out;
                     if( stmt.comment != "" )
                     {
@@ -724,7 +734,9 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
                     }
                 }
                 if( show_original )
+                {
                     asm_line_out = line_original;
+                }
                 if( generated )
                 {
                     asm_line_out = stmt.label;
@@ -759,7 +771,7 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
                     }
                 }
             }
-            asm_line_out = detabify(asm_line_out);
+            asm_line_out = detabify(asm_line_out, generate_switch==generate_x86 );
             util::putline( asm_out, asm_line_out );
         }
     }
@@ -807,7 +819,7 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
     }
 }
 
-std::string detabify( const std::string &s )
+std::string detabify( const std::string &s, bool push_comment_to_right )
 {
     std::string ret;
     int idx=0;
@@ -822,7 +834,7 @@ std::string detabify( const std::string &s )
         }
         else if( c == '\t' )
         {
-            int comment_column   = ( i+1<len && s[i+1]==';' ) ? 32 : 0;
+            int comment_column   = ( i+1<len && s[i+1]==';' ) ? (push_comment_to_right?48:32) : 0;
             int tab_stops[]      = {8,16,24,32,40,48,100};
             int tab_stops_wide[] = {9,17,25,33,41,49,100};
             bool wide = (original_switch == original_comment_out);
