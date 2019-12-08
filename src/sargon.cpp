@@ -90,10 +90,23 @@ unsigned int sargon_value_import( double value )
 
 static std::map<std::string,std::string> positions;
 static std::map<std::string,unsigned int> values;
+static std::map<std::string,unsigned int> cardinal_nbr;
+
+struct NODE
+{
+    unsigned char from;
+    unsigned char to;
+    unsigned char value;
+    std::shared_ptr<NODE> child; 
+    NODE( unsigned char f, unsigned char t, unsigned char v ) : from(f), to(t), value(v) {}
+};
+
+static std::vector< std::shared_ptr<NODE> > ply_table;
 
 extern "C" {
     void callback( uint32_t edi, uint32_t esi, uint32_t ebp, uint32_t esp,
-                   uint32_t ebx, uint32_t edx, uint32_t ecx, uint32_t eax )
+                   uint32_t ebx, uint32_t edx, uint32_t ecx, uint32_t eax,
+                   uint32_t eflags )
     {
         uint32_t *sp = &edi;
         sp--;
@@ -103,7 +116,27 @@ extern "C" {
         // expecting 0xeb = 2 byte opcode, (0xeb + 8 bit relative jump),
         //  if others skip over 4 operand bytes
         const char *msg = ( code[0]==0xeb ? (char *)(code+2) : (char *)(code+6) );
-        if( std::string(msg) == "end of POINTS()" )
+
+        // For purposes of minimax tracing experiment, we only want two possible
+        //  moves in each position - achieved by suppressing King moves
+        if( std::string(msg) == "Suppress King moves" )
+        {
+            unsigned char piece = peekb(T1);
+            if( piece == 6 )    // King?
+            {
+                // Change al to 2 and ch to 1 and MPIECE will exit without
+                //  generating (non-castling) king moves
+                uint32_t *peax = &eax;
+                *peax = 2;
+                uint32_t *pecx = &ecx;
+                *pecx = 0x100;
+            }
+        }
+
+        // For purposes of minimax tracing experiment, we inject our own points
+        //  score for each known position (we keep the number of positions to
+        //  managable levels.)
+        else if( std::string(msg) == "end of POINTS()" )
         {
             unsigned int p = peekw(MLPTRJ); // Load move list pointer
             unsigned char from  = peekb(p+2);
@@ -120,7 +153,11 @@ extern "C" {
                 printf( "key not found (?): %s\n", key.c_str() );
             else
             {
-                printf( "position %s found\n", it->second.c_str() );
+                std::string cardinal("??");
+                auto it3 = cardinal_nbr.find(it->second);
+                if( it3 != cardinal_nbr.end() )
+                    cardinal = util::sprintf( "%d", it3->second );
+                printf( "Position %s, %s found\n", cardinal.c_str(), it->second.c_str() );
                 auto it2 = values.find(it->second);
                 if( it2 == values.end() )
                     printf( "value not found (?): %s\n", it->second.c_str() );
@@ -136,14 +173,75 @@ extern "C" {
             bool was_white = (sfrom[0]=='a' || sfrom[0]=='b');
             cp.white = !was_white;
             static int count;
-            std::string s = util::sprintf( "Position %d. Last move: from=%s, to=%s value=%.1f", count++, algebraic(from).c_str(), algebraic(to).c_str(), sargon_value_export(value) );
+            std::string s = util::sprintf( "Position %d. Last move: from=%s, to=%s value=0x%02x / %.1f", count++, algebraic(from).c_str(), algebraic(to).c_str(), value, sargon_value_export(value) );
             printf( "%s\n", cp.ToDebugStr(s.c_str()).c_str() );
+        }
+
+        // For purposes of minimax tracing experiment, try to figure out
+        //  best move calculation
+        else if( std::string(msg) == "Best move" )
+        {
+            //printf( "Best move found\n" );
+            //diagnostics();
+            unsigned int p      = peekw(MLPTRJ);
+            unsigned int level  = peekb(NPLY);
+            unsigned char from  = peekb(p+2);
+            unsigned char to    = peekb(p+3);
+            unsigned char value = peekb(p+5);
+            std::shared_ptr<NODE> ptr = std::make_shared<NODE>(from,to,value);
+            static unsigned int previous_level;
+            if( level > previous_level )
+            {
+                while( ply_table.size() < level )
+                    ply_table.push_back(ptr);
+            }
+            else if( level == previous_level )
+            {
+                ply_table[ply_table.size()-1] = ptr;
+            }
+            else if( level < previous_level )
+            {
+                //if( level == 1 )
+                //    printf("debug\n");
+                while( ply_table.size() > level )
+                {
+                    std::shared_ptr<NODE> p2 = ply_table[ply_table.size()-1];
+                    ply_table.pop_back();
+                    if( ply_table.size() > 0 )
+                    {
+                        if( ply_table.size() == level )
+                            ply_table[ply_table.size()-1] = ptr;
+                        ply_table[ply_table.size()-1]->child = p2;
+                    }
+                }
+            }
+            previous_level = level;
+        }
+        else if( std::string(msg) == "After FNDMOV()" )
+        {
+            printf( "After FNDMOV()\n" );
+            diagnostics();
         }
     }
 }
 
 void probe_test_prime( const thc::ChessPosition &cp )
 {
+    cardinal_nbr["root"]   = 0;
+    cardinal_nbr["a4"]     = 1;
+    cardinal_nbr["b4"]     = 2;
+    cardinal_nbr["a4g5"]   = 3;
+    cardinal_nbr["a4h5"]   = 4;
+    cardinal_nbr["a4g5b4"] = 5;
+    cardinal_nbr["a4g5a5"] = 6;
+    cardinal_nbr["a4h5b4"] = 7;
+    cardinal_nbr["a4h5a5"] = 8;
+    cardinal_nbr["b4g5"]   = 9;
+    cardinal_nbr["b4h5"]   = 10;
+    cardinal_nbr["b4g5a4"] = 11;
+    cardinal_nbr["b4g5b5"] = 12;
+    cardinal_nbr["b4h5a4"] = 13;
+    cardinal_nbr["b4h5b5"] = 14;
 
 /*
 
@@ -153,7 +251,7 @@ Example 1, no Alpha Beta pruning (move played is 1.b4, value 3.0)
 
 0-------+-----1-----+-----3-----+------5 
 0.0->3.0|   1.a4    |   1...g5  |    2.b4
-        | 6.0->2.0  |  6.0->5.0 |       5.0
+        | 8.0->2.0  |  7.0->5.0 |       5.0
         |           |           |     <-5.0
         |           |           |     
         |           |           +------6 
@@ -163,7 +261,7 @@ Example 1, no Alpha Beta pruning (move played is 1.b4, value 3.0)
         |           |               
         |           +-----4-----+------7 
         |              1...h5   |    2.b4
-        |              4.0->2.0 |       1.0
+        |              3.0->2.0 |       1.0
         |                 <-2.0 |        
         |                       |     
         |                       +------8 
@@ -173,7 +271,7 @@ Example 1, no Alpha Beta pruning (move played is 1.b4, value 3.0)
         |                           
         +------2----+-----9-----+------11
             1.b4    |  1...g5   |    2.a4
-          6.0->3.0  |  6.0->4.0 |       4.0
+          6.0->3.0  |  5.5->4.0 |       4.0
              <-3.0  |           |     <-4.0
                     |           |    
                     |           |    
@@ -185,32 +283,54 @@ Example 1, no Alpha Beta pruning (move played is 1.b4, value 3.0)
                     |             
                     +-----10----+------13
                        1...h5   |    2.a4
-                       4.0->3.0 |       1.0
-                          <-3.0 |    
+                       4.0->3.0 |       3.0
+                          <-3.0 |     <-3.0
                                 |    
                                 |    
                                 +------14
                                      2.b5
-                                        3.0
-                                      <-3.0
+                                        1.0
+                                        1.0
 
+Best move found
+
+MLPTRI = 0218
+MLPTRJ = 0406
+MLLST  = 041e
+MLNXT  = 040c
+PLYIX: 0400 0406 040c 0412 0418 041e 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+   MLPTRI: link=0x0406
+         : link=0x0000, from=b3, to=b4 flags=0x00 value=68
+   MLPTRJ: link=0x0000, from=b3, to=b4 flags=0x00 value=68
+    MLLST: link=0x0000, from=b4, to=b5 flags=0x00 value=98
+    MLNXT: link=0x0412, from=g6, to=g5 flags=0x00 value=68
+         : link=0x0000, from=h6, to=h5 flags=0x00 value=88
+ PLYIX[0]: link=0x0406, from=a3, to=a4 flags=0x00 value=68
+         : link=0x0000, from=b3, to=b4 flags=0x00 value=68
+ PLYIX[2]: link=0x0000, from=b3, to=b4 flags=0x00 value=68    *
+ PLYIX[4]: link=0x0412, from=g6, to=g5 flags=0x00 value=68
+         : link=0x0000, from=h6, to=h5 flags=0x00 value=88
+ PLYIX[6]: link=0x0000, from=h6, to=h5 flags=0x00 value=88   *
+ PLYIX[8]: link=0x041e, from=a3, to=a4 flags=0x00 value=118
+         : link=0x0000, from=b4, to=b5 flags=0x00 value=98
+PLYIX[10]: link=0x0000, from=b4, to=b5 flags=0x00 value=98  *
 
 */
     values["root"]   = sargon_value_import(0.0);
-    values["a4"]     = sargon_value_import(6.0);
-    values["a4g5"]   = sargon_value_import(6.0);
+    values["a4"]     = sargon_value_import(8.0);
+    values["a4g5"]   = sargon_value_import(7.0);
     values["a4g5b4"] = sargon_value_import(5.0);
     values["a4g5a5"] = sargon_value_import(4.0);
-    values["a4h5"]   = sargon_value_import(4.0);
+    values["a4h5"]   = sargon_value_import(3.0);
     values["a4h5b4"] = sargon_value_import(1.0);
     values["a4h5a5"] = sargon_value_import(2.0);
     values["b4"]     = sargon_value_import(6.0);
-    values["b4g5"]   = sargon_value_import(6.0);
+    values["b4g5"]   = sargon_value_import(5.5);
     values["b4g5a4"] = sargon_value_import(4.0);
     values["b4g5b5"] = sargon_value_import(3.0);
     values["b4h5"]   = sargon_value_import(4.0);
-    values["b4h5a4"] = sargon_value_import(1.0);
-    values["b4h5b5"] = sargon_value_import(3.0);
+    values["b4h5a4"] = sargon_value_import(3.0);
+    values["b4h5b5"] = sargon_value_import(1.0);
 
 /*
 
@@ -260,9 +380,34 @@ Example 2, Alpha Beta pruning (move played is 1.a4, value 5.0)
                                      2.b5
                                            
                                            
-
+Best move found
+MLPTRI = 0218
+MLPTRJ = 0400
+MLLST  = 041e
+MLNXT  = 040c
+PLYIX: 0400 0400 040c 0412 0418 0418 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+   MLPTRI: link=0x0400
+         : link=0x0406, from=a3, to=a4 flags=0x00 value=68
+         : link=0x0000, from=b3, to=b4 flags=0x00 value=68
+   MLPTRJ: link=0x0406, from=a3, to=a4 flags=0x00 value=68
+         : link=0x0000, from=b3, to=b4 flags=0x00 value=68
+    MLLST: link=0x0000, from=a4, to=a5 flags=0x00 value=0
+    MLNXT: link=0x0412, from=g6, to=g5 flags=0x00 value=68
+         : link=0x0000, from=h6, to=h5 flags=0x00 value=88
+ PLYIX[0]: link=0x0406, from=a3, to=a4 flags=0x00 value=68
+         : link=0x0000, from=b3, to=b4 flags=0x00 value=68
+ PLYIX[2]: link=0x0406, from=a3, to=a4 flags=0x00 value=68
+         : link=0x0000, from=b3, to=b4 flags=0x00 value=68
+ PLYIX[4]: link=0x0412, from=g6, to=g5 flags=0x00 value=68
+         : link=0x0000, from=h6, to=h5 flags=0x00 value=88
+ PLYIX[6]: link=0x0000, from=h6, to=h5 flags=0x00 value=88
+ PLYIX[8]: link=0x041e, from=b3, to=b4 flags=0x00 value=18
+         : link=0x0000, from=a4, to=a5 flags=0x00 value=0
+PLYIX[10]: link=0x041e, from=b3, to=b4 flags=0x00 value=18
+         : link=0x0000, from=a4, to=a5 flags=0x00 value=0
 
 */
+  
     values["root"]   = sargon_value_import(0.0);
     values["a4"]     = sargon_value_import(6.0);
     values["a4g5"]   = sargon_value_import(6.0);
@@ -278,7 +423,7 @@ Example 2, Alpha Beta pruning (move played is 1.a4, value 5.0)
     values["b4h5"]   = sargon_value_import(4.0);
     values["b4h5a4"] = sargon_value_import(1.0);
     values["b4h5b5"] = sargon_value_import(3.0);
-
+    
     thc::Move mv;
     thc::ChessPosition base = cp;
     thc::ChessRules work = base;
@@ -538,6 +683,18 @@ depth, so royal fork for PLYMAX 1-4, mate if PLYMAX 5
         }
         offset--;
     }
+
+    // Print move chain
+    std::shared_ptr<NODE> solution = ply_table.size()==0 ? NULL : ply_table[0];
+    while( solution )
+    {
+        unsigned char from  = solution->from;
+        unsigned char to    = solution->to;
+        unsigned char value = solution->value;
+        double fvalue = sargon_value_export(value);
+        printf( "from=%s, to=%s value=%0.1f\n", algebraic(from).c_str(), algebraic(to).c_str(), fvalue );
+        solution = solution->child;
+    }
 }
 
 // Read chess position from Sargon
@@ -702,14 +859,6 @@ void pokeb( int offset, unsigned char b )
     *addr = b;
 }
 
-void dbg_ptrs()
-{
-    printf( "MLPTRI = %04x\n", peekw(MLPTRI) );
-    printf( "MLPTRJ = %04x\n", peekw(MLPTRJ) );
-    printf( "MLLST  = %04x\n", peekw(MLLST) );
-    printf( "MLNXT  = %04x\n", peekw(MLNXT) );
-}
-
 std::string algebraic( unsigned int sq )
 {
     std::string s = util::sprintf( "%d ??",sq);
@@ -725,19 +874,96 @@ std::string algebraic( unsigned int sq )
     return s;
 }
 
+void dbg_ptrs()
+{
+    printf( "BESTM  = %04x\n", peekw(BESTM) );
+    printf( "MLPTRI = %04x\n", peekw(MLPTRI) );
+    printf( "MLPTRJ = %04x\n", peekw(MLPTRJ) );
+    printf( "MLLST  = %04x\n", peekw(MLLST) );
+    printf( "MLNXT  = %04x\n", peekw(MLNXT) );
+}
+
+void dbg_score()
+{
+    printf( "SCORE[0] = %d / %f\n", peekb(SCORE),   sargon_value_export(peekb(SCORE))   );
+    printf( "SCORE[1] = %d / %f\n", peekb(SCORE+1), sargon_value_export(peekb(SCORE+1)) );
+    printf( "SCORE[2] = %d / %f\n", peekb(SCORE+2), sargon_value_export(peekb(SCORE+2)) );
+    printf( "SCORE[3] = %d / %f\n", peekb(SCORE+3), sargon_value_export(peekb(SCORE+3)) );
+    printf( "SCORE[4] = %d / %f\n", peekb(SCORE+4), sargon_value_export(peekb(SCORE+4)) );
+}
+
+void dbg_plyix()
+{
+    printf( "PLYIX: " );
+    unsigned int p = PLYIX;
+    for( int i=0; i<20; i++ )
+    {
+        unsigned int x =peekw(p);
+        p += 2;
+        if( x )
+            printf( "%04x", x );
+        else
+            printf( "0" );
+        printf( "%s",  i+1<20 ? " " : "\n" );
+    }
+}
+
 void diagnostics()
 {
     dbg_ptrs();
-    unsigned int p = peekw(MLPTRI);
-    printf( "MLPTRI chain\n" );
-    for( int i=0; i<50 && (p); i++ )
+    dbg_plyix();
+    dbg_score();
+    const char *s="";
+    unsigned int p=0;
+    for( int k=-1; k<24; k++ )
     {
-        unsigned char from  = peekb(p+2);
-        unsigned char to    = peekb(p+3);
-        unsigned char flags = peekb(p+4);
-        unsigned char value = peekb(p+5);
-        p = peekw(p);
-        printf( "link=0x%04x, from=%s, to=%s flags=0x%02x value=%u\n", p, algebraic(from).c_str(), algebraic(to).c_str(), flags, value );
+        switch( k )
+        {
+            case -1: p = peekw(BESTM);     s = "BESTM";        break;
+            case 0:  p = peekw(MLPTRI);    s = "MLPTRI";       break;
+            case 1:  p = peekw(MLPTRJ);    s = "MLPTRJ";       break;
+            case 2:  p = peekw(MLLST);     s = "MLLST";        break;
+            case 3:  p = peekw(MLNXT);     s = "MLNXT";        break;
+            case 4:  p = peekw(PLYIX);     s = "PLYIX[0]";     break;
+            case 5:  p = peekw(PLYIX+2 );  s = "PLYIX[2]";     break;
+            case 6:  p = peekw(PLYIX+4 );  s = "PLYIX[4]";     break;
+            case 7:  p = peekw(PLYIX+6 );  s = "PLYIX[6]";     break;
+            case 8:  p = peekw(PLYIX+8 );  s = "PLYIX[8]";     break;
+            case 9:  p = peekw(PLYIX+10);  s = "PLYIX[10]";    break;
+            case 10: p = peekw(PLYIX+12);  s = "PLYIX[12]";    break;
+            case 11: p = peekw(PLYIX+14);  s = "PLYIX[14]";    break;
+            case 12: p = peekw(PLYIX+16);  s = "PLYIX[16]";    break;
+            case 13: p = peekw(PLYIX+18);  s = "PLYIX[18]";    break;
+            case 14: p = peekw(PLYIX+20);  s = "PLYIX[20]";    break;
+            case 15: p = peekw(PLYIX+22);  s = "PLYIX[22]";    break;
+            case 16: p = peekw(PLYIX+24);  s = "PLYIX[24]";    break;
+            case 17: p = peekw(PLYIX+26);  s = "PLYIX[26]";    break;
+            case 18: p = peekw(PLYIX+28);  s = "PLYIX[28]";    break;
+            case 19: p = peekw(PLYIX+30);  s = "PLYIX[30]";    break;
+            case 20: p = peekw(PLYIX+32);  s = "PLYIX[32]";    break;
+            case 21: p = peekw(PLYIX+34);  s = "PLYIX[34]";    break;
+            case 22: p = peekw(PLYIX+36);  s = "PLYIX[36]";    break;
+            case 23: p = peekw(PLYIX+38);  s = "PLYIX[38]";    break;
+        }
+        if( p )
+        {
+            printf( "%9s: ", s );
+            for( int i=0; i<50 && (p); i++ )
+            {
+                unsigned char from  = peekb(p+2);
+                unsigned char to    = peekb(p+3);
+                unsigned char flags = peekb(p+4);
+                unsigned char value = peekb(p+5);
+                double fvalue = sargon_value_export(value);
+                if( i > 0 )
+                    printf( "%9s: ", " " );
+                if( p < 0x400 )
+                    printf( "link=0x%04x\n", peekw(p) );
+                else
+                    printf( "link=0x%04x, from=%s, to=%s flags=0x%02x value=%0.1f\n", peekw(p), algebraic(from).c_str(), algebraic(to).c_str(), flags, fvalue );
+                p = peekw(p);
+            }
+        }
     }
 }
 

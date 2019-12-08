@@ -777,8 +777,6 @@ MPIECE: XOR     al,byte ptr [ebp+ebx]           ; Piece to move
         JNZ     rel001                          ; No-Skip
         DEC     al                              ; Decrement for black Pawns
 rel001: AND     al,7                            ; Get piece type
-    cmp al,KING ;TODO Temp temp - suppress king moves for probe
-    jz  skip2   ;Temp temp
         MOV     byte ptr [ebp+T1],al            ; Save piece type
         MOV     di,word ptr [ebp+T1]            ; Load index to DCOUNT/DPOINT
         MOV     ch,byte ptr [ebp+edi+DCOUNT]    ; Get direction count
@@ -789,6 +787,7 @@ MP5:    MOV     cl,byte ptr [ebp+edi+DIRECT]    ; Get move direction
         MOV     al,byte ptr [ebp+M1]            ; From position
         MOV     byte ptr [ebp+M2],al            ; Initialize to position
 MP10:   CALL    PATH                            ; Calculate next position
+        CALLBACK "Suppress King moves"
         CMP     al,2                            ; Ready for new direction ?
         JNC     MP15                            ; Yes - Jump
         AND     al,al                           ; Test for empty square
@@ -2359,12 +2358,13 @@ FM37:   CMP     al,byte ptr [ebp+ebx]           ; Compare to score 2 ply above
         CMP     al,byte ptr [ebp+ebx]           ; Compare to score 1 ply above
         JC      FM15                            ; Jump if less than
         JZ      FM15                            ; Jump if equal
+        CALLBACK "Best move"
         MOV     byte ptr [ebp+ebx],al           ; Save as new score 1 ply above
         MOV     al,byte ptr [ebp+NPLY]          ; Get current ply counter
         CMP     al,1                            ; At top of tree ?
         JNZ     FM15                            ; No - jump
         MOV     bx,word ptr [ebp+MLPTRJ]        ; Load current move pointer
-        MOV     word ptr [ebp+BESTM],bx         ; Save as best move.pointer
+        MOV     word ptr [ebp+BESTM],bx         ; Save as best move pointer
         MOV     al,byte ptr [ebp+SCORE+1]       ; Get best move score
         CMP     al,0FFH                         ; Was it a checkmate ?
         JNZ     FM15                            ; No - jump
@@ -2513,6 +2513,7 @@ BM9:    INC     byte ptr [ebp+ebx]              ; (P-Q4)
 ; ARGUMENTS:  --  None
 ;***********************************************************
 CPTRMV: CALL    FNDMOV                          ; Select best move
+        CALLBACK "After FNDMOV()"
         MOV     bx,word ptr [ebp+BESTM]         ; Move list pointer variable
         MOV     word ptr [ebp+MLPTRJ],bx        ; Pointer to move data
         MOV     al,byte ptr [ebp+SCORE+1]       ; To check for mates
