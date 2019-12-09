@@ -103,6 +103,18 @@ struct NODE
 
 static std::vector< std::shared_ptr<NODE> > ply_table;
 
+struct NODE2
+{
+    unsigned int level;
+    unsigned char from;
+    unsigned char to;
+    unsigned char value;
+    int child_idx;
+    NODE2( unsigned int l, unsigned char f, unsigned char t, unsigned char v ) : level(l), from(f), to(t), value(v), child_idx(-1) {}
+};
+
+static std::vector<NODE2> nodes;
+
 extern "C" {
     void callback( uint32_t edi, uint32_t esi, uint32_t ebp, uint32_t esp,
                    uint32_t ebx, uint32_t edx, uint32_t ecx, uint32_t eax,
@@ -181,6 +193,21 @@ extern "C" {
         //  best move calculation
         else if( std::string(msg) == "Best move" )
         {
+#if 1
+            static unsigned int previous_level;
+            unsigned int p      = peekw(MLPTRJ);
+            unsigned int level  = peekb(NPLY);
+            unsigned char from  = peekb(p+2);
+            unsigned char to    = peekb(p+3);
+            unsigned char value = peekb(p+5);
+            NODE2 n(level,from,to,value);
+            if( level == previous_level-1 && nodes.size()>0 )
+                n.child_idx = nodes.size()-1;
+            else
+                n.child_idx = -1;
+            nodes.push_back(n);
+            previous_level = level;
+#else
             //printf( "Best move found\n" );
             //diagnostics();
             unsigned int p      = peekw(MLPTRJ);
@@ -216,6 +243,7 @@ extern "C" {
                 }
             }
             previous_level = level;
+#endif
         }
         else if( std::string(msg) == "After FNDMOV()" )
         {
@@ -652,11 +680,11 @@ depth, so royal fork for PLYMAX 1-4, mate if PLYMAX 5
                                                                     //  will kill the kings so that each side has only two moves available
                                                                     //  at each position)
     thc::ChessPosition cp;
-    cp.Forsyth(pos_probe);
-    probe_test_prime(cp);
+    cp.Forsyth(pos5);//_probe);
+    //probe_test_prime(cp);
     pokeb(COLOR,0);
     pokeb(KOLOR,0);
-    pokeb(PLYMAX,3);
+    pokeb(PLYMAX,5);
     sargon(api_INITBD);
     sargon_position_import(cp);
     sargon(api_ROYALT);
@@ -685,6 +713,23 @@ depth, so royal fork for PLYMAX 1-4, mate if PLYMAX 5
     }
 
     // Print move chain
+#if 1
+    int nbr = nodes.size();
+    int target = 1;
+    for( int i=nbr-1; i>=0; i-- )
+    {
+        NODE2 *n = &nodes[i];
+        if( n->level==target )
+        {
+            target++;
+            unsigned char from  = n->from;
+            unsigned char to    = n->to;
+            unsigned char value = n->value;
+            double fvalue = sargon_value_export(value);
+            printf( "level=%d, from=%s, to=%s value=%0.1f\n", n->level, algebraic(from).c_str(), algebraic(to).c_str(), fvalue );
+        }
+    }
+#else
     std::shared_ptr<NODE> solution = ply_table.size()==0 ? NULL : ply_table[0];
     while( solution )
     {
@@ -695,6 +740,7 @@ depth, so royal fork for PLYMAX 1-4, mate if PLYMAX 5
         printf( "from=%s, to=%s value=%0.1f\n", algebraic(from).c_str(), algebraic(to).c_str(), fvalue );
         solution = solution->child;
     }
+#endif
 }
 
 // Read chess position from Sargon
