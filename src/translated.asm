@@ -2348,7 +2348,8 @@ FM36:   MOV     bx,MATEF                        ; Set mate flag
         OR      byte ptr [ebp+ebx],1
         SAHF
         MOV     bx,word ptr [ebp+SCRIX]         ; Load score table pointer
-FM37:   CMP     al,byte ptr [ebp+ebx]           ; Compare to score 2 ply above
+FM37:   CALLBACK "Alpha beta cutoff?"
+        CMP     al,byte ptr [ebp+ebx]           ; Compare to score 2 ply above
         JC      FM40                            ; Jump if less
         JZ      FM40                            ; Jump if equal
         NEG     al                              ; Negate score
@@ -2356,10 +2357,11 @@ FM37:   CMP     al,byte ptr [ebp+ebx]           ; Compare to score 2 ply above
         INC     bx
         SAHF
         CMP     al,byte ptr [ebp+ebx]           ; Compare to score 1 ply above
+        CALLBACK "No. Best move?"
         JC      FM15                            ; Jump if less than
         JZ      FM15                            ; Jump if equal
-        CALLBACK "Best move"
         MOV     byte ptr [ebp+ebx],al           ; Save as new score 1 ply above
+        CALLBACK "Yes! Best move"
         MOV     al,byte ptr [ebp+NPLY]          ; Get current ply counter
         CMP     al,1                            ; At top of tree ?
         JNZ     FM15                            ; No - jump
@@ -2513,7 +2515,7 @@ BM9:    INC     byte ptr [ebp+ebx]              ; (P-Q4)
 ; ARGUMENTS:  --  None
 ;***********************************************************
 CPTRMV: CALL    FNDMOV                          ; Select best move
-        ;CALLBACK "After FNDMOV()"
+        CALLBACK "After FNDMOV()"
         MOV     bx,word ptr [ebp+BESTM]         ; Move list pointer variable
         MOV     word ptr [ebp+MLPTRJ],bx        ; Pointer to move data
         MOV     al,byte ptr [ebp+SCORE+1]       ; To check for mates
@@ -2538,12 +2540,18 @@ CP0C:   CALL    MOVE                            ; Produce move on board array
 CP10:   TEST    ch,2                            ; King side castle ?
         JZ      rel020                          ; No - jump
         PRTBLK  O.O,5                           ; Output "O-O"
+    mov     word ptr [ebp+MVEMSG],4f4fh ;"OO" ;* temp todo *
+    mov     word ptr [ebp+MVEMSG_2],0
         JMP     CP1C                            ; Jump
 rel020: TEST    ch,4                            ; Queen side castle ?
         JZ      rel021                          ; No - jump
         PRTBLK  O.O.O,5                         ; Output "O-O-O"
+    mov     word ptr [ebp+MVEMSG],4f4fh ;"OOO"
+    mov     word ptr [ebp+MVEMSG_2],4fh
         JMP     CP1C                            ; Jump
 rel021: PRTBLK  P.PEP,5                         ; Output "PxPep" - En passant
+    mov     word ptr [ebp+MVEMSG],5045h ;"EP"
+    mov     word ptr [ebp+MVEMSG_2],0
 CP1C:   MOV     al,byte ptr [ebp+COLOR]         ; Should computer call check ?
         MOV     ch,al
         XOR     al,80H                          ; Toggle color

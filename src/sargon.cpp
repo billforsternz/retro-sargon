@@ -45,6 +45,7 @@ void pokeb( int offset, unsigned char b );
 void dbg_ptrs();
 void diagnostics();
 void sargon_tests();
+void sargon_game();
 
 std::map<std::string,unsigned long> func_counts;
 void count_functions( const char *msg )
@@ -64,10 +65,10 @@ void on_exit_diagnostics()
         printf( "Callback %s called %lu times\n", it->first.c_str(), it->second );
     }
 }
-
 // Value seems to be 128 = 0.0
 // 128-30 = 3.0
 // 128+30 = -3.0
+// 128-128 = 0 = -12.8
 double sargon_value_export( unsigned int value )
 {
     double m = -3.0 / 30.0;
@@ -108,12 +109,14 @@ struct NODE2
     unsigned int level;
     unsigned char from;
     unsigned char to;
+    unsigned char flags;
     unsigned char value;
-    int child_idx;
-    NODE2( unsigned int l, unsigned char f, unsigned char t, unsigned char v ) : level(l), from(f), to(t), value(v), child_idx(-1) {}
+    NODE2() : level(0), from(0), to(0), flags(0), value(0) {}
+    NODE2( unsigned int l, unsigned char f, unsigned char t, unsigned char fs, unsigned char v ) : level(l), from(f), to(t), flags(fs), value(v) {}
 };
 
-static std::vector<NODE2> nodes;
+static NODE2 pv[10];
+static std::vector< NODE2 > nodes;
 
 extern "C" {
     void callback( uint32_t edi, uint32_t esi, uint32_t ebp, uint32_t esp,
@@ -185,31 +188,76 @@ extern "C" {
             bool was_white = (sfrom[0]=='a' || sfrom[0]=='b');
             cp.white = !was_white;
             static int count;
-            std::string s = util::sprintf( "Position %d. Last move: from=%s, to=%s value=0x%02x / %.1f", count++, algebraic(from).c_str(), algebraic(to).c_str(), value, sargon_value_export(value) );
+            std::string s = util::sprintf( "Position %d. Last move: from=%s, to=%s value=%d/%.1f", count++, algebraic(from).c_str(), algebraic(to).c_str(), value, sargon_value_export(value) );
             printf( "%s\n", cp.ToDebugStr(s.c_str()).c_str() );
         }
 
         // For purposes of minimax tracing experiment, try to figure out
         //  best move calculation
-        else if( std::string(msg) == "Best move" )
+        else if( std::string(msg) == "Alpha beta cutoff?" )
         {
+            unsigned int al  = eax&0xff;
+            unsigned int bx  = ebx&0xffff;
+            unsigned int val = peekb(bx);
+            bool jmp = (al < val);
+            if( jmp )
+            {
+                printf( "Ply level %d\n", peekb(NPLY));
+                printf( "Alpha beta cutoff? Yes if move value=%d/%.1f < 2 lower ply value=%d/%.1f, ",
+                    al,  sargon_value_export(al),
+                    val, sargon_value_export(val) );
+                printf( "So %s\n", jmp?"yes":"no" );
+            }
+        }
+        else if( std::string(msg) == "No. Best move?" )
+        {
+            unsigned int al  = eax&0xff;
+            unsigned int bx  = ebx&0xffff;
+            unsigned int val = peekb(bx);
+            bool jmp = (al < val);
+            if( !jmp )
+            {
+                printf( "Ply level %d\n", peekb(NPLY));
+                printf( "Best move? No if move value=%d/%.1f < 1 lower ply value=%d/%.1f, ",
+                    al,  sargon_value_export(al),
+                    val, sargon_value_export(val) );
+                printf( "So %s\n", jmp?"no":"yes" );
+            }
+        }
+        else if( std::string(msg) == "Yes! Best move" )
+        {
+            static int best_move_count;
 #if 1
-            static unsigned int previous_level;
             unsigned int p      = peekw(MLPTRJ);
             unsigned int level  = peekb(NPLY);
             unsigned char from  = peekb(p+2);
             unsigned char to    = peekb(p+3);
+            unsigned char flags = peekb(p+4);
             unsigned char value = peekb(p+5);
-            NODE2 n(level,from,to,value);
-            if( level == previous_level-1 && nodes.size()>0 )
-                n.child_idx = nodes.size()-1;
-            else
-                n.child_idx = -1;
+            NODE2 n(level,from,to,flags,value);
             nodes.push_back(n);
-            previous_level = level;
-#else
-            //printf( "Best move found\n" );
+            printf( "Best move found: %s%s (%d)\n", algebraic(from).c_str(), algebraic(to).c_str(), ++best_move_count );
             //diagnostics();
+#endif
+#if 0
+            if( level < sizeof(pv)/sizeof(pv[0]) )
+                pv[level] = n;
+            if( level == 1 )
+            {
+                printf( "\nPV\n" );
+                for( int i=1; i <= 5; i++ )
+                {
+                    NODE2 *n = &pv[i];
+                    unsigned char from  = n->from;
+                    unsigned char to    = n->to;
+                    unsigned char flags = n->flags;
+                    unsigned char value = n->value;
+                    double fvalue = sargon_value_export(value);
+                    printf( "from=%s, to=%s value=%d/%.1f, flags=%02x\n", algebraic(from).c_str(), algebraic(to).c_str(), value, fvalue, flags );
+                }
+            }
+#endif
+#if 0
             unsigned int p      = peekw(MLPTRJ);
             unsigned int level  = peekb(NPLY);
             unsigned char from  = peekb(p+2);
@@ -251,7 +299,7 @@ extern "C" {
             diagnostics();
         }
     }
-}
+};
 
 void probe_test_prime( const thc::ChessPosition &cp )
 {
@@ -435,7 +483,8 @@ PLYIX[10]: link=0x041e, from=b3, to=b4 flags=0x00 value=18
          : link=0x0000, from=a4, to=a5 flags=0x00 value=0
 
 */
-  
+
+#if 1  // wake up to trace alpha-beta
     values["root"]   = sargon_value_import(0.0);
     values["a4"]     = sargon_value_import(6.0);
     values["a4g5"]   = sargon_value_import(6.0);
@@ -451,7 +500,7 @@ PLYIX[10]: link=0x041e, from=b3, to=b4 flags=0x00 value=18
     values["b4h5"]   = sargon_value_import(4.0);
     values["b4h5a4"] = sargon_value_import(1.0);
     values["b4h5b5"] = sargon_value_import(3.0);
-    
+#endif    
     thc::Move mv;
     thc::ChessPosition base = cp;
     thc::ChessRules work = base;
@@ -614,7 +663,116 @@ int main( int argc, const char *argv[] )
 {
     util::tests();
     sargon_tests();
+    //sargon_game();
     on_exit_diagnostics();
+}
+
+
+void sargon_game()
+{
+    std::ofstream f("moves.txt");
+    if( !f )
+    {
+        printf( "Error; Cannot open moves.txt\n" );
+        return;
+    }
+    thc::ChessRules cr;
+    for(;;)
+    {
+        char buf[5];
+        pokeb(MVEMSG,   0 );
+        pokeb(MVEMSG+1, 0 );
+        pokeb(MVEMSG+2, 0 );
+        pokeb(MVEMSG+3, 0 );
+        pokeb(COLOR,0);
+        pokeb(KOLOR,0);
+        pokeb(PLYMAX,5);
+        nodes.clear();
+        sargon(api_INITBD);
+        sargon_position_import(cr);
+        sargon(api_ROYALT);
+        pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
+        sargon(api_CPTRMV);
+        thc::ChessRules cr_after;
+        sargon_position_export(cr_after);
+        memcpy( buf, peek(MVEMSG), 4 );
+        buf[4] = '\0';
+        bool trigger = false;
+        if( std::string(buf) == "OO" )
+        {
+            strcpy(buf,cr.white?"e1g1":"e8g8");
+            trigger = true;
+        }
+        else if( std::string(buf) == "OOO" )
+        {
+            strcpy(buf,cr.white?"e1c1":"e8c8");
+            trigger = true;
+        }
+        else if( std::string(buf) == "EP" )
+        {
+            trigger = true;
+            int target = cr.enpassant_target;
+            int src=0;
+            if( 0<=target && target<64 && cr_after.squares[target] == (cr.white?'P':'p') )
+            {
+                if( cr.white )
+                {
+                    int src1 = target + 7;
+                    int src2 = target + 9;
+                    if( cr.squares[src1]=='P' && cr_after.squares[src1]!='P' )
+                        src = src1;
+                    else
+                        src = src2;
+                }
+                else
+                {
+                    int src1 = target - 7;
+                    int src2 = target - 9;
+                    if( cr.squares[src1]=='p' && cr_after.squares[src1]!='p' )
+                        src = src1;
+                    else
+                        src = src2;
+                }
+            }
+#define FILE(sq)    ( (char) (  ((sq)&0x07) + 'a' ) )           // eg c5->'c'
+#define RANK(sq)    ( (char) (  '8' - (((sq)>>3) & 0x07) ) )    // eg c5->'5'
+            buf[0] = FILE(src);
+            buf[1] = RANK(src);
+            buf[2] = FILE(target);
+            buf[3] = RANK(target);
+        }
+        thc::Move mv;
+        bool ok = mv.TerseIn( &cr, buf );
+        if( !ok || trigger )
+        {
+            printf( "%s - %s\n%s", ok?"Castling or En-Passant":"Sargon doesnt find move", buf, cr.ToDebugStr().c_str() );
+            printf( "(After)\n%s",cr_after.ToDebugStr().c_str() );
+            if( !ok )
+                break;
+        }
+        std::string s = mv.NaturalOut(&cr);
+        printf( "Sargon plays %s\n", s.c_str() );
+        util::putline( f, s );
+        cr.PlayMove(mv);
+        if( strcmp(cr.squares,cr_after.squares) != 0 )
+        {
+            printf( "Position mismatch\n" );
+            //break;
+        }
+        std::vector<thc::Move> moves;
+        thc::ChessEvaluation ce=cr;
+        ce.GenLegalMoveListSorted( moves );
+        if( moves.size() == 0 )
+        {
+            printf( "Tarrasch doesnt find move\n" );
+            break;
+        }
+        mv = moves[0];
+        s = mv.NaturalOut(&cr);
+        printf( "Tarrasch plays %s\n", s.c_str() );
+        util::putline( f, s );
+        cr.PlayMove(mv);
+    }
 }
 
 void sargon_tests()
@@ -680,8 +838,8 @@ depth, so royal fork for PLYMAX 1-4, mate if PLYMAX 5
                                                                     //  will kill the kings so that each side has only two moves available
                                                                     //  at each position)
     thc::ChessPosition cp;
-    cp.Forsyth(pos5);//_probe);
-    //probe_test_prime(cp);
+    cp.Forsyth(pos5);
+    probe_test_prime(cp);
     pokeb(COLOR,0);
     pokeb(KOLOR,0);
     pokeb(PLYMAX,5);
@@ -715,21 +873,47 @@ depth, so royal fork for PLYMAX 1-4, mate if PLYMAX 5
     // Print move chain
 #if 1
     int nbr = nodes.size();
-    int target = 1;
-    for( int i=nbr-1; i>=0; i-- )
+    int search_start = nbr-1;
+    unsigned int target = 1;
+    int last_found=0;
+    for(;;)
     {
-        NODE2 *n = &nodes[i];
-        if( n->level==target )
+        for( int i=search_start; i>=0; i-- )
         {
-            target++;
-            unsigned char from  = n->from;
-            unsigned char to    = n->to;
-            unsigned char value = n->value;
-            double fvalue = sargon_value_export(value);
-            printf( "level=%d, from=%s, to=%s value=%0.1f\n", n->level, algebraic(from).c_str(), algebraic(to).c_str(), fvalue );
+            NODE2 *n = &nodes[i];
+            unsigned int level = n->level;
+            if( level == target )
+            {
+                target++;
+                last_found = i;
+                unsigned char from  = n->from;
+                unsigned char to    = n->to;
+                unsigned char value = n->value;
+                double fvalue = sargon_value_export(value);
+                printf( "level=%d, from=%s, to=%s value=%d/%.1f\n", n->level, algebraic(from).c_str(), algebraic(to).c_str(), value, fvalue );
+            }
+        }
+        if( target == 1 )
+            break;
+        else
+        {
+            printf("\n");
+            target = 1;
+            search_start = last_found-1;
         }
     }
-#else
+    for( int i=0; i<nbr; i++ )
+    {
+        NODE2 *n = &nodes[i];
+        unsigned int level = n->level;
+        unsigned char from  = n->from;
+        unsigned char to    = n->to;
+        unsigned char value = n->value;
+        double fvalue = sargon_value_export(value);
+        printf( "level=%d, from=%s, to=%s value=%d/%.1f\n", n->level, algebraic(from).c_str(), algebraic(to).c_str(), value, fvalue );
+    }
+#endif
+#if 0
     std::shared_ptr<NODE> solution = ply_table.size()==0 ? NULL : ply_table[0];
     while( solution )
     {
@@ -737,10 +921,11 @@ depth, so royal fork for PLYMAX 1-4, mate if PLYMAX 5
         unsigned char to    = solution->to;
         unsigned char value = solution->value;
         double fvalue = sargon_value_export(value);
-        printf( "from=%s, to=%s value=%0.1f\n", algebraic(from).c_str(), algebraic(to).c_str(), fvalue );
+        printf( "from=%s, to=%s value=%d/%.1f\n", algebraic(from).c_str(), algebraic(to).c_str(), value, fvalue );
         solution = solution->child;
     }
 #endif
+    diagnostics();
 }
 
 // Read chess position from Sargon
@@ -1006,7 +1191,7 @@ void diagnostics()
                 if( p < 0x400 )
                     printf( "link=0x%04x\n", peekw(p) );
                 else
-                    printf( "link=0x%04x, from=%s, to=%s flags=0x%02x value=%0.1f\n", peekw(p), algebraic(from).c_str(), algebraic(to).c_str(), flags, fvalue );
+                    printf( "link=0x%04x, from=%s, to=%s flags=0x%02x value=%d/%.1f\n", peekw(p), algebraic(from).c_str(), algebraic(to).c_str(), flags, value, fvalue );
                 p = peekw(p);
             }
         }
