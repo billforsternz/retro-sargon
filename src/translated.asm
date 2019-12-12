@@ -787,7 +787,7 @@ MP5:    MOV     cl,byte ptr [ebp+edi+DIRECT]    ; Get move direction
         MOV     al,byte ptr [ebp+M1]            ; From position
         MOV     byte ptr [ebp+M2],al            ; Initialize to position
 MP10:   CALL    PATH                            ; Calculate next position
-        ;CALLBACK "Suppress King moves"
+        CALLBACK "Suppress King moves"
         CMP     al,2                            ; Ready for new direction ?
         JNC     MP15                            ; Yes - Jump
         AND     al,al                           ; Test for empty square
@@ -1859,7 +1859,7 @@ rel026: MOV     al,6                            ; Load board control limit
         JNZ     rel016                          ; No - jump
         NEG     al                              ; Negate for white
 rel016: ADD     al,80H                          ; Rescale score (neutral = 80H
-        ;CALLBACK "end of POINTS()"
+        CALLBACK "end of POINTS()"
         MOV     byte ptr [ebp+VALM],al          ; Save score
         MOV     si,word ptr [ebp+MLPTRJ]        ; Load move list pointer
         MOV     byte ptr [ebp+esi+MLVAL],al     ; Save score in move list

@@ -132,6 +132,13 @@ extern "C" {
         //  if others skip over 4 operand bytes
         const char *msg = ( code[0]==0xeb ? (char *)(code+2) : (char *)(code+6) );
 
+        if( std::string(msg) == "After FNDMOV()" )
+        {
+            printf( "After FNDMOV()\n" );
+            diagnostics();
+        }
+        return; // return now to disable minimax tracing experiment
+
         // For purposes of minimax tracing experiment, we only want two possible
         //  moves in each position - achieved by suppressing King moves
         if( std::string(msg) == "Suppress King moves" )
@@ -227,7 +234,6 @@ extern "C" {
         else if( std::string(msg) == "Yes! Best move" )
         {
             static int best_move_count;
-#if 1
             unsigned int p      = peekw(MLPTRJ);
             unsigned int level  = peekb(NPLY);
             unsigned char from  = peekb(p+2);
@@ -238,71 +244,14 @@ extern "C" {
             nodes.push_back(n);
             printf( "Best move found: %s%s (%d)\n", algebraic(from).c_str(), algebraic(to).c_str(), ++best_move_count );
             //diagnostics();
-#endif
-#if 0
-            if( level < sizeof(pv)/sizeof(pv[0]) )
-                pv[level] = n;
-            if( level == 1 )
-            {
-                printf( "\nPV\n" );
-                for( int i=1; i <= 5; i++ )
-                {
-                    NODE2 *n = &pv[i];
-                    unsigned char from  = n->from;
-                    unsigned char to    = n->to;
-                    unsigned char flags = n->flags;
-                    unsigned char value = n->value;
-                    double fvalue = sargon_value_export(value);
-                    printf( "from=%s, to=%s value=%d/%.1f, flags=%02x\n", algebraic(from).c_str(), algebraic(to).c_str(), value, fvalue, flags );
-                }
-            }
-#endif
-#if 0
-            unsigned int p      = peekw(MLPTRJ);
-            unsigned int level  = peekb(NPLY);
-            unsigned char from  = peekb(p+2);
-            unsigned char to    = peekb(p+3);
-            unsigned char value = peekb(p+5);
-            std::shared_ptr<NODE> ptr = std::make_shared<NODE>(from,to,value);
-            static unsigned int previous_level;
-            if( level > previous_level )
-            {
-                while( ply_table.size() < level )
-                    ply_table.push_back(ptr);
-            }
-            else if( level == previous_level )
-            {
-                ply_table[ply_table.size()-1] = ptr;
-            }
-            else if( level < previous_level )
-            {
-                //if( level == 1 )
-                //    printf("debug\n");
-                while( ply_table.size() > level )
-                {
-                    std::shared_ptr<NODE> p2 = ply_table[ply_table.size()-1];
-                    ply_table.pop_back();
-                    if( ply_table.size() > 0 )
-                    {
-                        if( ply_table.size() == level )
-                            ply_table[ply_table.size()-1] = ptr;
-                        ply_table[ply_table.size()-1]->child = p2;
-                    }
-                }
-            }
-            previous_level = level;
-#endif
-        }
-        else if( std::string(msg) == "After FNDMOV()" )
-        {
-            printf( "After FNDMOV()\n" );
-            diagnostics();
         }
     }
 };
 
-void probe_test_prime( const thc::ChessPosition &cp )
+void probe_test_prime( const char *pos_probe )
 {
+    thc::ChessPosition cp;
+    cp.Forsyth(pos_probe);
     cardinal_nbr["root"]   = 0;
     cardinal_nbr["a4"]     = 1;
     cardinal_nbr["b4"]     = 2;
@@ -837,9 +786,11 @@ depth, so royal fork for PLYMAX 1-4, mate if PLYMAX 5
                                                                     //  to use this very dumb position to probe Alpha Beta pruning etc. (we
                                                                     //  will kill the kings so that each side has only two moves available
                                                                     //  at each position)
+    const char *pos10 = "6B1/2N5/7p/pR4p1/1b2P3/2N1kP2/PPPR2PP/2K5 w - - 0 34"; // Why not play N (either) - d5 mate? (played at PLYMAX=3, but not =5)
+
     thc::ChessPosition cp;
-    cp.Forsyth(pos5);
-    probe_test_prime(cp);
+    cp.Forsyth(pos10);
+    probe_test_prime(pos_probe);
     pokeb(COLOR,0);
     pokeb(KOLOR,0);
     pokeb(PLYMAX,5);
@@ -925,7 +876,7 @@ depth, so royal fork for PLYMAX 1-4, mate if PLYMAX 5
         solution = solution->child;
     }
 #endif
-    diagnostics();
+    //diagnostics();
 }
 
 // Read chess position from Sargon
