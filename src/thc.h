@@ -22,6 +22,7 @@
  */
 
 #include "Portability.h"
+#include "DebugPrintf.h"
 #include <stddef.h>
 #include <string>
 #include <vector>
