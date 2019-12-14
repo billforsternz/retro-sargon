@@ -88,9 +88,9 @@ extern "C" {
             {
                 // Change al to 2 and ch to 1 and MPIECE will exit without
                 //  generating (non-castling) king moves
-                uint32_t *peax = &reg_eax;
+                volatile uint32_t *peax = &reg_eax;
                 *peax = 2;
-                uint32_t *pecx = &reg_ecx;
+                volatile uint32_t *pecx = &reg_ecx;
                 *pecx = 0x100;
             }
         }
@@ -130,7 +130,7 @@ extern "C" {
 
                     // MODIFY VALUE !
                     value = it2->second;
-                    uint32_t *peax = &reg_eax;
+                    volatile uint32_t *peax = &reg_eax;
                     *peax = value;
                 }
             }
