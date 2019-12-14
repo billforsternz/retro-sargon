@@ -1,9 +1,10 @@
 /*
 
-  A program to exercise the classic program Sargon, as presented in the book 
-  "Sargon a Z80 Computer Chess Program" by Dan and Kathe Spracklen (Hayden Books
-  1978). Another program in this suite converts the Z80 code to working
-  X86 assembly language.
+  This program exercises a Windows port of the classic program Sargon, as
+  presented in the book "Sargon a Z80 Computer Chess Program" by Dan and
+  Kathe Spracklen (Hayden Books 1978). Another program in this suite converts
+  the Z80 code to working X86 assembly language. A third program wraps the
+  Sargon X86 code in a simple standard Windows UCI engine interface.
   
   */
 
@@ -29,51 +30,39 @@
 // Misc diagnostics
 void dbg_ptrs();
 void diagnostics();
-void sargon_tests();
-void sargon_game();
+void sargon_position_tests( bool quiet );
+void sargon_whole_game_test( bool quiet );
+void sargon_algorithm_explore( bool quiet, bool alpha_beta );
+void on_exit_diagnostics() {}
 
-std::map<std::string,unsigned long> func_counts;
-void count_functions( const char *msg )
-{
-    std::string s(msg);
-    auto it = func_counts.find(s);
-    if( it == func_counts.end() )
-        func_counts[s] = 1;
-    else
-        it->second++;
-}
-
-void on_exit_diagnostics()
-{
-    for( auto it = func_counts.begin(); it != func_counts.end(); ++it )
-    {
-        printf( "Callback %s called %lu times\n", it->first.c_str(), it->second );
-    }
-}
 static std::map<std::string,std::string> positions;
 static std::map<std::string,unsigned int> values;
 static std::map<std::string,unsigned int> cardinal_nbr;
+static std::vector<unsigned int> cardinal_list;
 
-struct NODE2
+struct NODE
 {
     unsigned int level;
     unsigned char from;
     unsigned char to;
     unsigned char flags;
     unsigned char value;
-    NODE2() : level(0), from(0), to(0), flags(0), value(0) {}
-    NODE2( unsigned int l, unsigned char f, unsigned char t, unsigned char fs, unsigned char v ) : level(l), from(f), to(t), flags(fs), value(v) {}
+    NODE() : level(0), from(0), to(0), flags(0), value(0) {}
+    NODE( unsigned int l, unsigned char f, unsigned char t, unsigned char fs, unsigned char v ) : level(l), from(f), to(t), flags(fs), value(v) {}
 };
 
-static NODE2 pv[10];
-static std::vector< NODE2 > nodes;
-
+static std::vector< NODE > nodes;
+static bool callback_enabled;
+static bool callback_kingmove_suppressed;
+static bool callback_quiet;
 extern "C" {
-    void callback( uint32_t edi, uint32_t esi, uint32_t ebp, uint32_t esp,
-                   uint32_t ebx, uint32_t edx, uint32_t ecx, uint32_t eax,
-                   uint32_t eflags )
+    void callback( uint32_t reg_edi, uint32_t reg_esi, uint32_t reg_ebp, uint32_t reg_esp,
+                   uint32_t reg_ebx, uint32_t reg_edx, uint32_t reg_ecx, uint32_t reg_eax,
+                   uint32_t reg_eflags )
     {
-        uint32_t *sp = &edi;
+        if( !callback_enabled )
+            return;
+        uint32_t *sp = &reg_edi;
         sp--;
         uint32_t ret_addr = *sp;
         const unsigned char *code = (const unsigned char *)ret_addr;
@@ -81,26 +70,27 @@ extern "C" {
         // expecting 0xeb = 2 byte opcode, (0xeb + 8 bit relative jump),
         //  if others skip over 4 operand bytes
         const char *msg = ( code[0]==0xeb ? (char *)(code+2) : (char *)(code+6) );
-
         if( std::string(msg) == "After FNDMOV()" )
         {
-            printf( "After FNDMOV()\n" );
-            diagnostics();
+            if( !callback_quiet )
+            {
+                printf( "After FNDMOV()\n" );
+                diagnostics();
+            }
         }
-        return; // return now to disable minimax tracing experiment
 
         // For purposes of minimax tracing experiment, we only want two possible
         //  moves in each position - achieved by suppressing King moves
-        if( std::string(msg) == "Suppress King moves" )
+        else if( callback_kingmove_suppressed && std::string(msg) == "Suppress King moves" )
         {
             unsigned char piece = peekb(T1);
             if( piece == 6 )    // King?
             {
                 // Change al to 2 and ch to 1 and MPIECE will exit without
                 //  generating (non-castling) king moves
-                uint32_t *peax = &eax;
+                uint32_t *peax = &reg_eax;
                 *peax = 2;
-                uint32_t *pecx = &ecx;
+                uint32_t *pecx = &reg_ecx;
                 *pecx = 0x100;
             }
         }
@@ -108,17 +98,16 @@ extern "C" {
         // For purposes of minimax tracing experiment, we inject our own points
         //  score for each known position (we keep the number of positions to
         //  managable levels.)
-        else if( std::string(msg) == "end of POINTS()" )
+        else if( callback_kingmove_suppressed && std::string(msg) == "end of POINTS()" )
         {
             unsigned int p = peekw(MLPTRJ); // Load move list pointer
-            unsigned char from  = peekb(p+2);
-            unsigned char to    = peekb(p+3);
-            unsigned int value = eax&0xff;
+            unsigned char from  = p ? peekb(p+2) : 0;
+            unsigned char to    = p ? peekb(p+3) : 0;
+            unsigned int value = reg_eax&0xff;
             thc::ChessPosition cp;
             sargon_position_export( cp );
             std::string sfrom = algebraic(from).c_str();
             std::string sto   = algebraic(to).c_str();
-
             std::string key = util::sprintf("%s%s -> %s", sfrom.c_str(), sto.c_str(), cp.squares );
             auto it = positions.find(key);
             if( it == positions.end() )
@@ -128,7 +117,10 @@ extern "C" {
                 std::string cardinal("??");
                 auto it3 = cardinal_nbr.find(it->second);
                 if( it3 != cardinal_nbr.end() )
+                {                                  
+                    cardinal_list.push_back(it3->second);
                     cardinal = util::sprintf( "%d", it3->second );
+                }
                 printf( "Position %s, %s found\n", cardinal.c_str(), it->second.c_str() );
                 auto it2 = values.find(it->second);
                 if( it2 == values.end() )
@@ -138,23 +130,26 @@ extern "C" {
 
                     // MODIFY VALUE !
                     value = it2->second;
-                    uint32_t *peax = &eax;
+                    uint32_t *peax = &reg_eax;
                     *peax = value;
                 }
             }
             bool was_white = (sfrom[0]=='a' || sfrom[0]=='b');
             cp.white = !was_white;
-            static int count;
-            std::string s = util::sprintf( "Position %d. Last move: from=%s, to=%s value=%d/%.1f", count++, algebraic(from).c_str(), algebraic(to).c_str(), value, sargon_value_export(value) );
-            printf( "%s\n", cp.ToDebugStr(s.c_str()).c_str() );
+            if( !callback_quiet )
+            {
+                static int count;
+                std::string s = util::sprintf( "Position %d. Last move: from=%s, to=%s value=%d/%.1f", count++, algebraic(from).c_str(), algebraic(to).c_str(), value, sargon_value_export(value) );
+                printf( "%s\n", cp.ToDebugStr(s.c_str()).c_str() );
+            }
         }
 
         // For purposes of minimax tracing experiment, try to figure out
         //  best move calculation
-        else if( std::string(msg) == "Alpha beta cutoff?" )
+        else if( !callback_quiet && std::string(msg) == "Alpha beta cutoff?" )
         {
-            unsigned int al  = eax&0xff;
-            unsigned int bx  = ebx&0xffff;
+            unsigned int al  = reg_eax&0xff;
+            unsigned int bx  = reg_ebx&0xffff;
             unsigned int val = peekb(bx);
             bool jmp = (al < val);
             if( jmp )
@@ -166,10 +161,10 @@ extern "C" {
                 printf( "So %s\n", jmp?"yes":"no" );
             }
         }
-        else if( std::string(msg) == "No. Best move?" )
+        else if( !callback_quiet && std::string(msg) == "No. Best move?" )
         {
-            unsigned int al  = eax&0xff;
-            unsigned int bx  = ebx&0xffff;
+            unsigned int al  = reg_eax&0xff;
+            unsigned int bx  = reg_ebx&0xffff;
             unsigned int val = peekb(bx);
             bool jmp = (al < val);
             if( !jmp )
@@ -190,15 +185,18 @@ extern "C" {
             unsigned char to    = peekb(p+3);
             unsigned char flags = peekb(p+4);
             unsigned char value = peekb(p+5);
-            NODE2 n(level,from,to,flags,value);
+            NODE n(level,from,to,flags,value);
             nodes.push_back(n);
-            printf( "Best move found: %s%s (%d)\n", algebraic(from).c_str(), algebraic(to).c_str(), ++best_move_count );
-            //diagnostics();
+            if( !callback_quiet )
+            {
+                printf( "Best move found: %s%s (%d)\n", algebraic(from).c_str(), algebraic(to).c_str(), ++best_move_count );
+                //diagnostics();
+            }
         }
     }
 };
 
-void probe_test_prime( const char *pos_probe )
+void probe_test_prime( const char *pos_probe, bool quiet, bool alpha_beta )
 {
     thc::ChessPosition cp;
     cp.Forsyth(pos_probe);
@@ -291,22 +289,24 @@ PLYIX: 0400 0406 040c 0412 0418 041e 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 PLYIX[10]: link=0x0000, from=b4, to=b5 flags=0x00 value=98  *
 
 */
-    values["root"]   = sargon_value_import(0.0);
-    values["a4"]     = sargon_value_import(8.0);
-    values["a4g5"]   = sargon_value_import(7.0);
-    values["a4g5b4"] = sargon_value_import(5.0);
-    values["a4g5a5"] = sargon_value_import(4.0);
-    values["a4h5"]   = sargon_value_import(3.0);
-    values["a4h5b4"] = sargon_value_import(1.0);
-    values["a4h5a5"] = sargon_value_import(2.0);
-    values["b4"]     = sargon_value_import(6.0);
-    values["b4g5"]   = sargon_value_import(5.5);
-    values["b4g5a4"] = sargon_value_import(4.0);
-    values["b4g5b5"] = sargon_value_import(3.0);
-    values["b4h5"]   = sargon_value_import(4.0);
-    values["b4h5a4"] = sargon_value_import(3.0);
-    values["b4h5b5"] = sargon_value_import(1.0);
-
+    if( !alpha_beta )
+    {
+        values["root"]   = sargon_value_import(0.0);
+        values["a4"]     = sargon_value_import(8.0);
+        values["a4g5"]   = sargon_value_import(7.0);
+        values["a4g5b4"] = sargon_value_import(5.0);
+        values["a4g5a5"] = sargon_value_import(4.0);
+        values["a4h5"]   = sargon_value_import(3.0);
+        values["a4h5b4"] = sargon_value_import(1.0);
+        values["a4h5a5"] = sargon_value_import(2.0);
+        values["b4"]     = sargon_value_import(6.0);
+        values["b4g5"]   = sargon_value_import(5.5);
+        values["b4g5a4"] = sargon_value_import(4.0);
+        values["b4g5b5"] = sargon_value_import(3.0);
+        values["b4h5"]   = sargon_value_import(4.0);
+        values["b4h5a4"] = sargon_value_import(3.0);
+        values["b4h5b5"] = sargon_value_import(1.0);
+    }
 /*
 
 Example 2, Alpha Beta pruning (move played is 1.a4, value 5.0)
@@ -383,23 +383,24 @@ PLYIX[10]: link=0x041e, from=b3, to=b4 flags=0x00 value=18
 
 */
 
-#if 1  // wake up to trace alpha-beta
-    values["root"]   = sargon_value_import(0.0);
-    values["a4"]     = sargon_value_import(6.0);
-    values["a4g5"]   = sargon_value_import(6.0);
-    values["a4g5b4"] = sargon_value_import(5.0);
-    values["a4g5a5"] = sargon_value_import(4.0);
-    values["a4h5"]   = sargon_value_import(4.0);
-    values["a4h5b4"] = sargon_value_import(11.0);
-    values["a4h5a5"] = sargon_value_import(2.0);
-    values["b4"]     = sargon_value_import(6.0);
-    values["b4g5"]   = sargon_value_import(6.0);
-    values["b4g5a4"] = sargon_value_import(4.0);
-    values["b4g5b5"] = sargon_value_import(3.0);
-    values["b4h5"]   = sargon_value_import(4.0);
-    values["b4h5a4"] = sargon_value_import(1.0);
-    values["b4h5b5"] = sargon_value_import(3.0);
-#endif    
+    if( alpha_beta )
+    {
+        values["root"]   = sargon_value_import(0.0);
+        values["a4"]     = sargon_value_import(6.0);
+        values["a4g5"]   = sargon_value_import(6.0);
+        values["a4g5b4"] = sargon_value_import(5.0);
+        values["a4g5a5"] = sargon_value_import(4.0);
+        values["a4h5"]   = sargon_value_import(4.0);
+        values["a4h5b4"] = sargon_value_import(11.0);
+        values["a4h5a5"] = sargon_value_import(2.0);
+        values["b4"]     = sargon_value_import(6.0);
+        values["b4g5"]   = sargon_value_import(6.0);
+        values["b4g5a4"] = sargon_value_import(4.0);
+        values["b4g5b5"] = sargon_value_import(3.0);
+        values["b4h5"]   = sargon_value_import(4.0);
+        values["b4h5a4"] = sargon_value_import(1.0);
+        values["b4h5b5"] = sargon_value_import(3.0);
+    }
     thc::Move mv;
     thc::ChessPosition base = cp;
     thc::ChessRules work = base;
@@ -551,23 +552,89 @@ PLYIX[10]: link=0x041e, from=b3, to=b4 flags=0x00 value=18
     key += " -> ";
     key += pos;
     positions[key] = "b4g5a4";
-
-    for( auto it = positions.begin(); it != positions.end(); ++it )
+    if( !quiet )
     {
-        printf( "%s: %s\n", it->second.c_str(), it->first.c_str() );
+        for( auto it = positions.begin(); it != positions.end(); ++it )
+        {
+            printf( "%s: %s\n", it->second.c_str(), it->first.c_str() );
+        }
     }
 }
 
 int main( int argc, const char *argv[] )
 {
     util::tests();
-    sargon_tests();
-    //sargon_game();
+    //sargon_position_tests(true);
+    //sargon_whole_game_test(true);
+    sargon_algorithm_explore(true, false);
+    sargon_algorithm_explore(true, true);
     on_exit_diagnostics();
 }
 
+void sargon_algorithm_explore( bool quiet, bool alpha_beta  )
+{
+    // W king on a1 pawns a3 and b3, B king on h8 pawns g6 and h6 we are going
+    //  to use this very dumb position to probe Alpha Beta pruning etc. (we
+    //  will kill the kings so that each side has only two moves available
+    //  at each position)
+    const char *pos_probe = "7k/8/6pp/8/8/PP6/8/K7 w - - 0 1";
 
-void sargon_game()
+    // Because there are only 2 moves available at each ply, we can explore
+    //  to PLYMAX=3 with only 2 positions at ply 1, 4 positions at ply 2
+    //  and 8 positions at ply 3 (plus 1 root position at ply 0) for a very
+    //  manageable 1+2+4+8 = 15 nodes (i.e. positions) total. We use the
+    //  callback facility to monitor the algorithm and indeed actively
+    //  interfere with it by changing the node evals and watching how that
+    //  effects node traversal and generates a best move.
+    // Note that if alpha_beta=true the resulting node values will result
+    // in alpha-beta pruning and all 15 nodes won't be traversed
+    probe_test_prime(pos_probe,quiet,alpha_beta);
+    cardinal_list.clear();
+    callback_enabled = true;
+    callback_kingmove_suppressed = true;
+    callback_quiet = quiet;
+    nodes.clear();
+    thc::ChessPosition cp;
+    cp.Forsyth(pos_probe);
+    pokeb(MLPTRJ,0); //need to set this ptr to 0 to get Root position recognised in callback()
+    pokeb(MLPTRJ+1,0);
+    pokeb(COLOR,0);
+    pokeb(KOLOR,0);
+    pokeb(PLYMAX,3);
+    sargon(api_INITBD);
+    sargon_position_import(cp);
+    sargon(api_ROYALT);
+    pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
+    if( alpha_beta )
+        printf("Expect 3 of 15 positions (8,13 and 14) to be skipped\n" );
+    else
+        printf("Expect all 15 positions 0-14 to be traversed in order\n" );
+    sargon(api_CPTRMV);
+    bool pass=false;
+    if( alpha_beta )
+    {
+        std::vector<unsigned int> expect = {0,1,2,3,4,5,6,7,9,10,11,12};
+        pass = (expect==cardinal_list);
+    }
+    else
+    {
+        std::vector<unsigned int> expect = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14};
+        pass = (expect==cardinal_list);
+    }
+    printf( "Expected traverse order (%salpha-beta pruning): %s\n",
+                alpha_beta?"":"no ", pass ? "PASS" : "FAIL" );
+    char buf[5];
+    memcpy( buf, peek(MVEMSG), 4 );
+    buf[4] = '\0';
+    const char *solution = alpha_beta? "a3a4" : "b3b4";
+    pass = (0==strcmp(solution,buf));
+    printf( "Simple 15 node best move calculation (%salpha-beta pruning): %s\n",
+                alpha_beta?"":"no ", pass ? "PASS" : "FAIL" );
+    if( !pass )
+        printf( "FAIL reason: Expected=%s, Calculated=%s\n", solution, buf );
+}
+
+void sargon_whole_game_test( bool quiet )
 {
     std::ofstream f("moves.txt");
     if( !f )
@@ -674,159 +741,204 @@ void sargon_game()
     }
 }
 
-void sargon_tests()
+struct TEST
 {
-/*
+    const char *fen;
+    int plymax_required;
+    const char *solution;   // As terse string
+};
 
-Test position 1
+void sargon_position_tests( bool quiet )
+{
+    /*
 
-FEN r2n2k1/5ppp/b5q1/1P3N2/8/8/3Q1PPP/3R2K1 w - - 0 1
+    Getting this port working started with this position;
+    (test position #1)
 
-r..n..k.
-.....ppp
-b.....q.
-.P...N..
-........
-........
-...Q.PPP
-...R..K.
+    FEN r2n2k1/5ppp/b5q1/1P3N2/8/8/3Q1PPP/3R2K1 w - - 0 1
 
-White to play has three forcing wins, requiring
-increasing depth for increasing reward;
+    r..n..k.
+    .....ppp
+    b.....q.
+    .P...N..
+    ........
+    ........
+    ...Q.PPP
+    ...R..K.
 
-In theory:
-Immediate capture of bishop b5xa6 (wins a piece) [1 ply]
-Royal fork Nf5-e7 (wins queen) [3 ply]
-Back rank mate Qd2xd8+ [4 ply maybe]
-In practice:
-Mate found with PLYMAX 3 or greater
-Royal fork found with PLYMAX 1 or 2
+    White to play has three forcing wins, requiring
+    increasing depth for increasing reward;
 
-To make the back rank mate a little harder, move the
-Pb5 and ba6 to Pb3 and ba4 so bishop can postpone mate
-by one move. As expected mate now requires greater
-depth, so royal fork for PLYMAX 1-4, mate if PLYMAX 5
+    In theory:
+    Immediate capture of bishop b5xa6 (wins a piece) [1 ply]
+    Royal fork Nf5-e7 (wins queen) [3 ply]
+    Back rank mate Qd2xd8+ [4 ply maybe]
+    In practice:
+    Mate found with PLYMAX 3 or greater
+    Royal fork found with PLYMAX 1 or 2
 
-*/
+    To make the back rank mate a little harder, move the
+    Pb5 and ba6 to Pb3 and ba4 so bishop can postpone mate
+    by one move. As expected mate now requires greater
+    depth, so royal fork for PLYMAX 1-4, mate if PLYMAX 5
 
-    // CTWBFK = "Chess Tactics Workbook For Kids'
-    const char *pos1 = "r2n2k1/5ppp/b5q1/1P3N2/8/8/3Q1PPP/3R2K1 w - - 0 1";             // Test position #1 above
-    const char *pos1b = "r2n2k1/5ppp/6q1/5N2/b7/1P6/3Q1PPP/3R2K1 w - - 0 1";            // Modified version as discussed above
-                                                                                        // Used to have a lot of other mods as we
-                                                                                        // tried to figure out what was going wrong before
-                                                                                        // we got some things sorted out (notably need to
-                                                                                        // call ROYALT before CPTRMV!)
-    const char *pos2 = "2r1nrk1/5pbp/1p2p1p1/8/p2B4/PqNR2P1/1P3P1P/1Q1R2K1 w - - 0 1";  // CTWBFK Pos 30, page 41 - solution Nc3-d5
-    const char *pos3 = "5k2/3KR3/4B3/8/3P4/8/8/6q1 w - - 0 1";                          // CTWBFK Pos 34, page 62 - solution Re7-f7+
-    const char *pos4 = "3r2k1/1pq2ppp/pb1pp1b1/8/3B4/2N5/PPP1QPPP/4R1K1 w - - 0 1";     // CTWBFK Pos 7, page 102 - solution Nc3-d5
-                                                                                        //  Sargon currently fails on this one - Plays Bd4xb6 instead
-                                                                                        //  a -2 move instead of a +2 move, with reasonable depth
-                                                                                        //  Now fixed! after adding call to ROYALT() after setting position
-    const char *pos5 = "r4r2/6kp/2pqppp1/p1R5/b2P4/4QN2/1P3PPP/2R3K1 w - - 0 1";        // CTWBFK Pos 29, page 77 - solution Qe3-a3. Quite difficult!
-    const char *pos6 = "2rq1r1k/3npp1p/3p1n1Q/pp1P2N1/8/2P4P/1P4P1/R4R1K w - - 0 1";    // CTWBFK Pos 11, page 68 - solution Rf1xf6. Sadly Sargon doesn't solve this one
-                                                                                        //  It now does! At PLYMAX=7, takes about 5 mins 45 secs
-    const char *pos7 = "8/8/q2pk3/2p5/8/3N4/8/4K2R w K - 0 1";      // White has Nc3xd5+ pulling victory from the jaws of defeat 
-                                                                    //  It's seen at PLYMAX=3, not seen at PLYMAX=2
-                                                                    //  It's a kind of 5 ply calculation (on the 5th half move White captures the queen
-                                                                    //  which is the only justification for the sac on the 1st half move) - so maybe
-                                                                    //  add 2 to convert PLYMAX to calculation depth
-    const char *pos8 = "3k4/8/8/7P/8/8/1p6/1K6 w - - 0 1";  // Pawn outside the square needs PLYMAX=5 to solve
-    const char *pos9 = "2k5/8/8/8/7P/8/1p6/1K6 w - - 0 1";  // Pawn one further step back needs, as expected PLYMAX=7 to solve
+    */
+
+    static TEST tests[]=
+    {
+        // Test position #1 above
+        { "r2n2k1/5ppp/b5q1/1P3N2/8/8/3Q1PPP/3R2K1 w - - 0 1", 3, "d2d8" },
+        { "r2n2k1/5ppp/b5q1/1P3N2/8/8/3Q1PPP/3R2K1 w - - 0 1", 2, "f5e7" },
+
+        // Modified version as discussed above. I used to have a lot of other
+        //  slight mods as I tried to figure out what was going wrong before
+        //  I got some important things sorted out (most notably the need to
+        //  call ROYALT before CPTRMV!)
+        { "r2n2k1/5ppp/6q1/5N2/b7/1P6/3Q1PPP/3R2K1 w - - 0 1", 5, "d2d8" },
+        { "r2n2k1/5ppp/6q1/5N2/b7/1P6/3Q1PPP/3R2K1 w - - 0 1", 4, "f5e7" },   
+
+        // CTWBFK = "Chess Tactics Workbook For Kids'
+        // CTWBFK Pos 30, page 41 - solution Nc3-d5
+        { "2r1nrk1/5pbp/1p2p1p1/8/p2B4/PqNR2P1/1P3P1P/1Q1R2K1 w - - 0 1", 5, "c3d5" },
+
+        // CTWBFK Pos 34, page 62 - solution Re7-f7+
+        { "5k2/3KR3/4B3/8/3P4/8/8/6q1 w - - 0 1", 5, "e7f7" },
+        // CTWBFK Pos 7, page 102 - solution Nc3-d5. For a long time this was a fail
+        //  Sargon plays Bd4xb6 instead, so a -2 move instead of a +2 move. Fixed
+        //  after adding call to ROYALT() after setting position
+        { "3r2k1/1pq2ppp/pb1pp1b1/8/3B4/2N5/PPP1QPPP/4R1K1 w - - 0 1", 5, "c3d5" },
+
+        // CTWBFK Pos 29, page 77 - solution Qe3-a3. Quite difficult!
+        { "r4r2/6kp/2pqppp1/p1R5/b2P4/4QN2/1P3PPP/2R3K1 w - - 0 1", 5, "e3a3" },
+
+        // White has Nd3xc5+ pulling victory from the jaws of defeat, it's seen 
+        //  It's seen at PLYMAX=3, not seen at PLYMAX=2. It's a kind of 5 ply
+        //  calculation (on the 5th half move White captures the queen which is
+        //  the only justification for the sac on the 1st half move) - so maybe
+        //  in forcing situations add 2 to convert PLYMAX to calculation depth
+        { "8/8/q2pk3/2p5/8/3N4/8/4K2R w K - 0 1", 3, "d3c5" },
+
+        // Pawn outside the square needs PLYMAX=5 to solve
+        { "3k4/8/8/7P/8/8/1p6/1K6 w - - 0 1", 5, "h5h6" },
+
+        // Pawn one further step back needs, as expected PLYMAX=7 to solve
+        { "2k5/8/8/8/7P/8/1p6/1K6 w - - 0 1", 7, "h4h5" },
+    
+        // Why not play N (either) - d5 mate? (played at PLYMAX=3, but not PLYMAX=5)
+        //  I think this is a bug, or at least an imperfection in Sargon. I suspect
+        //  something to do with decrementing PLYMAX by 2 if mate found. Our "auto"
+        //  mode engine wrapper will mask this, by starting at lower PLYMAX
+        { "6B1/2N5/7p/pR4p1/1b2P3/2N1kP2/PPPR2PP/2K5 w - - 0 34", 5, "b5b6" },
+        { "6B1/2N5/7p/pR4p1/1b2P3/2N1kP2/PPPR2PP/2K5 w - - 0 34", 3, "c7d5" },
+
+        // CTWBFK Pos 11, page 68 - solution Rf1xf6. Involves quiet moves. Sargon
+        //  solves this, but needs PLYMAX 7, takes about 5 mins 45 secs
+        { "2rq1r1k/3npp1p/3p1n1Q/pp1P2N1/8/2P4P/1P4P1/R4R1K w - - 0 1", 7, "f1f6" }
+    };
+
     const char *pos_probe = "7k/8/6pp/8/8/PP6/8/K7 w - - 0 1";      // W king on a1 pawns a3 and b3, B king on h8 pawns g6 and h6 we are going
                                                                     //  to use this very dumb position to probe Alpha Beta pruning etc. (we
                                                                     //  will kill the kings so that each side has only two moves available
                                                                     //  at each position)
-    const char *pos10 = "6B1/2N5/7p/pR4p1/1b2P3/2N1kP2/PPPR2PP/2K5 w - - 0 34"; // Why not play N (either) - d5 mate? (played at PLYMAX=3, but not =5)
-
-    thc::ChessPosition cp;
-    cp.Forsyth(pos10);
-    probe_test_prime(pos_probe);
-    pokeb(COLOR,0);
-    pokeb(KOLOR,0);
-    pokeb(PLYMAX,5);
-    sargon(api_INITBD);
-    sargon_position_import(cp);
-    sargon(api_ROYALT);
-    sargon_position_export(cp);
-    std::string s = cp.ToDebugStr( "Position after test position set" );
-    printf( "%s\n", s.c_str() );
-    pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
-    sargon(api_CPTRMV);
-    sargon_position_export(cp);
-    s = cp.ToDebugStr( "Position after computer move made" );
-    printf( "%s\n", s.c_str() );
-    char buf[5];
-    memcpy( buf, peek(MVEMSG), 4 );
-    buf[4] = '\0';
-    printf( "\nMove made is: %s\n", buf );
-    int offset = MLEND;
-    while( offset > 0 )
+    //probe_test_prime(pos_probe);
+    int nbr_tests = sizeof(tests)/sizeof(tests[0]);
+    for( int i=0; i<nbr_tests; i++ )
     {
-        unsigned char b = peekb(offset);
-        if( b )
+        TEST *pt = &tests[i];
+        nodes.clear();
+        thc::ChessPosition cp;
+        cp.Forsyth(pt->fen);
+        pokeb(COLOR,0);
+        pokeb(KOLOR,0);
+        pokeb(PLYMAX,pt->plymax_required);
+        sargon(api_INITBD);
+        sargon_position_import(cp);
+        sargon(api_ROYALT);
+        if( !quiet )
         {
-            printf("Last non-zero in memory is addr=0x%04x data=0x%02x\n", offset, b );
-            break;
+            sargon_position_export(cp);
+            std::string s = cp.ToDebugStr( "Position after test position set" );
+            printf( "%s\n", s.c_str() );
         }
-        offset--;
-    }
-
-    // Print move chain
-#if 1
-    int nbr = nodes.size();
-    int search_start = nbr-1;
-    unsigned int target = 1;
-    int last_found=0;
-    for(;;)
-    {
-        for( int i=search_start; i>=0; i-- )
+        pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
+        printf( "Test %d of %d: PLYMAX=%d:", i+1, nbr_tests, pt->plymax_required );
+        if( 0 == strcmp(pt->fen,"2rq1r1k/3npp1p/3p1n1Q/pp1P2N1/8/2P4P/1P4P1/R4R1K w - - 0 1") )
+            printf( " (sorry this particular test is very slow) :" );
+        sargon(api_CPTRMV);
+        if( !quiet )
         {
-            NODE2 *n = &nodes[i];
-            unsigned int level = n->level;
-            if( level == target )
+            sargon_position_export(cp);
+            std::string s = cp.ToDebugStr( "Position after computer move made" );
+            printf( "%s\n", s.c_str() );
+        }
+        char buf[5];
+        memcpy( buf, peek(MVEMSG), 4 );
+        buf[4] = '\0';
+        bool pass = (0==strcmp(pt->solution,buf));
+        printf( " %s\n", pass ? "PASS" : "FAIL" );
+        if( !pass )
+            printf( "FAIL reason: Expected=%s, Calculated=%s\n", pt->solution, buf );
+
+        // Print move chain
+        if( !quiet )
+        {
+            int nbr = nodes.size();
+            int search_start = nbr-1;
+            unsigned int target = 1;
+            int last_found=0;
+            for(;;)
             {
-                target++;
-                last_found = i;
+                for( int i=search_start; i>=0; i-- )
+                {
+                    NODE *n = &nodes[i];
+                    unsigned int level = n->level;
+                    if( level == target )
+                    {
+                        target++;
+                        last_found = i;
+                        unsigned char from  = n->from;
+                        unsigned char to    = n->to;
+                        unsigned char value = n->value;
+                        double fvalue = sargon_value_export(value);
+                        printf( "level=%d, from=%s, to=%s value=%d/%.1f\n", n->level, algebraic(from).c_str(), algebraic(to).c_str(), value, fvalue );
+                    }
+                }
+                if( target == 1 )
+                    break;
+                else
+                {
+                    printf("\n");
+                    target = 1;
+                    search_start = last_found-1;
+                }
+            }
+            for( int i=0; i<nbr; i++ )
+            {
+                NODE *n = &nodes[i];
+                unsigned int level = n->level;
                 unsigned char from  = n->from;
                 unsigned char to    = n->to;
                 unsigned char value = n->value;
                 double fvalue = sargon_value_export(value);
                 printf( "level=%d, from=%s, to=%s value=%d/%.1f\n", n->level, algebraic(from).c_str(), algebraic(to).c_str(), value, fvalue );
             }
+            diagnostics();
         }
-        if( target == 1 )
-            break;
-        else
+    }
+    if( !quiet )
+    {
+        int offset = MLEND;
+        while( offset > 0 )
         {
-            printf("\n");
-            target = 1;
-            search_start = last_found-1;
+            unsigned char b = peekb(offset);
+            if( b )
+            {
+                printf("Last non-zero in memory is addr=0x%04x data=0x%02x\n", offset, b );
+                break;
+            }
+            offset--;
         }
     }
-    for( int i=0; i<nbr; i++ )
-    {
-        NODE2 *n = &nodes[i];
-        unsigned int level = n->level;
-        unsigned char from  = n->from;
-        unsigned char to    = n->to;
-        unsigned char value = n->value;
-        double fvalue = sargon_value_export(value);
-        printf( "level=%d, from=%s, to=%s value=%d/%.1f\n", n->level, algebraic(from).c_str(), algebraic(to).c_str(), value, fvalue );
-    }
-#endif
-#if 0
-    std::shared_ptr<NODE> solution = ply_table.size()==0 ? NULL : ply_table[0];
-    while( solution )
-    {
-        unsigned char from  = solution->from;
-        unsigned char to    = solution->to;
-        unsigned char value = solution->value;
-        double fvalue = sargon_value_export(value);
-        printf( "from=%s, to=%s value=%d/%.1f\n", algebraic(from).c_str(), algebraic(to).c_str(), value, fvalue );
-        solution = solution->child;
-    }
-#endif
-    //diagnostics();
 }
 
 void dbg_ptrs()
