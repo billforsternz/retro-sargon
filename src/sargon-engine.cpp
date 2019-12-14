@@ -207,27 +207,6 @@ void diagnostics()
     }
 }
 
-
-/*
- *  Sadly we need this junk to get thc.h and thc.cpp to compile and link
- */
-
-#ifndef KILL_DEBUG_COMPLETELY
-int core_printf( const char *fmt, ... )
-{
-    int ret=0;
-	va_list args;
-	va_start( args, fmt );
-    char buf[1000];
-    char *p = buf;
-    vsnprintf( p, sizeof(buf)-2-(p-buf), fmt, args ); 
-    fputs(buf,stdout);
-    va_end(args);
-    return ret;
-}
-#endif
-
-
 //-- preferences
 #define VERSION "1978"
 #define ENGINE_NAME "Sargon"
@@ -444,6 +423,7 @@ void cmd_multipv( const char *cmd )
         MULTIPV = 4;
 }
 
+#if 0
 void ReportOnProgress
 (
     bool    init,
@@ -569,6 +549,7 @@ void ReportOnProgress
         }
     }
 }
+#endif
 
 bool CalculateNextMove( thc::ChessRules &cr, bool new_game, std::vector<thc::Move> &pv, thc::Move &bestmove, int &score_cp,
                         unsigned long ms_time,
@@ -724,14 +705,6 @@ const char *cmd_go( const char *cmd )
     int score_cp=0;
     bestmove.Invalid();
     std::vector<thc::Move> pv;
-    ReportOnProgress
-    (
-        true,
-        1,
-        pv,
-        0,
-        0
-    );
     bool new_game = is_new_game();
     bool have_move = CalculateNextMove( the_position, new_game, pv, bestmove, score_cp, ms_time, ms_budget, BALANCE, depth );
 
