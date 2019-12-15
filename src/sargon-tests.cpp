@@ -1,6 +1,6 @@
 /*
 
-  This program exercises a Windows port of the classic program Sargon, as
+  This program tests a Windows port of the classic program Sargon, as
   presented in the book "Sargon a Z80 Computer Chess Program" by Dan and
   Kathe Spracklen (Hayden Books 1978). Another program in this suite converts
   the Z80 code to working X86 assembly language. A third program wraps the
@@ -11,13 +11,8 @@
 #define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
-#include <assert.h>
-#include <iostream>
-#include <fstream>
 #include <string>
 #include <vector>
-#include <deque>
 #include <map>
 #include <set>
 #include <algorithm>
@@ -25,12 +20,17 @@
 #include "thc.h"
 #include "sargon-asm-interface.h"
 #include "sargon-interface.h"
-#include "translate.h"
 
-// The tests
+// Individual tests
 bool sargon_position_tests( bool quiet, bool no_very_slow_tests );
-bool sargon_whole_game_test( bool quiet, bool no_very_slow_tests );
+bool sargon_whole_game_tests( bool quiet, bool no_very_slow_tests );
 bool sargon_algorithm_explore( bool quiet, bool alpha_beta );
+
+// Suites of tests
+bool sargon_tests_quiet();
+bool sargon_tests_quiet_comprehensive();
+bool sargon_tests_verbose();
+bool sargon_tests_verbose_comprehensive();
 
 // Misc diagnostics
 void dbg_ptrs();
@@ -62,33 +62,93 @@ void probe_test_prime( const char *pos_probe, bool quiet, bool alpha_beta );
 
 int main( int argc, const char *argv[] )
 {
-    bool ok=true;
     util::tests();
+    on_exit_diagnostics();
+    bool ok = sargon_tests_quiet();
+    if( ok )
+        printf( "All tests passed\n" );
+    else
+        printf( "Not all tests passed\n" );
+    return ok ? 0 : -1;
+}
 
-    bool passed = sargon_position_tests(true, true);
-    if( !passed )
-        ok = false;
-    passed = sargon_whole_game_test(true, true);
-    if( !passed )
-        ok = false;
-    passed = sargon_algorithm_explore(true, false);
+bool sargon_tests_quiet()
+{
+    bool ok=true;
+    bool passed = sargon_algorithm_explore(true, false);
     if( !passed )
         ok = false;
     passed = sargon_algorithm_explore(true, true);
     if( !passed )
         ok = false;
-    if( ok )
-        printf( "All tests passed\n" );
-    else
-        printf( "Not all tests passed\n" );
-    on_exit_diagnostics();
+    passed = sargon_position_tests(true, true);
+    if( !passed )
+        ok = false;
+    passed = sargon_whole_game_tests(true, true);
+    if( !passed )
+        ok = false;
+    return ok;
+}
+
+bool sargon_tests_quiet_comprehensive()
+{
+    bool ok=true;
+    bool passed = sargon_algorithm_explore(true, false);
+    if( !passed )
+        ok = false;
+    passed = sargon_algorithm_explore(true, true);
+    if( !passed )
+        ok = false;
+    passed = sargon_position_tests(true, false);
+    if( !passed )
+        ok = false;
+    passed = sargon_whole_game_tests(true, false);
+    if( !passed )
+        ok = false;
+    return ok;
+}
+
+bool sargon_tests_verbose()
+{
+    bool ok=true;
+    bool passed = sargon_algorithm_explore(false, false);
+    if( !passed )
+        ok = false;
+    passed = sargon_algorithm_explore(false, true);
+    if( !passed )
+        ok = false;
+    passed = sargon_position_tests(false, true);
+    if( !passed )
+        ok = false;
+    passed = sargon_whole_game_tests(false, true);
+    if( !passed )
+        ok = false;
+    return ok;
+}
+
+bool sargon_tests_verbose_comprehensive()
+{
+    bool ok=true;
+    bool passed = sargon_algorithm_explore(false, false);
+    if( !passed )
+        ok = false;
+    passed = sargon_algorithm_explore(false, true);
+    if( !passed )
+        ok = false;
+    passed = sargon_position_tests(false, false);
+    if( !passed )
+        ok = false;
+    passed = sargon_whole_game_tests(false, false);
+    if( !passed )
+        ok = false;
+    return ok;
 }
 
 // Use a simple example to explore/probe the minimax algorithm and verify it
 bool sargon_algorithm_explore( bool quiet, bool alpha_beta  )
 {
     bool ok=true;
-    printf( "Minimax algorithm tests\n" );
+    printf( "* Minimax %salgorithm tests\n", alpha_beta?"plus alpha-beta pruning ":"" );
 
     // W king on a1 pawns a3 and b3, B king on h8 pawns g6 and h6 we are going
     //  to use this very dumb position to probe Alpha Beta pruning etc. (we
@@ -106,10 +166,10 @@ bool sargon_algorithm_explore( bool quiet, bool alpha_beta  )
     // Note that if alpha_beta=true the resulting node values will result
     // in alpha-beta pruning and all 15 nodes won't be traversed
     probe_test_prime(pos_probe,quiet,alpha_beta);
-    cardinal_list.clear();
     callback_enabled = true;
     callback_kingmove_suppressed = true;
     callback_quiet = quiet;
+    cardinal_list.clear();
     nodes.clear();
     thc::ChessPosition cp;
     cp.Forsyth(pos_probe);
@@ -158,10 +218,11 @@ bool sargon_algorithm_explore( bool quiet, bool alpha_beta  )
 }
 
 
-bool sargon_whole_game_test( bool quiet, bool no_very_slow_tests )
+bool sargon_whole_game_tests( bool quiet, bool no_very_slow_tests )
 {
     bool ok = true;
-    printf( "Whole game tests\n" );
+    printf( "* Whole game tests\n" );
+    callback_enabled = false;
     printf( "Entire PLYMAX=3 game test " );
     for( int i=0; i<3; i++ )
     {
@@ -269,13 +330,13 @@ bool sargon_whole_game_test( bool quiet, bool no_very_slow_tests )
             if( moves.size() == 0 )
             {
                 if( !quiet )
-                    printf( "Tarrasch doesnt find move\n" );
+                    printf( "Tarrasch static evaluator doesn't find move\n" );
                 break;
             }
             mv = moves[0];
             s = mv.NaturalOut(&cr);
             if( !quiet )
-                printf( "Tarrasch plays %s\n", s.c_str() );
+                printf( "Tarrasch static evaluator plays %s\n", s.c_str() );
             game_text += " ";
             game_text += s;
             cr.PlayMove(mv);
@@ -318,7 +379,8 @@ struct TEST
 bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
 {
     bool ok = true;
-    printf( "Test position tests\n" );
+    printf( "* Test position tests\n" );
+    callback_enabled = false;
 
     /*
 
