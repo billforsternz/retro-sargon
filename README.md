@@ -6,12 +6,12 @@ The project is coming along very well, I have Sargon basically running well and 
 "make it into a pretty package stage".
 
 Some notes on the project organisation. The Sargon assembly language source, in original and
-transformed versions is in directory "stages" to (name indicates the stages it has been
+transformed versions is in directory "stages" (the name indicates the stages it has been
 through). The following files are present;
 
 - stages/sargon1.asm ;As close to original book as we can make it
 - stages/sargon2.asm ;Typos and spelling errors fixed
-- stages/sargon3.asm ;Label all PC relative jumps (instead of, for example JR $+5)
+- stages/sargon3.asm ;Label all PC relative jumps (eg JR $+5 -> JR rel6)
 - stages/sargon4.asm ;Conventional Z80 mnemonics instead of TDL assembler mnemonics
 - stages/sargon5.asm ;Add x86 interface
 
@@ -40,4 +40,3 @@ Some notes to myself:
 To turn on assembly programming in Visual C++ 2017
 <br>Menu > Project > build customizations, turn on MASM
 <br>Also need linker option LSAFESEH:NO
-
