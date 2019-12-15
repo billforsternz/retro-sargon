@@ -2,10 +2,30 @@ The book "Sargon, a computer chess program", by Dan and Kathe Spracklen publishe
 presents the source code to the classic early chess program Sargon in Z80 assembly language.
 This is a project to bring the code back to life in the modern era.
 
-This project isn't finished, but I've made good progress. Currently the input file is
-sargon-step6.asm, which is the original, plus some decoration I've invented. This file gets
-transformed into an X86 file translated.asm. This program is now calculating a first move
-(which happens to be 1.Nf3).
+The project is coming along very well, I have Sargon basically running well and I'm in the
+"make it into a pretty package stage".
+
+Some notes on the project organisation. The Sargon assembly language source, in original and
+transformed versions is in directory "stages" to (name indicates the stages it has been
+through). The following files are present;
+
+- stages/sargon1.asm ;As close to original book as we can make it
+- stages/sargon2.asm ;Typos and spelling errors fixed
+- stages/sargon3.asm ;Label all PC relative jumps (instead of, for example JR $+5)
+- stages/sargon4.asm ;Conventional Z80 mnemonics instead of TDL assembler mnemonics
+- stages/sargon5.asm ;Add x86 interface
+
+There are currently three C++ projects (Visual Studio parlance for C++ executable programs
+with main() functions);
+
+1) Transform source code program to convert the assembly language line by line. This program
+transforms stages/sargon5/asm into src/translated.asm (it also throws out stages/sargon4.asm
+as a nice side effect)
+2) A test suite which grew out of a program to get translated.asm working initially, then
+working reliably with regressing tests.
+3) A simple Windows UCI chess engine wrapper so Sargon can run in standard GUIs.
+
+All three projects are working. I am refining 2) and 3) in particular.
 
 I acknowledge the ownership of legendary
 programmers Dan and Kathe Spracklen, and if they contact me in respect of this project, I will
