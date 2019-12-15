@@ -35,8 +35,11 @@ _sargon_base_address:
 ;       ORG     100h
         DB      256     DUP (?)                 ;Padding bytes to ORG location
 TBASE   EQU     0100h
-;TBASE must be page aligned, but perhaps not page 0, so
-;push it out to address 100H
+;TBASE must be page aligned, but not page 0, because an
+;extensively used trick is to test whether the hi byte of
+;a pointer == 0 and to consider this as a equivalent to
+;testing whether the whole pointer == 0 (works as long as
+;pointers never point to page 0)
 ;**********************************************************
 ; DIRECT  --  Direction Table.  Used to determine the dir-
 ;             ection of movement of each piece.
@@ -171,7 +174,7 @@ POSQ    EQU     01d0h
 ;**********************************************************
 ;       ORG     200h
         DB      45      DUP (?)                 ;Padding bytes to ORG location
-SCORE   EQU     0200h
+SCORE   EQU     0200h                           ;extended up to 10 ply
         DW      0,0,0,0,0,0,0,0,0,0,0
 
 ;***********************************************************
@@ -499,18 +502,18 @@ Z80_EXX  MACRO
          ENDM
 
 Z80_RLD  MACRO                          ;a=kx (hl)=yz -> a=ky (hl)=zx
-         mov     ah,byte ptr [ebp+ebx]      ;ax=yzkx
+         mov     ah,byte ptr [ebp+ebx]  ;ax=yzkx
          ror     al,4                   ;ax=yzxk
          rol     ax,4                   ;ax=zxky
-         mov     byte ptr [ebp+ebx],ah      ;al=ky [ebx]=zx
+         mov     byte ptr [ebp+ebx],ah  ;al=ky [ebx]=zx
          or      al,al                  ;set z and s flags
          ENDM
 
 Z80_RRD  MACRO                          ;a=kx (hl)=yz -> a=kz (hl)=xy
-         mov     ah,byte ptr [ebp+ebx]      ;ax=yzkx
+         mov     ah,byte ptr [ebp+ebx]  ;ax=yzkx
          ror     ax,4                   ;ax=xyzk
          ror     al,4                   ;ax=xykz
-         mov     byte ptr [ebp+ebx],ah      ;al=kz [ebx]=xy
+         mov     byte ptr [ebp+ebx],ah  ;al=kz [ebx]=xy
          or      al,al                  ;set z and s flags
          ENDM
 
@@ -619,6 +622,10 @@ reg_1:   lea    ebp,_sargon_base_address
          jz     api_2_ROYALT
          cmp    dword ptr [esp+32],3
          jz     api_3_CPTRMV
+         cmp    dword ptr [esp+32],4
+         jz     api_4_VALMOV
+         cmp    dword ptr [esp+32],5
+         jz     api_5_ASNTBI
          jmp    api_end
 
 api_1_INITBD:
@@ -632,6 +639,14 @@ api_2_ROYALT:
 api_3_CPTRMV:
          sahf
          call   CPTRMV
+         jmp    api_end
+api_4_VALMOV:
+         sahf
+         call   VALMOV
+         jmp    api_end
+api_5_ASNTBI:
+         sahf
+         call   ASNTBI
          jmp    api_end
 
 api_end: mov    ebp,[esp+36]     ;parm2 = ptr to REGS
@@ -1858,7 +1873,7 @@ rel026: MOV     al,6                            ; Load board control limit
         TEST    byte ptr [ebp+ebx],80h          ; Is it white ?
         JNZ     rel016                          ; No - jump
         NEG     al                              ; Negate for white
-rel016: ADD     al,80H                          ; Rescale score (neutral = 80H
+rel016: ADD     al,80H                          ; Rescale score (neutral = 80H)
         CALLBACK "end of POINTS()"
         MOV     byte ptr [ebp+VALM],al          ; Save score
         MOV     si,word ptr [ebp+MLPTRJ]        ; Load move list pointer
@@ -2412,7 +2427,7 @@ rel019: MOV     bx,word ptr [ebp+SCRIX]         ; Load score table index
         MOV     bx,NPLY                         ; Decrement ply counter
         DEC     byte ptr [ebp+ebx]
         MOV     bx,word ptr [ebp+MLPTRI]        ; Load ply list pointer
-        LAHF                                    ; Load pointer to move list to
+        LAHF                                    ; Load pointer to move list top
         DEC     bx
         SAHF
         MOV     dh,byte ptr [ebp+ebx]
@@ -2431,7 +2446,7 @@ rel019: MOV     bx,word ptr [ebp+SCRIX]         ; Load score table index
         MOV     dl,byte ptr [ebp+ebx]
         MOV     word ptr [ebp+MLPTRI],bx        ; Save new ply list pointer
         MOV     word ptr [ebp+MLPTRJ],dx        ; Save next move pointer
-        CALL    UNMOVE                          ; Restore board to previous pl
+        CALL    UNMOVE                          ; Restore board to previous ply
         RET                                     ; Return
 
 ;***********************************************************
@@ -2604,6 +2619,99 @@ BITASN: SUB     al,al                           ; Get ready for division
         MOV     al,dh                           ; Rank
         ADD     al,30H                          ; Convert rank to Ascii (1-8)
         MOV     bh,al                           ; Save
+        RET                                     ; Return
+
+
+;***********************************************************
+; ASCII SQUARE NAME TO BOARD INDEX
+;***********************************************************
+; FUNCTION:   --  To convert an algebraic square name in
+;                 Ascii to a hexadecimal board index.
+;                 This routine also checks the input for
+;                 validity.
+;
+; CALLED BY:  --  PLYRMV
+;
+; CALLS:      --  MLTPLY
+;
+; ARGUMENTS:  --  Accepts the square name in register pair HL
+;                 and outputs the board index in register A.
+;                 Register B = 0 if ok. Register B = Register
+;                 A if invalid.
+;***********************************************************
+ASNTBI: MOV     al,bl                           ; Ascii rank (1 - 8)
+        SUB     al,30H                          ; Rank 1 - 8
+        CMP     al,1                            ; Check lower bound
+        JS      AT04                            ; Jump if invalid
+        CMP     al,9                            ; Check upper bound
+        JNC     AT04                            ; Jump if invalid
+        INC     al                              ; Rank 2 - 9
+        MOV     dh,al                           ; Ready for multiplication
+        MOV     dl,10
+        CALL    MLTPLY                          ; Multiply
+        MOV     al,bh                           ; Ascii file letter (a - h)
+        SUB     al,40H                          ; File 1 - 8
+        CMP     al,1                            ; Check lower bound
+        JS      AT04                            ; Jump if invalid
+        CMP     al,9                            ; Check upper bound
+        JNC     AT04                            ; Jump if invalid
+        ADD     al,dh                           ; File+Rank(20-90)=Board index
+        MOV     ch,0                            ; Ok flag
+        RET                                     ; Return
+AT04:   MOV     ch,al                           ; Invalid flag
+        RET                                     ; Return
+
+;***********************************************************
+; VALIDATE MOVE SUBROUTINE
+;***********************************************************
+; FUNCTION:   --  To check a players move for validity.
+;
+; CALLED BY:  --  PLYRMV
+;
+; CALLS:      --  GENMOV
+;                 MOVE
+;                 INCHK
+;                 UNMOVE
+;
+; ARGUMENTS:  --  Returns flag in register A, 0 for valid
+;                 and 1 for invalid move.
+;***********************************************************
+VALMOV: MOV     bx,word ptr [ebp+MLPTRJ]        ; Save last move pointer
+        PUSH    ebx                             ; Save register
+        MOV     al,byte ptr [ebp+KOLOR]         ; Computers color
+        XOR     al,80H                          ; Toggle color
+        MOV     byte ptr [ebp+COLOR],al         ; Store
+        MOV     bx,PLYIX-2                      ; Load move list index
+        MOV     word ptr [ebp+MLPTRI],bx
+        MOV     bx,MLIST+1024                   ; Next available list pointer
+        MOV     word ptr [ebp+MLNXT],bx
+        CALL    GENMOV                          ; Generate opponents moves
+        MOV     si,MLIST+1024                   ; Index to start of moves
+VA5:    MOV     al,byte ptr [ebp+MVEMSG]        ; "From" position
+        CMP     al,byte ptr [ebp+esi+MLFRP]     ; Is it in list ?
+        JNZ     VA6                             ; No - jump
+        MOV     al,byte ptr [ebp+MVEMSG+1]      ; "To" position
+        CMP     al,byte ptr [ebp+esi+MLTOP]     ; Is it in list ?
+        JZ      VA7                             ; Yes - jump
+VA6:    MOV     dl,byte ptr [ebp+esi+MLPTR]     ; Pointer to next list move
+        MOV     dh,byte ptr [ebp+esi+MLPTR+1]
+        XOR     al,al                           ; At end of list ?
+        CMP     al,dh
+        JZ      VA10                            ; Yes - jump
+        PUSH    edx                             ; Move to X register
+        POP     esi
+        JMP     VA5                             ; Jump
+VA7:    MOV     word ptr [ebp+MLPTRJ],si        ; Save opponents move pointer
+        CALL    MOVE                            ; Make move on board array
+        CALL    INCHK                           ; Was it a legal move ?
+        AND     al,al
+        JNZ     VA9                             ; No - jump
+VA8:    POP     ebx                             ; Restore saved register
+        RET                                     ; Return
+VA9:    CALL    UNMOVE                          ; Un-do move on board array
+VA10:   MOV     al,1                            ; Set flag for invalid move
+        POP     ebx                             ; Restore saved register
+        MOV     word ptr [ebp+MLPTRJ],bx        ; Save move pointer
         RET                                     ; Return
 
 

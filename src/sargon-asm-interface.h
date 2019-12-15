@@ -81,4 +81,6 @@ extern "C" {
     const int api_INITBD = 1;
     const int api_ROYALT = 2;
     const int api_CPTRMV = 3;
+    const int api_VALMOV = 4;
+    const int api_ASNTBI = 5;
 };
