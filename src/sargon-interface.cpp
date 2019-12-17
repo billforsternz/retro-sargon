@@ -124,6 +124,8 @@ void sargon_position_import( const thc::ChessPosition &cp )
     memset( board_position, 0xff, sizeof(board_position) );
     unsigned char *dst_base = board_position + 28;  // square h1
     const char *src_base = &cp.squares[thc::h1];
+    bool white_king_on_e1 = (cp.squares[thc::e1]=='K');
+    bool black_king_on_e8 = (cp.squares[thc::e8]=='k');
     for( int i=0; i<8; i++ )
     {
         unsigned char *dst = dst_base + i*10;
@@ -139,28 +141,32 @@ void sargon_position_import( const thc::ChessPosition &cp )
                 case 'b':   b = 0x83;   break;
                 case 'r':   b = 0x84;   break;
                 case 'q':   b = 0x85;   break;
-                case 'k':   b = 0x86;   break;
+                case 'k':   b = 0x96;   break;
                 case 'P':   b = 0x01;   break;
                 case 'N':   b = 0x02;   break;
                 case 'B':   b = 0x03;   break;
                 case 'R':   b = 0x04;   break;
                 case 'Q':   b = 0x05;   break;
-                case 'K':   b = 0x06;   break;
+                case 'K':   b = 0x16;   break;
             }
             bool moved=true;
             if( i==0 )
             {
-                if( j==0 && c=='R' && cp.wking_allowed() )
-                    moved = false; 
+                if( j==0 && c=='R' && (cp.wking_allowed()||!white_king_on_e1) )
+                    moved = false;  // indicate R on home square has not moved, unless it's
+                                    //  essential to mark it moved in order to stop illegal castling 
                 if( (j==1||j==6) && c=='N' )
                     moved = false; 
                 if( (j==2||j==5) && c=='B' )
                     moved = false; 
                 if( j==3 && c=='K' && (cp.wking_allowed()||cp.wqueen_allowed()) )
+                {
                     moved = false; 
+                    b = 0x06;  // uncastled white king
+                }
                 if( j==4 && c=='Q' )
                     moved = false; 
-                if( j==7 && c=='R' && cp.wqueen_allowed() )
+                if( j==7 && c=='R' && (cp.wqueen_allowed()||!white_king_on_e1)  )
                     moved = false; 
             }
             else if( i==1 && c=='P' )
@@ -169,17 +175,20 @@ void sargon_position_import( const thc::ChessPosition &cp )
                 moved = false; 
             else if( i==7 )
             {
-                if( j==0 && c=='r' && cp.bking_allowed() )
+                if( j==0 && c=='r' && (cp.bking_allowed()||!black_king_on_e8)  )
                     moved = false; 
                 if( (j==1||j==6) && c=='n' )
                     moved = false; 
                 if( (j==2||j==5) && c=='b' )
                     moved = false; 
                 if( j==3 && c=='k' && (cp.bking_allowed()||cp.bqueen_allowed()) )
+                {
                     moved = false; 
+                    b = 0x86;  // uncastled black king
+                }
                 if( j==4 && c=='q' )
                     moved = false; 
-                if( j==7 && c=='r' && cp.bqueen_allowed() )
+                if( j==7 && c=='r' && (cp.bqueen_allowed()||!black_king_on_e8) )
                     moved = false; 
             }
             if( moved && b!=0 )
@@ -242,3 +251,4 @@ std::string algebraic( unsigned int sq )
     return s;
 }
 
+    
