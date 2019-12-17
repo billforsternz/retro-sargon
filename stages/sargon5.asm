@@ -582,6 +582,8 @@ reg_1:   lea    ebp,_sargon_base_address
          jz     api_4_VALMOV
          cmp    dword ptr [esp+32],5
          jz     api_5_ASNTBI
+         cmp    dword ptr [esp+32],6
+         jz     api_6_EXECMV
          jmp    api_end
 
 api_1_INITBD:
@@ -603,6 +605,10 @@ api_4_VALMOV:
 api_5_ASNTBI:
          sahf
          call   ASNTBI
+         jmp    api_end
+api_6_EXECMV:
+         sahf
+         call   EXECMV
          jmp    api_end
 
 api_end: mov    ebp,[esp+36]     ;parm2 = ptr to REGS
