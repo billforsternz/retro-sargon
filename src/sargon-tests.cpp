@@ -34,6 +34,7 @@ bool sargon_tests_verbose_comprehensive();
 
 // Misc diagnostics
 void dbg_ptrs();
+void dbg_position();
 void diagnostics();
 void on_exit_diagnostics() {}
 
@@ -228,13 +229,15 @@ bool sargon_whole_game_tests( bool quiet, bool no_very_slow_tests )
     {
         if( i==2 && no_very_slow_tests )
         {
-            printf( "** Skipping very slow test **\n" );
-            break;
+            printf( "** Not Skipping very slow test **\n" );
+            //break;
         }
         std::string game_text;
         std::string between_moves;
         thc::ChessRules cr;
-        for(;;)
+        bool regenerate_position=true;
+        int nbr_moves_played = 0;
+        while( nbr_moves_played < 200 )
         {
             char buf[5];
             pokeb(MVEMSG,   0 );
@@ -245,10 +248,13 @@ bool sargon_whole_game_tests( bool quiet, bool no_very_slow_tests )
             pokeb(KOLOR,0);
             pokeb(PLYMAX, i==0 ? 3 : (i==1?4:5) );
             nodes.clear();
-            sargon(api_INITBD);
-            sargon_position_import(cr);
-            sargon(api_ROYALT);
-            pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
+            if( regenerate_position )
+            {
+                sargon(api_INITBD);
+                sargon_position_import(cr);
+                sargon(api_ROYALT);
+                pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
+            }
             sargon(api_CPTRMV);
             thc::ChessRules cr_after;
             sargon_position_export(cr_after);
@@ -319,9 +325,10 @@ bool sargon_whole_game_tests( bool quiet, bool no_very_slow_tests )
             game_text += s;
             between_moves = " ";
             cr.PlayMove(mv);
+            nbr_moves_played++;
             if( strcmp(cr.squares,cr_after.squares) != 0 )
             {
-                printf( "Position mismatch ?!\n" );
+                printf( "Position mismatch after Sargon move ?!\n" );
                 //break;
             }
             std::vector<thc::Move> moves;
@@ -339,21 +346,143 @@ bool sargon_whole_game_tests( bool quiet, bool no_very_slow_tests )
                 printf( "Tarrasch static evaluator plays %s\n", s.c_str() );
             game_text += " ";
             game_text += s;
+/*
+;***********************************************************
+; PLAYERS MOVE ANALYSIS
+;***********************************************************
+; FUNCTION:   --  To accept and validate the players move
+;                 and produce it on the graphics board. Also
+;                 allows player to resign the game by
+;                 entering a control-R.
+;
+; CALLED BY:  --  DRIVER
+;
+; CALLS:      --  CHARTR
+;                 ASNTBI
+;                 VALMOV
+;                 EXECMV
+;                 PGIFND
+;                 TBPLCL
+;
+; ARGUMENTS:  --  None
+;***********************************************************
+PLYRMV: CALL    CHARTR          ; Accept "from" file letter
+        CPI     12H             ; Is it instead a Control-R ?
+        JZ      FM09            ; Yes - jump
+        MOV     H,A             ; Save
+        CALL    CHARTR          ; Accept "from" rank number
+        MOV     L,A             ; Save
+        CALL    ASNTBI          ; Convert to a board index
+        SUB     B               ; Gives board index, if valid
+        JRZ     PL08            ; Jump if invalid
+        STA     MVEMSG          ; Move list "from" position
+        CALL    CHARTR          ; Accept separator & ignore it
+        CALL    CHARTR          ; Repeat for "to" position
+        MOV     H,A
+        CALL    CHARTR
+        MOV     L,A
+        CALL    ASNTBI
+        SUB     B
+        JRZ     PL08
+        STA     MVEMSG+1        ; Move list "to" position
+        CALL    VALMOV          ; Determines if a legal move
+        ANA     A               ; Legal ?
+        JNZ     PL08            ; No - jump
+        CALL    EXECMV          ; Make move on graphics board
+        RET                     ; Return
+PL08:   LXI     H,LINECT        ; Address of screen line count
+        INR     M               ; Increase by 2 for message
+        INR     M
+        CARRET                  ; New line
+        CALL    PGIFND          ; New page if needed
+        PRTLIN  INVAL1,12       ; Output "INVALID MOVE"
+        PRTLIN  INVAL2,9        ; Output "TRY AGAIN"
+        CALL    TBPLCL          ; Tab to players column
+        JMP     PLYRMV          ; Jump
+        .ENDIF
+
+
+*/
             cr.PlayMove(mv);
+            nbr_moves_played++;
+            std::string terse = mv.TerseOut();
+            z80_registers regs;
+            bool api_ok = false;
+            for( int i=0; i<2; i++ )
+            {
+                memset( &regs, 0, sizeof(regs) );
+                unsigned int file = terse[0 + 2*i] - 0x20;    // toupper
+                unsigned int rank = terse[1 + 2*i];
+                regs.hl = (file<<8) + rank;
+                sargon( api_ASNTBI, &regs );
+                api_ok = (((regs.bc>>8) & 0xff) == 0);  // ok if reg B eq 0
+                if( api_ok )
+                {
+                    unsigned int board_index = (regs.af&0xff);
+                    pokeb(MVEMSG+i,board_index);
+                }
+            }
+            if( api_ok )
+            {
+                sargon( api_VALMOV, &regs );
+                api_ok = ((regs.af & 0xff) == 0);  // ok if reg A eq 0
+                if( api_ok )
+                {
+                    sargon( api_EXECMV, &regs );
+                    sargon_position_export(cr_after);
+                    if( strcmp(cr.squares,cr_after.squares) != 0 )
+                    {
+                        printf( "Position mismatch after Tarrasch static evaluator move ?!\n" );
+                        //break;
+                    }
+                }
+            }
+            regenerate_position = !api_ok;
+#if 0
+            if( i==0 && nbr_moves_played==34 )  // inspect breakdown point
+            {
+                printf( "Compare to test position idx=0\n" );
+                printf( "%s\n", cr.ToDebugStr().c_str() );
+                dbg_position();
+            }
+            else if( i==1 && nbr_moves_played==28 )  // inspect breakdown point
+            {
+                printf( "Compare to test position idx=1\n" );
+                printf( "%s\n", cr.ToDebugStr().c_str() );
+                dbg_position();
+            }
+#endif
         }
         std::string expected = (i==0 ?
+            //"Nc3 d5 d4 Nc6 Be3 e5 dxe5 Nxe5 Qd4 Bd6 Nf3 Nxf3+ exf3 Nf6 Nxd5 O-O Nxf6+ Qxf6"
+            //" O-O-O Bd7 Qxf6 gxf6 Bc4 f5 Kd2 c5 Ke2 Bxh2 Rxd7 Be5 Rxb7 Bd4 Bxd4 cxd4 Rh5"
+            //" f4 Rg5+ Kh8 Bxf7 Rfd8 Be6 Rdb8 Bd5 Rc8 Be4 h6 Rh7#"
             "Nc3 d5 d4 Nc6 Be3 e5 dxe5 Nxe5 Qd4 Bd6 Nf3 Nxf3+ exf3 Nf6 Nxd5 O-O Nxf6+ Qxf6"
-            " O-O-O Bd7 Qxf6 gxf6 Bc4 f5 Kd2 c5 Ke2 Bxh2 Rxd7 Be5 Rxb7 Bd4 Bxd4 cxd4 Rh5"
-            " f4 Rg5+ Kh8 Bxf7 Rfd8 Be6 Rdb8 Bd5 Rc8 Be4 h6 Rh7#"
+            " O-O-O Bd7 Qxf6 gxf6 Bc4 f5 Kd2 c5 Ke2 Bxh2 Rxd7 Be5 Rxb7 Bd4 Bxd4 cxd4 Kd3"
+            " Rab8 Bxf7+ Kh8 Rxa7 Rbd8 Be6 Rb8 Raxh7#"
                 : (i==1 ?
+            //"Nc3 d5 d4 Nc6 Bf4 Nf6 Nb5 e5 dxe5 Ne4 e6 Bxe6 Nxc7+ Kd7 Nxa8 Qxa8 Nh3 f5 f3 Nc5"
+            //" c4 d4 e3 d3 Bxd3 Nxd3+ Qxd3+ Kc8 Kf2 Be7 Rhd1 Rg8 Ng5 Bxg5 Bxg5 Kb8 Qd6+ Kc8 Bf4"
+            //" Bxc4 Qd7#"
             "Nc3 d5 d4 Nc6 Bf4 Nf6 Nb5 e5 dxe5 Ne4 e6 Bxe6 Nxc7+ Kd7 Nxa8 Qxa8 Nh3 f5 f3 Nc5"
-            " c4 d4 e3 d3 Bxd3 Nxd3+ Qxd3+ Kc8 Kf2 Be7 Rhd1 Rg8 Ng5 Bxg5 Bxg5 Kb8 Qd6+ Kc8 Bf4"
-            " Bxc4 Qd7#"
+            " c4 d4 e3 d3 Bxd3 Nxd3+ Qxd3+ Kc8 O-O Be7 Rfd1 Rg8 Ng5 Bxg5 Bxg5 Kb8 Qd6+ Kc8"
+            " Bf4 Bxc4 Qd7#"
                 :
+            //"Nc3 d5 d4 Nc6 Bf4 Nf6 Nb5 e5 Bxe5 Nxe5 dxe5 Ne4 Qxd5 Qxd5 Nxc7+ Kd8 Nxd5 Rb8 f3 Nc5"
+            //" O-O-O Ra8 Nb6+ Nd3+ Rxd3+ Bd7 Nxa8 Kc8 Nh3 Kd8 Ng5 Ke8 Nc7+ Ke7 Nxf7 Rg8 Nd6 b6 Ndb5"
+            //" a5 Nc3 Kd8 Na8 Bc5 e6 Ke7 Rxd7+ Kxe6 Ra7 h6 e4 g6 Bc4+ Kd6 Bxg8 Ke5 Rb7 b5 Rxb5 Kd4"
+            //" Rd1+ Ke3 Rd2 Bb4 Nc7 g5 Rb6 h5 Bf7 h4 a3 Bc5 Ra6 a4 b4 axb3 N7d5#")
             "Nc3 d5 d4 Nc6 Bf4 Nf6 Nb5 e5 Bxe5 Nxe5 dxe5 Ne4 Qxd5 Qxd5 Nxc7+ Kd8 Nxd5 Rb8 f3 Nc5"
             " O-O-O Ra8 Nb6+ Nd3+ Rxd3+ Bd7 Nxa8 Kc8 Nh3 Kd8 Ng5 Ke8 Nc7+ Ke7 Nxf7 Rg8 Nd6 b6 Ndb5"
-            " a5 Nc3 Kd8 Na8 Bc5 e6 Ke7 Rxd7+ Kxe6 Ra7 h6 e4 g6 Bc4+ Kd6 Bxg8 Ke5 Rb7 b5 Rxb5 Kd4"
-            " Rd1+ Ke3 Rd2 Bb4 Nc7 g5 Rb6 h5 Bf7 h4 a3 Bc5 Ra6 a4 b4 axb3 N7d5#")
+            " a5 Rd6 Bxb5 Nxb5 Kf7 Rxb6 Be7 Rb7 Rf8 e3 Re8 Nd6+ Kf8 Nxe8 Kxe8 Bd3 g6 h4 Kf7 Kd2"
+            " Ke6 Bc4+ Kxe5 Rxe7+ Kd6 Rxh7 Kc5 Kc3 a4 Rg7 g5 hxg5 Kd6 Ra7 Ke5 g4 Kd6 b4 axb3 f4"
+            " bxa2 Kb4 a1=Q Rhxa1 Kc6 Rd1 Kb6 Rdd7 Kc6 c3 Kb6 e4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4"
+            " Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4"
+            " Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4"
+            " Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4"
+            " Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4"
+            " Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4"
+            " Kc6")
         );
         bool pass = (game_text == expected);
         if( !pass )
@@ -418,6 +547,16 @@ bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
 
     static TEST tests[]=
     {
+        // Point where game test fails, PLYMAX=3 (now fixed, until we tweaked
+        //  sargon_position_import() to assume castled kings [if moved] and
+        //  making unmoved rooks more likely we got "h1h5")
+        { "r4rk1/pR3p1p/8/5p2/2Bp4/5P2/PPP1KPP1/7R w - - 0 18", 3, "e2d3" },
+
+        // Point where game test fails, PLYMAX=4 (now fixed, until we tweaked
+        //  sargon_position_import() to assume castled kings [if moved] and
+        //  making unmoved rooks more likely we got "e1f2")
+        { "q1k2b1r/pp4pp/2n1b3/5p2/2P2B2/3QPP1N/PP4PP/R3K2R w KQ - 1 15", 4, "OO" },
+
         // Test position #1 above
         { "r2n2k1/5ppp/b5q1/1P3N2/8/8/3Q1PPP/3R2K1 w - - 0 1", 3, "d2d8" },
         { "r2n2k1/5ppp/b5q1/1P3N2/8/8/3Q1PPP/3R2K1 w - - 0 1", 2, "f5e7" },
@@ -488,6 +627,12 @@ bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
             printf( "%s\n", s.c_str() );
         }
         pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
+    /*  if( i<2 )
+        {
+            printf( "%s\n", cp.ToDebugStr().c_str() );
+            printf( "Test position idx=%d\n", i );
+            dbg_position();
+        } */
         printf( "Test %d of %d: PLYMAX=%d:", i+1, nbr_tests, pt->plymax_required );
         if( 0 == strcmp(pt->fen,"2rq1r1k/3npp1p/3p1n1Q/pp1P2N1/8/2P4P/1P4P1/R4R1K w - - 0 1") )
         {
@@ -578,6 +723,23 @@ bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
         }
     }
     return ok;
+}
+
+// Diagnostics dump of chess position from Sargon
+void dbg_position()
+{
+    const unsigned char *sargon_board = peek(BOARDA);
+    for( int i=0; i<12; i++ )
+    {
+        for( int j=0; j<10; j++ )
+        {
+            unsigned int b = *sargon_board++;
+            printf( "%02x", b );
+            if( j+1 < 10 )
+                printf( " " );
+        }
+        printf( "\n" );
+    }
 }
 
 void dbg_ptrs()
