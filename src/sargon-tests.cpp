@@ -229,14 +229,16 @@ bool sargon_whole_game_tests( bool quiet, bool no_very_slow_tests )
     {
         if( i==2 && no_very_slow_tests )
         {
-            printf( "** Not Skipping very slow test **\n" );
-            //break;
+            printf( "** Skipping very slow test **\n" );
+            break;
         }
         std::string game_text;
         std::string between_moves;
         thc::ChessRules cr;
         bool regenerate_position=true;
         int nbr_moves_played = 0;
+        unsigned char moveno=1;
+        pokeb(MOVENO,moveno);
         while( nbr_moves_played < 200 )
         {
             char buf[5];
@@ -244,8 +246,8 @@ bool sargon_whole_game_tests( bool quiet, bool no_very_slow_tests )
             pokeb(MVEMSG+1, 0 );
             pokeb(MVEMSG+2, 0 );
             pokeb(MVEMSG+3, 0 );
-            pokeb(COLOR,0);
-            pokeb(KOLOR,0);
+            pokeb(COLOR,0); // white to move
+            pokeb(KOLOR,0); // Sargon is white
             pokeb(PLYMAX, i==0 ? 3 : (i==1?4:5) );
             nodes.clear();
             if( regenerate_position )
@@ -253,7 +255,6 @@ bool sargon_whole_game_tests( bool quiet, bool no_very_slow_tests )
                 sargon(api_INITBD);
                 sargon_position_import(cr);
                 sargon(api_ROYALT);
-                pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
             }
             sargon(api_CPTRMV);
             thc::ChessRules cr_after;
@@ -437,7 +438,13 @@ PL08:   LXI     H,LINECT        ; Address of screen line count
                     }
                 }
             }
+            moveno++;
+            if( moveno <= 1 )   // avoid book move == 1
+                moveno = 2;
+            pokeb(MOVENO,moveno);
             regenerate_position = !api_ok;
+            if( regenerate_position )
+                printf( "Move by move operation has broken down, need to regenerate position\n" );
 #if 0
             if( i==0 && nbr_moves_played==34 )  // inspect breakdown point
             {
@@ -453,36 +460,20 @@ PL08:   LXI     H,LINECT        ; Address of screen line count
             }
 #endif
         }
+        // We now have introduced book moves (by starting MOVENO at 1 and incrementing it after each pair of half moves), and
+        //  they are reproducible by the LDAR callback(). Note that by good luck we are avoiding the e4 game that ends in a
+        //  repetition at plymax 4 and the d4 game that ends in a repetition at plymax 5 (Sargon does seem to have difficulty
+        //  mating the opponent if there are too many mates available at higher plymax)
         std::string expected = (i==0 ?
-            //"Nc3 d5 d4 Nc6 Be3 e5 dxe5 Nxe5 Qd4 Bd6 Nf3 Nxf3+ exf3 Nf6 Nxd5 O-O Nxf6+ Qxf6"
-            //" O-O-O Bd7 Qxf6 gxf6 Bc4 f5 Kd2 c5 Ke2 Bxh2 Rxd7 Be5 Rxb7 Bd4 Bxd4 cxd4 Rh5"
-            //" f4 Rg5+ Kh8 Bxf7 Rfd8 Be6 Rdb8 Bd5 Rc8 Be4 h6 Rh7#"
-            "Nc3 d5 d4 Nc6 Be3 e5 dxe5 Nxe5 Qd4 Bd6 Nf3 Nxf3+ exf3 Nf6 Nxd5 O-O Nxf6+ Qxf6"
-            " O-O-O Bd7 Qxf6 gxf6 Bc4 f5 Kd2 c5 Ke2 Bxh2 Rxd7 Be5 Rxb7 Bd4 Bxd4 cxd4 Kd3"
-            " Rab8 Bxf7+ Kh8 Rxa7 Rbd8 Be6 Rb8 Raxh7#"
+            "e4 d5 Qf3 Nf6 Nc3 e6 e5 Ng8 Nh3 Nc6 Bb5 f5 O-O Be7 Qg3 Kf7 Bxc6 bxc6 Qf4 Qd7 d3 c5 Bd2 Bb7 Ng5+ Ke8 Qa4 Nh6 Nxe6 Rg8 Nxc7+ Kd8 Qxd7+ Kxd7 Nxa8 Rxa8 Bxh6 gxh6 Nb5 a6 e6+ Kxe6 Nc7+ Kd7 Nxa8 Bxa8 Rae1 Bb7 f4 Ba8 Kf2 Bb7 Kg3 Ba8 a3 Bb7 c3 Ba8 Re5 Bb7 Rfe1 Bd6 Rxf5 Ba8 Rf7+ Kc6 Rxh7 Bf8 Re8 Be7 Rxa8 Bd6 Rxa6+ Kb5 Rxd6 h5 Rxh5 Ka4 Rhxd5 Kb5 b3 Ka5 Rxc5#"
+            //"d4 d5 Nc3 Nc6 Be3 e5 dxe5 Nxe5 Qd4 Bd6 Nf3 Nxf3+ exf3 Nf6 Nxd5 O-O O-O-O Nxd5 Qxd5 Qe7 Bc4 h6 b3 Ba3+ Kb1 c5 h4 Be6 Qe5 Rab8 Rd6 Ra8 Bxe6 fxe6 Rxe6 Qd7 Re7 Qb5 Qxg7#"
                 : (i==1 ?
-            //"Nc3 d5 d4 Nc6 Bf4 Nf6 Nb5 e5 dxe5 Ne4 e6 Bxe6 Nxc7+ Kd7 Nxa8 Qxa8 Nh3 f5 f3 Nc5"
-            //" c4 d4 e3 d3 Bxd3 Nxd3+ Qxd3+ Kc8 Kf2 Be7 Rhd1 Rg8 Ng5 Bxg5 Bxg5 Kb8 Qd6+ Kc8 Bf4"
-            //" Bxc4 Qd7#"
-            "Nc3 d5 d4 Nc6 Bf4 Nf6 Nb5 e5 dxe5 Ne4 e6 Bxe6 Nxc7+ Kd7 Nxa8 Qxa8 Nh3 f5 f3 Nc5"
-            " c4 d4 e3 d3 Bxd3 Nxd3+ Qxd3+ Kc8 O-O Be7 Rfd1 Rg8 Ng5 Bxg5 Bxg5 Kb8 Qd6+ Kc8"
-            " Bf4 Bxc4 Qd7#"
+            "d4 d5 Nc3 Nc6 Bf4 Nf6 Nb5 e5 dxe5 Ne4 e6 Bxe6 Nxc7+ Kd7 Nxa8 Qxa8 Nh3 f5 Qd3 Be7 O-O-O Rg8 f3 Nc5 Qe3 d4 c3 Bxa2 cxd4 Ne6 d5 Nxf4 dxc6+ Kxc6 Qxe7 Qb8 Qd7+ Kb6 Qd4+ Ka5 b4+ Kb5 Nxf4 Qa8 Kb2 Bc4 Qc5+ Ka4 Qxc4 Qb8 Ra1#"
+            // "e4 d5 Qf3 Nf6 e5 Ne4 d3 Nc5 Nc3 e6 d4 Nca6 Be3 Nc6 O-O-O f5 Nh3 Bb4 Bxa6 bxa6 Bg5 Qd7 a3 Bxc3 Qxc3 O-O Kd2 Bb7 Ke2 a5 b4 a4 b5 Ne7 Qb4 c5 dxc5 Rab8 Qxa4 Ra8 Bf4 Rfe8 c3 Red8 Rhg1 Rdc8 Be3 Rcb8 f4 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8"
                 :
-            //"Nc3 d5 d4 Nc6 Bf4 Nf6 Nb5 e5 Bxe5 Nxe5 dxe5 Ne4 Qxd5 Qxd5 Nxc7+ Kd8 Nxd5 Rb8 f3 Nc5"
-            //" O-O-O Ra8 Nb6+ Nd3+ Rxd3+ Bd7 Nxa8 Kc8 Nh3 Kd8 Ng5 Ke8 Nc7+ Ke7 Nxf7 Rg8 Nd6 b6 Ndb5"
-            //" a5 Nc3 Kd8 Na8 Bc5 e6 Ke7 Rxd7+ Kxe6 Ra7 h6 e4 g6 Bc4+ Kd6 Bxg8 Ke5 Rb7 b5 Rxb5 Kd4"
-            //" Rd1+ Ke3 Rd2 Bb4 Nc7 g5 Rb6 h5 Bf7 h4 a3 Bc5 Ra6 a4 b4 axb3 N7d5#")
-            "Nc3 d5 d4 Nc6 Bf4 Nf6 Nb5 e5 Bxe5 Nxe5 dxe5 Ne4 Qxd5 Qxd5 Nxc7+ Kd8 Nxd5 Rb8 f3 Nc5"
-            " O-O-O Ra8 Nb6+ Nd3+ Rxd3+ Bd7 Nxa8 Kc8 Nh3 Kd8 Ng5 Ke8 Nc7+ Ke7 Nxf7 Rg8 Nd6 b6 Ndb5"
-            " a5 Rd6 Bxb5 Nxb5 Kf7 Rxb6 Be7 Rb7 Rf8 e3 Re8 Nd6+ Kf8 Nxe8 Kxe8 Bd3 g6 h4 Kf7 Kd2"
-            " Ke6 Bc4+ Kxe5 Rxe7+ Kd6 Rxh7 Kc5 Kc3 a4 Rg7 g5 hxg5 Kd6 Ra7 Ke5 g4 Kd6 b4 axb3 f4"
-            " bxa2 Kb4 a1=Q Rhxa1 Kc6 Rd1 Kb6 Rdd7 Kc6 c3 Kb6 e4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4"
-            " Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4"
-            " Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4"
-            " Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4"
-            " Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4"
-            " Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4 Kc6 Bb5+ Kb6 Bc4"
-            " Kc6")
+            "e4 d5 Qf3 Nf6 e5 Ne4 d3 Nc5 Nc3 e6 d4 Nca6 Bb5+ Nc6 Nge2 f5 Bf4 Be7 O-O-O O-O Qg3 Rb8 Kd2 Ra8 h4 Rb8 Bh6 Rf7 Bg5 Ra8 Bxc6 bxc6 Na4 Qd7 Bf4 c5 Nxc5 Nxc5 dxc5 Bxc5 Rb1 Bb7 b4 Bb6 Kd3 Rff8 h5 c5 bxc5 Bxc5 h6 Rab8 hxg7 Qxg7 Qxg7+ Kxg7 Bh6+ Kh8 Bxf8 Bxf8 Kd4 Be7 Nf4 Kg7 Nxe6+ Kh8 Nc7 Kg7 Na6 Bxa6 Rxb8 Bc4 Rb7 Kf8 Rxh7 Ba3 Rb8#"
+            // "d4 d5 Nc3 Nc6 Bf4 Nf6 Nb5 e5 Bxe5 Nxe5 dxe5 Ne4 Qxd5 Qxd5 Nxc7+ Kd8 Nxd5 Rb8 Rd1 Ra8 f3 Nc5 Nb6+ Nd3+ Rxd3+ Bd7 Nxa8 Kc8 Nh3 Kd8 Ng5 Ke8 Nc7+ Ke7 Nxf7 Rg8 Nd6 b6 h4 Kd8 Ndb5 a5 e6 Kc8 exd7+ Kb7 d8=Q Rh8 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7"
+                )
         );
         bool pass = (game_text == expected);
         if( !pass )
@@ -1164,16 +1155,26 @@ extern "C" {
                    uint32_t reg_ebx, uint32_t reg_edx, uint32_t reg_ecx, uint32_t reg_eax,
                    uint32_t reg_eflags )
     {
-        if( !callback_enabled )
-            return;
         uint32_t *sp = &reg_edi;
         sp--;
+
+        // expecting code at return address to be 0xeb = 2 byte opcode, (0xeb + 8 bit relative jump),
         uint32_t ret_addr = *sp;
         const unsigned char *code = (const unsigned char *)ret_addr;
+        const char *msg = (const char *)(code+2);   // ASCIIZ text should come after that
 
-        // expecting 0xeb = 2 byte opcode, (0xeb + 8 bit relative jump),
-        //  if others skip over 4 operand bytes
-        const char *msg = ( code[0]==0xeb ? (char *)(code+2) : (char *)(code+6) );
+        if( 0 == strcmp(msg,"LDAR") )
+        {
+            // For testing purposes, make LDAR output increment, results in
+            //  deterministic choice of book moves
+            static uint8_t a_reg;
+            volatile uint32_t *peax = &reg_eax;
+            *peax = a_reg++;
+            return;
+        }
+
+        if( !callback_enabled )
+            return;
         if( std::string(msg) == "After FNDMOV()" )
         {
             if( !callback_quiet )
