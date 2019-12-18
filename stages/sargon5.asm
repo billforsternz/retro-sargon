@@ -2195,6 +2195,7 @@ BOOK:   POP     PSW             ; Abort return to FNDMOV
         ANA     A               ; Is it white ?
         JRNZ    BM5             ; No - jump
         LDAR                    ; Load refresh reg (random no)
+        CALLBACK "LDAR"
         BIT     0,A             ; Test random bit
         RZ                      ; Return if zero (P-K4)
         INR     M               ; P-Q4

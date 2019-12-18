@@ -2478,6 +2478,7 @@ BOOK:   POP     eax                             ; Abort return to FNDMOV
         AND     al,al                           ; Is it white ?
         JNZ     BM5                             ; No - jump
         Z80_LDAR                                ; Load refresh reg (random no)
+        CALLBACK "LDAR"
         TEST    al,1                            ; Test random bit
         JNZ     skip28                          ; Return if zero (P-K4)
         RET
