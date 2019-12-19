@@ -66,6 +66,9 @@ enum Square
     SQUARE_INVALID
 };
 
+inline char get_file( Square sq )  { return static_cast<char> (  (static_cast<int>(sq)&0x07) + 'a' ); }           // eg c5->'c'
+inline char get_rank( Square sq )  { return static_cast<char> (  '8' - ((static_cast<int>(sq)>>3) & 0x07) ); }    // eg c5->'5'
+
 // Special (i.e. not ordinary) move types
 enum SPECIAL
 {           
