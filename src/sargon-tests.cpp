@@ -61,11 +61,12 @@ static std::vector<unsigned int> cardinal_list;
 //  algorithm example
 void probe_test_prime( const char *pos_probe, bool quiet, bool alpha_beta );
 
+
 int main( int argc, const char *argv[] )
 {
     util::tests();
     on_exit_diagnostics();
-    bool ok = sargon_tests_quiet();
+    bool ok = sargon_tests_quiet_comprehensive();
     if( ok )
         printf( "All tests passed\n" );
     else
@@ -176,11 +177,10 @@ bool sargon_algorithm_explore( bool quiet, bool alpha_beta  )
     cp.Forsyth(pos_probe);
     pokeb(MLPTRJ,0); //need to set this ptr to 0 to get Root position recognised in callback()
     pokeb(MLPTRJ+1,0);
-    pokeb(COLOR,0);
     pokeb(KOLOR,0);
     pokeb(PLYMAX,3);
     sargon(api_INITBD);
-    sargon_position_import(cp);
+    sargon_import_position(cp);
     sargon(api_ROYALT);
     pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
     if( alpha_beta )
@@ -218,19 +218,19 @@ bool sargon_algorithm_explore( bool quiet, bool alpha_beta  )
     return ok;
 }
 
-
 bool sargon_whole_game_tests( bool quiet, bool no_very_slow_tests )
 {
     bool ok = true;
     printf( "* Whole game tests\n" );
     callback_enabled = false;
-    printf( "Entire PLYMAX=3 game test " );
-    for( int i=0; i<3; i++ )
+    for( int i=0; i<6; i++ )
     {
-        if( i==2 && no_very_slow_tests )
+        int plymax = "334455"[i] - '0'; // two 3 ply games, then 2 4 ply games, then 2 5 ply games
+        printf( "Entire PLYMAX=%d 1.%c4 game test ", plymax, i%2==0 ? 'd' : 'e' );
+        if( plymax==5 && no_very_slow_tests )
         {
             printf( "** Skipping very slow test **\n" );
-            break;
+            continue;
         }
         std::string game_text;
         std::string between_moves;
@@ -241,77 +241,30 @@ bool sargon_whole_game_tests( bool quiet, bool no_very_slow_tests )
         pokeb(MOVENO,moveno);
         while( nbr_moves_played < 200 )
         {
-            char buf[5];
             pokeb(MVEMSG,   0 );
             pokeb(MVEMSG+1, 0 );
             pokeb(MVEMSG+2, 0 );
             pokeb(MVEMSG+3, 0 );
-            pokeb(COLOR,0); // white to move
             pokeb(KOLOR,0); // Sargon is white
-            pokeb(PLYMAX, i==0 ? 3 : (i==1?4:5) );
+            pokeb(PLYMAX, plymax );
             nodes.clear();
             if( regenerate_position )
             {
                 sargon(api_INITBD);
-                sargon_position_import(cr);
+                sargon_import_position(cr);
                 sargon(api_ROYALT);
             }
             sargon(api_CPTRMV);
             thc::ChessRules cr_after;
-            sargon_position_export(cr_after);
-            memcpy( buf, peek(MVEMSG), 4 );
-            buf[4] = '\0';
-            bool trigger = false;
-            if( std::string(buf) == "OO" )
-            {
-                strcpy(buf,cr.white?"e1g1":"e8g8");
-                trigger = true;
-            }
-            else if( std::string(buf) == "OOO" )
-            {
-                strcpy(buf,cr.white?"e1c1":"e8c8");
-                trigger = true;
-            }
-            else if( std::string(buf) == "EP" )
-            {
-                trigger = true;
-                int target = cr.enpassant_target;
-                int src=0;
-                if( 0<=target && target<64 && cr_after.squares[target] == (cr.white?'P':'p') )
-                {
-                    if( cr.white )
-                    {
-                        int src1 = target + 7;
-                        int src2 = target + 9;
-                        if( cr.squares[src1]=='P' && cr_after.squares[src1]!='P' )
-                            src = src1;
-                        else
-                            src = src2;
-                    }
-                    else
-                    {
-                        int src1 = target - 7;
-                        int src2 = target - 9;
-                        if( cr.squares[src1]=='p' && cr_after.squares[src1]!='p' )
-                            src = src1;
-                        else
-                            src = src2;
-                    }
-                }
-    #define FILE(sq)    ( (char) (  ((sq)&0x07) + 'a' ) )           // eg c5->'c'
-    #define RANK(sq)    ( (char) (  '8' - (((sq)>>3) & 0x07) ) )    // eg c5->'5'
-                buf[0] = FILE(src);
-                buf[1] = RANK(src);
-                buf[2] = FILE(target);
-                buf[3] = RANK(target);
-            }
+            sargon_export_position(cr_after);
+            std::string terse = sargon_export_move(BESTM);
             thc::Move mv;
-            bool ok = mv.TerseIn( &cr, buf );
-            if( !ok || trigger )
+            bool ok = mv.TerseIn( &cr, terse.c_str() );
+            if( !ok )
             {
                 if( !quiet )
                 {
-                    printf( "%s - %s\n%s", ok?"Castling or En-Passant":"Sargon doesnt find move", buf, cr.ToDebugStr().c_str() );
+                    printf( "Sargon doesn't find move - %s\n%s", terse.c_str(), cr.ToDebugStr().c_str() );
                     printf( "(After)\n%s",cr_after.ToDebugStr().c_str() );
                 }
                 if( !ok )
@@ -347,144 +300,45 @@ bool sargon_whole_game_tests( bool quiet, bool no_very_slow_tests )
                 printf( "Tarrasch static evaluator plays %s\n", s.c_str() );
             game_text += " ";
             game_text += s;
-/*
-;***********************************************************
-; PLAYERS MOVE ANALYSIS
-;***********************************************************
-; FUNCTION:   --  To accept and validate the players move
-;                 and produce it on the graphics board. Also
-;                 allows player to resign the game by
-;                 entering a control-R.
-;
-; CALLED BY:  --  DRIVER
-;
-; CALLS:      --  CHARTR
-;                 ASNTBI
-;                 VALMOV
-;                 EXECMV
-;                 PGIFND
-;                 TBPLCL
-;
-; ARGUMENTS:  --  None
-;***********************************************************
-PLYRMV: CALL    CHARTR          ; Accept "from" file letter
-        CPI     12H             ; Is it instead a Control-R ?
-        JZ      FM09            ; Yes - jump
-        MOV     H,A             ; Save
-        CALL    CHARTR          ; Accept "from" rank number
-        MOV     L,A             ; Save
-        CALL    ASNTBI          ; Convert to a board index
-        SUB     B               ; Gives board index, if valid
-        JRZ     PL08            ; Jump if invalid
-        STA     MVEMSG          ; Move list "from" position
-        CALL    CHARTR          ; Accept separator & ignore it
-        CALL    CHARTR          ; Repeat for "to" position
-        MOV     H,A
-        CALL    CHARTR
-        MOV     L,A
-        CALL    ASNTBI
-        SUB     B
-        JRZ     PL08
-        STA     MVEMSG+1        ; Move list "to" position
-        CALL    VALMOV          ; Determines if a legal move
-        ANA     A               ; Legal ?
-        JNZ     PL08            ; No - jump
-        CALL    EXECMV          ; Make move on graphics board
-        RET                     ; Return
-PL08:   LXI     H,LINECT        ; Address of screen line count
-        INR     M               ; Increase by 2 for message
-        INR     M
-        CARRET                  ; New line
-        CALL    PGIFND          ; New page if needed
-        PRTLIN  INVAL1,12       ; Output "INVALID MOVE"
-        PRTLIN  INVAL2,9        ; Output "TRY AGAIN"
-        CALL    TBPLCL          ; Tab to players column
-        JMP     PLYRMV          ; Jump
-        .ENDIF
-
-
-*/
             cr.PlayMove(mv);
             nbr_moves_played++;
-            std::string terse = mv.TerseOut();
-            z80_registers regs;
-            bool api_ok = false;
-            for( int i=0; i<2; i++ )
+            ok = sargon_play_move(mv);
+            if( ok )
             {
-                memset( &regs, 0, sizeof(regs) );
-                unsigned int file = terse[0 + 2*i] - 0x20;    // toupper
-                unsigned int rank = terse[1 + 2*i];
-                regs.hl = (file<<8) + rank;
-                sargon( api_ASNTBI, &regs );
-                api_ok = (((regs.bc>>8) & 0xff) == 0);  // ok if reg B eq 0
-                if( api_ok )
+                sargon_export_position(cr_after);
+                if( strcmp(cr.squares,cr_after.squares) != 0 )
                 {
-                    unsigned int board_index = (regs.af&0xff);
-                    pokeb(MVEMSG+i,board_index);
+                    printf( "Position mismatch after Tarrasch static evaluator move ?!\n" );
+                    //break;
                 }
             }
-            if( api_ok )
-            {
-                sargon( api_VALMOV, &regs );
-                api_ok = ((regs.af & 0xff) == 0);  // ok if reg A eq 0
-                if( api_ok )
-                {
-                    sargon( api_EXECMV, &regs );
-                    sargon_position_export(cr_after);
-                    if( strcmp(cr.squares,cr_after.squares) != 0 )
-                    {
-                        printf( "Position mismatch after Tarrasch static evaluator move ?!\n" );
-                        //break;
-                    }
-                }
-            }
-            moveno++;
-            if( moveno <= 1 )   // avoid book move == 1
-                moveno = 2;
+            if( moveno <= 254 )
+                moveno++;
             pokeb(MOVENO,moveno);
-            regenerate_position = !api_ok;
+            regenerate_position = !ok;
             if( regenerate_position )
-                printf( "Move by move operation has broken down, need to regenerate position\n" );
-#if 0
-            if( i==0 && nbr_moves_played==34 )  // inspect breakdown point
-            {
-                printf( "Compare to test position idx=0\n" );
-                printf( "%s\n", cr.ToDebugStr().c_str() );
-                dbg_position();
-            }
-            else if( i==1 && nbr_moves_played==28 )  // inspect breakdown point
-            {
-                printf( "Compare to test position idx=1\n" );
-                printf( "%s\n", cr.ToDebugStr().c_str() );
-                dbg_position();
-            }
-#endif
+                printf( "Move by move operation has broken down, need to regenerate position ??\n" );
         }
         // We now have introduced book moves (by starting MOVENO at 1 and incrementing it after each pair of half moves), and
-        //  they are reproducible by the LDAR callback(). Note that by good luck we are avoiding the e4 game that ends in a
-        //  repetition at plymax 4 and the d4 game that ends in a repetition at plymax 5 (Sargon does seem to have difficulty
-        //  mating the opponent if there are too many mates available at higher plymax)
-        std::string expected = (i==0 ?
-            "e4 d5 Qf3 Nf6 Nc3 e6 e5 Ng8 Nh3 Nc6 Bb5 f5 O-O Be7 Qg3 Kf7 Bxc6 bxc6 Qf4 Qd7 d3 c5 Bd2 Bb7 Ng5+ Ke8 Qa4 Nh6 Nxe6 Rg8 Nxc7+ Kd8 Qxd7+ Kxd7 Nxa8 Rxa8 Bxh6 gxh6 Nb5 a6 e6+ Kxe6 Nc7+ Kd7 Nxa8 Bxa8 Rae1 Bb7 f4 Ba8 Kf2 Bb7 Kg3 Ba8 a3 Bb7 c3 Ba8 Re5 Bb7 Rfe1 Bd6 Rxf5 Ba8 Rf7+ Kc6 Rxh7 Bf8 Re8 Be7 Rxa8 Bd6 Rxa6+ Kb5 Rxd6 h5 Rxh5 Ka4 Rhxd5 Kb5 b3 Ka5 Rxc5#"
-            //"d4 d5 Nc3 Nc6 Be3 e5 dxe5 Nxe5 Qd4 Bd6 Nf3 Nxf3+ exf3 Nf6 Nxd5 O-O O-O-O Nxd5 Qxd5 Qe7 Bc4 h6 b3 Ba3+ Kb1 c5 h4 Be6 Qe5 Rab8 Rd6 Ra8 Bxe6 fxe6 Rxe6 Qd7 Re7 Qb5 Qxg7#"
-                : (i==1 ?
-            "d4 d5 Nc3 Nc6 Bf4 Nf6 Nb5 e5 dxe5 Ne4 e6 Bxe6 Nxc7+ Kd7 Nxa8 Qxa8 Nh3 f5 Qd3 Be7 O-O-O Rg8 f3 Nc5 Qe3 d4 c3 Bxa2 cxd4 Ne6 d5 Nxf4 dxc6+ Kxc6 Qxe7 Qb8 Qd7+ Kb6 Qd4+ Ka5 b4+ Kb5 Nxf4 Qa8 Kb2 Bc4 Qc5+ Ka4 Qxc4 Qb8 Ra1#"
-            // "e4 d5 Qf3 Nf6 e5 Ne4 d3 Nc5 Nc3 e6 d4 Nca6 Be3 Nc6 O-O-O f5 Nh3 Bb4 Bxa6 bxa6 Bg5 Qd7 a3 Bxc3 Qxc3 O-O Kd2 Bb7 Ke2 a5 b4 a4 b5 Ne7 Qb4 c5 dxc5 Rab8 Qxa4 Ra8 Bf4 Rfe8 c3 Red8 Rhg1 Rdc8 Be3 Rcb8 f4 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8"
-                :
-            "e4 d5 Qf3 Nf6 e5 Ne4 d3 Nc5 Nc3 e6 d4 Nca6 Bb5+ Nc6 Nge2 f5 Bf4 Be7 O-O-O O-O Qg3 Rb8 Kd2 Ra8 h4 Rb8 Bh6 Rf7 Bg5 Ra8 Bxc6 bxc6 Na4 Qd7 Bf4 c5 Nxc5 Nxc5 dxc5 Bxc5 Rb1 Bb7 b4 Bb6 Kd3 Rff8 h5 c5 bxc5 Bxc5 h6 Rab8 hxg7 Qxg7 Qxg7+ Kxg7 Bh6+ Kh8 Bxf8 Bxf8 Kd4 Be7 Nf4 Kg7 Nxe6+ Kh8 Nc7 Kg7 Na6 Bxa6 Rxb8 Bc4 Rb7 Kf8 Rxh7 Ba3 Rb8#"
-            // "d4 d5 Nc3 Nc6 Bf4 Nf6 Nb5 e5 Bxe5 Nxe5 dxe5 Ne4 Qxd5 Qxd5 Nxc7+ Kd8 Nxd5 Rb8 Rd1 Ra8 f3 Nc5 Nb6+ Nd3+ Rxd3+ Bd7 Nxa8 Kc8 Nh3 Kd8 Ng5 Ke8 Nc7+ Ke7 Nxf7 Rg8 Nd6 b6 h4 Kd8 Ndb5 a5 e6 Kc8 exd7+ Kb7 d8=Q Rh8 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7 Qd5+ Kc8 Qe6+ Kb7"
-                )
-        );
+        //  they are reproducible by the LDAR callback(). Some games end in repetition with Sargon winning easily, in
+        //  particular Sargon does seem to have difficulty mating the opponent if there are too many mates available at higher
+        //  plymax
+        const char *expected_games[] =
+        {
+            "d4 d5 Nc3 Nc6 Be3 e5 Nf3 Nxd4 Bxd4 exd4 Qxd4 Nf6 O-O-O Be6 e3 Qd7 Bb5 c6 Ne5 Qc7 Be2 c5 Qa4+ Kd8 Nf3 Be7 Kd2 g6 h4 Kc8 Ng5 Kb8 Nxe6 fxe6 h5 e5 hxg6 a6 Bd3 e4 Nxd5 Nxd5 Qxe4 Rd8 gxh7 Ka7 h8=Q Rxh8 Qxd5 Qb6 Rxh8 Rxh8 Kc1 Rh2 Bc4 Kb8 Qe5+ Ka7 Qxh2 Ka8 Qh8+ Ka7 Qe5 Bd8 Rd6 Qa5 Qd5 Bc7 Rf6 Kb8 c3 Ka7 g3 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7 Rf6 Kb8 Rf8+ Ka7",
+            "e4 d5 Qf3 Nf6 Nc3 e6 e5 Ng8 Nh3 Nc6 Bb5 f5 exf6 Nxf6 O-O e5 Re1 Be6 Bxc6+ bxc6 Rxe5 Qd7 Ng5 c5 Nxe6 c6 Nxc5+ Qe7 Rxe7+ Bxe7 Qe3 Kf7 Qe6+ Ke8 Qxc6+ Kf7 Qe6+ Ke8 Nxd5 Nxd5 Qxd5 Rb8 Qe6 Ra8 d4 Rb8 Bg5 Rxb2 Qxe7#",
+            "d4 d5 Nc3 Nc6 Bf4 Nf6 Nb5 e5 dxe5 Ne4 e6 Bxe6 Nxc7+ Kd7 Nxa8 Qxa8 Nh3 f5 Qd3 Be7 O-O-O Rg8 f3 Nc5 Qe3 d4 c3 Bxa2 cxd4 Ne6 d5 Nxf4 dxc6+ Kxc6 Qxe7 Qb8 Qd7+ Kb6 Qd4+ Ka5 b4+ Kb5 Nxf4 Qa8 Kb2 Bc4 Qc5+ Ka4 Qxc4 Qb8 Ra1#",
+            "e4 d5 Qf3 Nf6 e5 Ne4 d3 Nc5 Nc3 e6 d4 Nca6 Be3 Nc6 O-O-O f5 Nh3 Bb4 Bxa6 bxa6 Bg5 Qd7 a3 Bxc3 Qxc3 O-O Kd2 Bb7 Ke2 a5 b4 a4 b5 Ne7 Qb4 c5 dxc5 Rab8 Qxa4 Ra8 Bf4 Rfe8 c3 Red8 Rhg1 Rdc8 Be3 Rcb8 f4 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8 Rg1 Rc8 Rgf1 Rcb8",
+            "d4 d5 Nc3 Nc6 e4 Nf6 e5 Ne4 Be3 g6 Bb5 Nxc3 bxc3 f5 Nf3 Bd7 Bxc6 bxc6 Ng5 Bg7 e6 Bc8 Nf7 Bxd4 Qxd4 Bxe6 Nxd8 Rxd8 Qxh8+ Kd7 Qxh7 c5 Bxc5 Rc8 Qxe7+ Kc6 Qxe6+ Kb7 Rb1+ Ka8 Qxc8#",
+            "e4 d5 Nc3 Nf6 e5 Ne4 Qf3 Nxc3 bxc3 Nc6 Bb5 e6 Ne2 f5 O-O Be7 c4 O-O Bb2 Rb8 cxd5 Qxd5 Qxd5 exd5 Bd4 Bd7 Bxa7 Ra8 Bd4 Rab8 Rfb1 Ra8 c3 Rab8 Nf4 Nxd4 Bxd7 Nc6 Nxd5 Bd8 Bxc6 b6 e6 Rc8 e7 Bxe7 Nxe7+ Kh8 Nxc8 Rxc8 Re1 Rb8 Re7 Rc8 Bb7 Rb8 Rxc7 Rd8 d4 Rb8 Rb1 Rd8 Rxb6 Rb8 Bc6 Rxb6 Rc8#"
+        };
+        std::string expected = expected_games[i];
         bool pass = (game_text == expected);
         if( !pass )
             ok = false;
         printf( " %s\n", pass ? "PASS" : "FAIL" );
         if( !pass )
             printf( "FAIL reason: Expected=%s, Calculated=%s\n", expected.c_str(), game_text.c_str() );
-        if( i == 0 )
-            printf( "Entire PLYMAX=4 game test " );
-        else if( i == 1 )
-            printf( "Entire PLYMAX=5 game test " );
     }
     return ok;
 }
@@ -538,15 +392,18 @@ bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
 
     static TEST tests[]=
     {
+        // Test en-passant
+        { "8/8/3k4/6Pp/8/8/8/K7 w - h6 0 1", 5, "g5h6" },
+
         // Point where game test fails, PLYMAX=3 (now fixed, until we tweaked
-        //  sargon_position_import() to assume castled kings [if moved] and
+        //  sargon_import_position_inner() to assume castled kings [if moved] and
         //  making unmoved rooks more likely we got "h1h5")
         { "r4rk1/pR3p1p/8/5p2/2Bp4/5P2/PPP1KPP1/7R w - - 0 18", 3, "e2d3" },
 
         // Point where game test fails, PLYMAX=4 (now fixed, until we tweaked
-        //  sargon_position_import() to assume castled kings [if moved] and
+        //  sargon_import_position_inner() to assume castled kings [if moved] and
         //  making unmoved rooks more likely we got "e1f2")
-        { "q1k2b1r/pp4pp/2n1b3/5p2/2P2B2/3QPP1N/PP4PP/R3K2R w KQ - 1 15", 4, "OO" },
+        { "q1k2b1r/pp4pp/2n1b3/5p2/2P2B2/3QPP1N/PP4PP/R3K2R w KQ - 1 15", 4, "e1g1" },
 
         // Test position #1 above
         { "r2n2k1/5ppp/b5q1/1P3N2/8/8/3Q1PPP/3R2K1 w - - 0 1", 3, "d2d8" },
@@ -605,15 +462,16 @@ bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
         nodes.clear();
         thc::ChessPosition cp;
         cp.Forsyth(pt->fen);
-        pokeb(COLOR,0);
         pokeb(KOLOR,0);
         pokeb(PLYMAX,pt->plymax_required);
         sargon(api_INITBD);
-        sargon_position_import(cp);
+        sargon_import_position(cp);
+        pokeb(COLOR,0);
+        pokeb(KOLOR,0);
         sargon(api_ROYALT);
         if( !quiet )
         {
-            sargon_position_export(cp);
+            sargon_export_position(cp);
             std::string s = cp.ToDebugStr( "Position after test position set" );
             printf( "%s\n", s.c_str() );
         }
@@ -638,19 +496,20 @@ bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
         sargon(api_CPTRMV);
         if( !quiet )
         {
-            sargon_position_export(cp);
+            sargon_export_position(cp);
             std::string s = cp.ToDebugStr( "Position after computer move made" );
             printf( "%s\n", s.c_str() );
         }
-        char buf[5];
-        memcpy( buf, peek(MVEMSG), 4 );
-        buf[4] = '\0';
-        bool pass = (0==strcmp(pt->solution,buf));
+        std::string sargon_move = sargon_export_move(BESTM);
+        //char buf[5];
+        //memcpy( buf, peek(MVEMSG), 4 );
+        //buf[4] = '\0';
+        bool pass = (sargon_move==std::string(pt->solution));
         printf( " %s\n", pass ? "PASS" : "FAIL" );
         if( !pass )
         {
             ok = false;
-            printf( "FAIL reason: Expected=%s, Calculated=%s\n", pt->solution, buf );
+            printf( "FAIL reason: Expected=%s, Calculated=%s\n", pt->solution, sargon_move.c_str() );
         }
 
         // Print move chain
@@ -673,7 +532,7 @@ bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
                         unsigned char from  = n->from;
                         unsigned char to    = n->to;
                         unsigned char value = n->value;
-                        double fvalue = sargon_value_export(value);
+                        double fvalue = sargon_export_value(value);
                         printf( "level=%d, from=%s, to=%s value=%d/%.1f\n", n->level, algebraic(from).c_str(), algebraic(to).c_str(), value, fvalue );
                     }
                 }
@@ -693,7 +552,7 @@ bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
                 unsigned char from  = n->from;
                 unsigned char to    = n->to;
                 unsigned char value = n->value;
-                double fvalue = sargon_value_export(value);
+                double fvalue = sargon_export_value(value);
                 printf( "level=%d, from=%s, to=%s value=%d/%.1f\n", n->level, algebraic(from).c_str(), algebraic(to).c_str(), value, fvalue );
             }
             diagnostics();
@@ -744,11 +603,11 @@ void dbg_ptrs()
 
 void dbg_score()
 {
-    printf( "SCORE[0] = %d / %f\n", peekb(SCORE),   sargon_value_export(peekb(SCORE))   );
-    printf( "SCORE[1] = %d / %f\n", peekb(SCORE+1), sargon_value_export(peekb(SCORE+1)) );
-    printf( "SCORE[2] = %d / %f\n", peekb(SCORE+2), sargon_value_export(peekb(SCORE+2)) );
-    printf( "SCORE[3] = %d / %f\n", peekb(SCORE+3), sargon_value_export(peekb(SCORE+3)) );
-    printf( "SCORE[4] = %d / %f\n", peekb(SCORE+4), sargon_value_export(peekb(SCORE+4)) );
+    printf( "SCORE[0] = %d / %f\n", peekb(SCORE),   sargon_export_value(peekb(SCORE))   );
+    printf( "SCORE[1] = %d / %f\n", peekb(SCORE+1), sargon_export_value(peekb(SCORE+1)) );
+    printf( "SCORE[2] = %d / %f\n", peekb(SCORE+2), sargon_export_value(peekb(SCORE+2)) );
+    printf( "SCORE[3] = %d / %f\n", peekb(SCORE+3), sargon_export_value(peekb(SCORE+3)) );
+    printf( "SCORE[4] = %d / %f\n", peekb(SCORE+4), sargon_export_value(peekb(SCORE+4)) );
 }
 
 void dbg_plyix()
@@ -813,7 +672,7 @@ void diagnostics()
                 unsigned char to    = peekb(p+3);
                 unsigned char flags = peekb(p+4);
                 unsigned char value = peekb(p+5);
-                double fvalue = sargon_value_export(value);
+                double fvalue = sargon_export_value(value);
                 if( i > 0 )
                     printf( "%9s: ", " " );
                 if( p < 0x400 )
@@ -905,21 +764,21 @@ Example 1, no Alpha Beta pruning (move played is 1.b4, value 3.0)
 */
     if( !alpha_beta )
     {
-        values["root"]   = sargon_value_import(0.0);
-        values["a4"]     = sargon_value_import(8.0);
-        values["a4g5"]   = sargon_value_import(7.0);
-        values["a4g5b4"] = sargon_value_import(5.0);
-        values["a4g5a5"] = sargon_value_import(4.0);
-        values["a4h5"]   = sargon_value_import(3.0);
-        values["a4h5b4"] = sargon_value_import(1.0);
-        values["a4h5a5"] = sargon_value_import(2.0);
-        values["b4"]     = sargon_value_import(6.0);
-        values["b4g5"]   = sargon_value_import(5.5);
-        values["b4g5a4"] = sargon_value_import(4.0);
-        values["b4g5b5"] = sargon_value_import(3.0);
-        values["b4h5"]   = sargon_value_import(4.0);
-        values["b4h5a4"] = sargon_value_import(3.0);
-        values["b4h5b5"] = sargon_value_import(1.0);
+        values["root"]   = sargon_import_value(0.0);
+        values["a4"]     = sargon_import_value(8.0);
+        values["a4g5"]   = sargon_import_value(7.0);
+        values["a4g5b4"] = sargon_import_value(5.0);
+        values["a4g5a5"] = sargon_import_value(4.0);
+        values["a4h5"]   = sargon_import_value(3.0);
+        values["a4h5b4"] = sargon_import_value(1.0);
+        values["a4h5a5"] = sargon_import_value(2.0);
+        values["b4"]     = sargon_import_value(6.0);
+        values["b4g5"]   = sargon_import_value(5.5);
+        values["b4g5a4"] = sargon_import_value(4.0);
+        values["b4g5b5"] = sargon_import_value(3.0);
+        values["b4h5"]   = sargon_import_value(4.0);
+        values["b4h5a4"] = sargon_import_value(3.0);
+        values["b4h5b5"] = sargon_import_value(1.0);
     }
 /*
 
@@ -973,21 +832,21 @@ Example 2, Alpha Beta pruning (move played is 1.a4, value 5.0)
 
     if( alpha_beta )
     {
-        values["root"]   = sargon_value_import(0.0);
-        values["a4"]     = sargon_value_import(6.0);
-        values["a4g5"]   = sargon_value_import(6.0);
-        values["a4g5b4"] = sargon_value_import(5.0);
-        values["a4g5a5"] = sargon_value_import(4.0);
-        values["a4h5"]   = sargon_value_import(4.0);
-        values["a4h5b4"] = sargon_value_import(11.0);
-        values["a4h5a5"] = sargon_value_import(2.0);
-        values["b4"]     = sargon_value_import(6.0);
-        values["b4g5"]   = sargon_value_import(6.0);
-        values["b4g5a4"] = sargon_value_import(4.0);
-        values["b4g5b5"] = sargon_value_import(3.0);
-        values["b4h5"]   = sargon_value_import(4.0);
-        values["b4h5a4"] = sargon_value_import(1.0);
-        values["b4h5b5"] = sargon_value_import(3.0);
+        values["root"]   = sargon_import_value(0.0);
+        values["a4"]     = sargon_import_value(6.0);
+        values["a4g5"]   = sargon_import_value(6.0);
+        values["a4g5b4"] = sargon_import_value(5.0);
+        values["a4g5a5"] = sargon_import_value(4.0);
+        values["a4h5"]   = sargon_import_value(4.0);
+        values["a4h5b4"] = sargon_import_value(11.0);
+        values["a4h5a5"] = sargon_import_value(2.0);
+        values["b4"]     = sargon_import_value(6.0);
+        values["b4g5"]   = sargon_import_value(6.0);
+        values["b4g5a4"] = sargon_import_value(4.0);
+        values["b4g5b5"] = sargon_import_value(3.0);
+        values["b4h5"]   = sargon_import_value(4.0);
+        values["b4h5a4"] = sargon_import_value(1.0);
+        values["b4h5b5"] = sargon_import_value(3.0);
     }
     thc::Move mv;
     thc::ChessPosition base = cp;
@@ -1168,11 +1027,11 @@ extern "C" {
             // For testing purposes, make LDAR output increment, results in
             //  deterministic choice of book moves
             static uint8_t a_reg;
+            a_reg++;
             volatile uint32_t *peax = &reg_eax;
-            *peax = a_reg++;
+            *peax = a_reg;
             return;
         }
-
         if( !callback_enabled )
             return;
         if( std::string(msg) == "After FNDMOV()" )
@@ -1210,7 +1069,7 @@ extern "C" {
             unsigned char to    = p ? peekb(p+3) : 0;
             unsigned int value = reg_eax&0xff;
             thc::ChessPosition cp;
-            sargon_position_export( cp );
+            sargon_export_position( cp );
             std::string sfrom = algebraic(from).c_str();
             std::string sto   = algebraic(to).c_str();
             std::string key = util::sprintf("%s%s -> %s", sfrom.c_str(), sto.c_str(), cp.squares );
@@ -1244,7 +1103,7 @@ extern "C" {
             if( !callback_quiet )
             {
                 static int count;
-                std::string s = util::sprintf( "Position %d. Last move: from=%s, to=%s value=%d/%.1f", count++, algebraic(from).c_str(), algebraic(to).c_str(), value, sargon_value_export(value) );
+                std::string s = util::sprintf( "Position %d. Last move: from=%s, to=%s value=%d/%.1f", count++, algebraic(from).c_str(), algebraic(to).c_str(), value, sargon_export_value(value) );
                 printf( "%s\n", cp.ToDebugStr(s.c_str()).c_str() );
             }
         }
@@ -1261,8 +1120,8 @@ extern "C" {
             {
                 printf( "Ply level %d\n", peekb(NPLY));
                 printf( "Alpha beta cutoff? Yes if move value=%d/%.1f < 2 lower ply value=%d/%.1f, ",
-                    al,  sargon_value_export(al),
-                    val, sargon_value_export(val) );
+                    al,  sargon_export_value(al),
+                    val, sargon_export_value(val) );
                 printf( "So %s\n", jmp?"yes":"no" );
             }
         }
@@ -1276,8 +1135,8 @@ extern "C" {
             {
                 printf( "Ply level %d\n", peekb(NPLY));
                 printf( "Best move? No if move value=%d/%.1f < 1 lower ply value=%d/%.1f, ",
-                    al,  sargon_value_export(al),
-                    val, sargon_value_export(val) );
+                    al,  sargon_export_value(al),
+                    val, sargon_export_value(val) );
                 printf( "So %s\n", jmp?"no":"yes" );
             }
         }
