@@ -10,27 +10,14 @@
 #include "sargon-interface.h"
 #include "sargon-asm-interface.h"
 
-// Read chess position from Sargon
-void sargon_position_export( thc::ChessPosition &cp );
-
-// Write chess position into Sargon
-void sargon_position_import( const thc::ChessPosition &cp );
-
-// Sargon square convention -> string
-std::string algebraic( unsigned int sq );
-
-// Peek and poke at Sargon
-const unsigned char *peek(int offset);
-unsigned char peekb(int offset);
-unsigned int peekw(int offset);
-unsigned char *poke(int offset);
-void pokeb( int offset, unsigned char b );
+// Write chess position into Sargon (inner-most part)
+static void sargon_import_position_inner( const thc::ChessPosition &cp );
 
 // Value seems to be 128 = 0.0
 // 128-30 = 3.0
 // 128+30 = -3.0
 // 128-128 = 0 = -12.8
-double sargon_value_export( unsigned int value )
+double sargon_export_value( unsigned int value )
 {
     double m = -3.0 / 30.0;
     double c = 12.8;
@@ -38,7 +25,7 @@ double sargon_value_export( unsigned int value )
     return y;
 }
 
-unsigned int sargon_value_import( double value )
+unsigned int sargon_import_value( double value )
 {
     if( value < -12.6 )
         value = -12.6;
@@ -65,8 +52,141 @@ struct NODE2
 static NODE2 pv[10];
 static std::vector< NODE2 > nodes;
 
+// Read a square value out of Sargon
+bool sargon_export_square( unsigned int sargon_square, thc::Square &sq )
+{
+    bool ok=false;
+    if( sargon_square >= 21 )
+    {
+        int rank = (sargon_square-21)/10;               // eg a1=21 ->0, h1=28->0, a2=31->1 ... a8=91 ->7, h8=98 ->7
+        int file = sargon_square - (21 + (rank*10));    // eg a1=21 ->0, h1=28->7, a2=31->0 ... a8=91 ->0, h8=98 ->7
+        if( 0<=rank && rank<=7 && 0<=file && file<=7 )
+        {
+            ok = true;
+            int offset = (7-rank)*8 + file;             // eg a1->56, h1->63, a2->48 ...  a8->0, h8->7
+            sq = static_cast<thc::Square>(offset);
+        }
+    }
+    return ok;
+}
+
+// Read a chess move out of Sargon (returns "Terse" form - eg "e1g1" for White O-O, note
+//  that Sargon always promotes to Queen, so four character form is sufficient)
+std::string sargon_export_move( unsigned int sargon_move_ptr )
+{
+    char buf[5];
+    buf[0] = '\0';
+    unsigned int  p    = peekw(sargon_move_ptr);
+    unsigned char from = peekb(p+2);
+    unsigned char to   = peekb(p+3);
+    thc::Square f, t;
+    if( sargon_export_square(from,f) )
+    {
+        if( sargon_export_square(to,t) )
+        {
+            buf[0] = thc::get_file(f);
+            buf[1] = thc::get_rank(f);
+            buf[2] = thc::get_file(t);
+            buf[3] = thc::get_rank(t);
+            buf[4] = '\0';
+        }
+    }
+    return std::string(buf);
+}
+
+// Play a move inside Sargon (i.e. update Sargon's representation with a legal
+//  played move)
+bool sargon_play_move( thc::Move &mv )
+{
+
+    // This function is modelled on PLYRMV() Sargon user interface
+    //  function
+
+    /*
+    ;***********************************************************
+    ; PLAYERS MOVE ANALYSIS
+    ;***********************************************************
+    ; FUNCTION:   --  To accept and validate the players move
+    ;                 and produce it on the graphics board. Also
+    ;                 allows player to resign the game by
+    ;                 entering a control-R.
+    ;
+    ; CALLED BY:  --  DRIVER
+    ;
+    ; CALLS:      --  CHARTR
+    ;                 ASNTBI
+    ;                 VALMOV
+    ;                 EXECMV
+    ;                 PGIFND
+    ;                 TBPLCL
+    ;
+    ; ARGUMENTS:  --  None
+    ;***********************************************************
+    PLYRMV: CALL    CHARTR          ; Accept "from" file letter
+            CPI     12H             ; Is it instead a Control-R ?
+            JZ      FM09            ; Yes - jump
+            MOV     H,A             ; Save
+            CALL    CHARTR          ; Accept "from" rank number
+            MOV     L,A             ; Save
+            CALL    ASNTBI          ; Convert to a board index
+            SUB     B               ; Gives board index, if valid
+            JRZ     PL08            ; Jump if invalid
+            STA     MVEMSG          ; Move list "from" position
+            CALL    CHARTR          ; Accept separator & ignore it
+            CALL    CHARTR          ; Repeat for "to" position
+            MOV     H,A
+            CALL    CHARTR
+            MOV     L,A
+            CALL    ASNTBI
+            SUB     B
+            JRZ     PL08
+            STA     MVEMSG+1        ; Move list "to" position
+            CALL    VALMOV          ; Determines if a legal move
+            ANA     A               ; Legal ?
+            JNZ     PL08            ; No - jump
+            CALL    EXECMV          ; Make move on graphics board
+            RET                     ; Return
+    PL08:   LXI     H,LINECT        ; Address of screen line count
+            INR     M               ; Increase by 2 for message
+            INR     M
+            CARRET                  ; New line
+            CALL    PGIFND          ; New page if needed
+            PRTLIN  INVAL1,12       ; Output "INVALID MOVE"
+            PRTLIN  INVAL2,9        ; Output "TRY AGAIN"
+            CALL    TBPLCL          ; Tab to players column
+            JMP     PLYRMV          ; Jump
+
+    */
+
+    bool ok=false;
+    std::string terse = mv.TerseOut();
+    z80_registers regs;
+    for( int i=0; i<2; i++ )
+    {
+        memset( &regs, 0, sizeof(regs) );
+        unsigned int file = terse[0 + 2*i] - 0x20;    // toupper for ASNTBI()
+        unsigned int rank = terse[1 + 2*i];
+        regs.hl = (file<<8) + rank;     // eg set hl registers = 0x4838 = "H8"
+        sargon( api_ASNTBI, &regs );    // ASNTBI = ASCII square name to board index
+        ok = (((regs.bc>>8) & 0xff) == 0);  // ok if reg B eq 0
+        if( ok )
+        {
+            unsigned int board_index = (regs.af&0xff);  // A register is low part of regs.af
+            pokeb(MVEMSG+i,board_index);
+        }
+    }
+    if( ok )
+    {
+        sargon( api_VALMOV, &regs );
+        ok = ((regs.af & 0xff) == 0);  // ok if reg A eq 0
+        if( ok )
+            sargon( api_EXECMV, &regs );
+    }
+    return ok;
+}
+
 // Read chess position from Sargon
-void sargon_position_export( thc::ChessPosition &cp )
+void sargon_export_position( thc::ChessPosition &cp )
 {
     cp.Init();
     const unsigned char *sargon_board = peek(BOARDA);
@@ -103,8 +223,106 @@ void sargon_position_export( thc::ChessPosition &cp )
 }
 
 // Write chess position into Sargon
-void sargon_position_import( const thc::ChessPosition &cp )
+void sargon_import_position( thc::ChessPosition &cp )
 {
+    // Sargon's move evaluation takes some account of the full move number (it
+    //  prioritises moving unmoved pieces early). So get an approximation to
+    //  that by counting pieces that are in their initial positions
+    int moveno = 0;
+    thc::ChessRules init;
+
+    // Check initial and one half move played positions, set moveno = 1 for
+    //  those cases only to get Book move
+    if( cp.WhiteToPlay() )
+    {
+        if( cp.ToDebugStr() == init.ToDebugStr() )
+            moveno = 1;
+    }
+    else
+    {
+        std::vector<thc::Move> moves;
+        init.GenLegalMoveList( moves );
+        for( thc::Move mv: moves )
+        {
+            init.PushMove(mv);
+            if( cp.ToDebugStr() == init.ToDebugStr() )
+                moveno = 1;
+            init.PopMove(mv);
+        }
+    }
+
+    // Otherwise average number of moved black and white pieces, plus a
+    //  little to account for pieces moved twice etc. (and to avoid moveno == 1
+    //  unless it is one of the 21 known positions after 0 or 1 half moves)
+    if( moveno == 0 )
+    {
+        int black_count=0, white_count=0;
+        for( int i=0; i<16; i++ )
+        {
+            if( init.squares[i] == cp.squares[i] )
+                black_count++;
+        }
+        for( int i=48; i<64; i++ )
+        {
+            if( init.squares[i] == cp.squares[i] )
+                white_count++;
+        }
+        moveno = (black_count+white_count) / 2;
+        moveno += 2;
+    }
+    cp.full_move_count = moveno;
+
+    // To support en-passant, create position before double pawn advance
+    //  then play double pawn advance
+    thc::Square sq = cp.enpassant_target;
+    if( sq == thc::SQUARE_INVALID )
+    {
+        sargon_import_position_inner( cp );
+    }
+    else
+    {
+        int isq = static_cast<int>(sq);
+        int from=0, to=0;
+
+        // If en-passant with White to play, en-passant target should be
+        //  on 6th rank, eg if e6 undo 'p' e7 -> e5
+        if( cp.white && thc::get_rank(sq)=='6' && cp.squares[isq+8]=='p' )
+        {
+            cp.white = false;
+            from = isq - 8;
+            to   = isq + 8;
+            cp.squares[from] = 'p';
+            cp.squares[to]   = ' ';
+        }
+
+        // If en-passant with Black to play, en-passant target should be
+        //  on 3rd rank, eg if e3 undo 'P' e2 -> e4
+        else if( !cp.white && thc::get_rank(sq)=='3' && cp.squares[isq-8]=='P' )
+        {
+            cp.white = true;
+            from = isq + 8;
+            to   = isq - 8;
+            cp.squares[from] = 'P';
+            cp.squares[to]   = ' ';
+        }
+        sargon_import_position_inner( cp );
+        if( from != to )
+        {
+            thc::Move mv;
+            mv.src = static_cast<thc::Square>(from);
+            mv.dst = static_cast<thc::Square>(to);
+            mv.capture = ' ';
+            mv.special = (cp.white ? thc::SPECIAL_WPAWN_2SQUARES : thc::SPECIAL_BPAWN_2SQUARES);
+            sargon_play_move( mv );
+        }
+    }
+}
+
+// Write chess position into Sargon (inner-most part)
+static void sargon_import_position_inner( const thc::ChessPosition &cp )
+{
+    pokeb(COLOR,cp.white?0:0x80);
+    pokeb(MOVENO,cp.full_move_count);
     static unsigned char board_position[120] =
     {
         0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
