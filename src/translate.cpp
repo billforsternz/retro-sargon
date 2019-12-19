@@ -1074,8 +1074,8 @@ void translate_init()
     // JNZ addr -> JNZ addr
     xlat["JNZ"] = { "JNZ\t%s", "JMP\tNZ,%s", NULL, echo };
 
-    // JP addr -> JP addr  (jump sign positive)
-    xlat["JP"] = { "JP\t%s", "JMP\tP,%s", NULL, echo };
+    // JP addr -> JNS addr  (jump sign not set [i.e.positive])
+    xlat["JP"] = { "JNS\t%s", "JMP\tP,%s", NULL, echo };
 
     // JPE addr -> JPE addr  (jump parity even - check this one, parity bit not 100% compatible) 
     xlat["JPE"] = { "JPE\t%s",  "JMP\tPE,%s", NULL, echo };
