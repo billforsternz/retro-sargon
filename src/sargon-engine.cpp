@@ -77,8 +77,8 @@ extern "C" {
             {
                 printf( "Ply level %d\n", peekb(NPLY));
                 printf( "Alpha beta cutoff? Yes if move value=%d/%.1f < 2 lower ply value=%d/%.1f, ",
-                    al,  sargon_value_export(al),
-                    val, sargon_value_export(val) );
+                    al,  sargon_export_value(al),
+                    val, sargon_export_value(val) );
                 printf( "So %s\n", jmp?"yes":"no" );
             }
         }
@@ -92,8 +92,8 @@ extern "C" {
             {
                 printf( "Ply level %d\n", peekb(NPLY));
                 printf( "Best move? No if move value=%d/%.1f < 1 lower ply value=%d/%.1f, ",
-                    al,  sargon_value_export(al),
-                    val, sargon_value_export(val) );
+                    al,  sargon_export_value(al),
+                    val, sargon_export_value(val) );
                 printf( "So %s\n", jmp?"no":"yes" );
             }
         }
@@ -125,11 +125,11 @@ void dbg_ptrs()
 
 void dbg_score()
 {
-    printf( "SCORE[0] = %d / %f\n", peekb(SCORE),   sargon_value_export(peekb(SCORE))   );
-    printf( "SCORE[1] = %d / %f\n", peekb(SCORE+1), sargon_value_export(peekb(SCORE+1)) );
-    printf( "SCORE[2] = %d / %f\n", peekb(SCORE+2), sargon_value_export(peekb(SCORE+2)) );
-    printf( "SCORE[3] = %d / %f\n", peekb(SCORE+3), sargon_value_export(peekb(SCORE+3)) );
-    printf( "SCORE[4] = %d / %f\n", peekb(SCORE+4), sargon_value_export(peekb(SCORE+4)) );
+    printf( "SCORE[0] = %d / %f\n", peekb(SCORE),   sargon_export_value(peekb(SCORE))   );
+    printf( "SCORE[1] = %d / %f\n", peekb(SCORE+1), sargon_export_value(peekb(SCORE+1)) );
+    printf( "SCORE[2] = %d / %f\n", peekb(SCORE+2), sargon_export_value(peekb(SCORE+2)) );
+    printf( "SCORE[3] = %d / %f\n", peekb(SCORE+3), sargon_export_value(peekb(SCORE+3)) );
+    printf( "SCORE[4] = %d / %f\n", peekb(SCORE+4), sargon_export_value(peekb(SCORE+4)) );
 }
 
 void dbg_plyix()
@@ -194,7 +194,7 @@ void diagnostics()
                 unsigned char to    = peekb(p+3);
                 unsigned char flags = peekb(p+4);
                 unsigned char value = peekb(p+5);
-                double fvalue = sargon_value_export(value);
+                double fvalue = sargon_export_value(value);
                 if( i > 0 )
                     printf( "%9s: ", " " );
                 if( p < 0x400 )
@@ -576,12 +576,12 @@ bool CalculateNextMove( thc::ChessRules &cr, bool new_game, std::vector<thc::Mov
     pokeb(PLYMAX,3);
     nodes.clear();
     sargon(api_INITBD);
-    sargon_position_import(cr);
+    sargon_import_position(cr);
     sargon(api_ROYALT);
     pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
     sargon(api_CPTRMV);
     thc::ChessRules cr_after;
-    sargon_position_export(cr_after);
+    sargon_export_position(cr_after);
     memcpy( buf, peek(MVEMSG), 4 );
     buf[4] = '\0';
     bool trigger = false;
