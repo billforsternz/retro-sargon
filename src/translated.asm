@@ -913,7 +913,7 @@ skip4:
         JNZ     skip5                           ; No - return
         RET
 skip5:
-        MOV     al,byte ptr [ebp+esi+MLTOP]     ; Get "to" postition
+        MOV     al,byte ptr [ebp+esi+MLTOP]     ; Get "to" position
         MOV     byte ptr [ebp+M4],al            ; Store as index to board
         MOV     si,word ptr [ebp+M4]            ; Load board index
         MOV     al,byte ptr [ebp+esi+BOARD]     ; Get piece moved
@@ -926,7 +926,7 @@ skip6:
         MOV     al,byte ptr [ebp+M4]            ; Get "to" position
         MOV     bx,M2                           ; Get present "to" position
         SUB     al,byte ptr [ebp+ebx]           ; Find difference
-        JP      rel003                          ; Positive ? Yes - Jump
+        JNS     rel003                          ; Positive ? Yes - Jump
         NEG     al                              ; Else take absolute value
 rel003: CMP     al,10                           ; Is difference 10 ?
         JZ      skip7                           ; No - return
@@ -1575,7 +1575,7 @@ rel008: MOV     al,byte ptr [ebp+ebx]           ; Number of defenders
         POP     edi                             ; Restore regs.
         POP     edx
         POP     ecx
-        JP      PF25                            ; Jump if pin not valid
+        JNS     PF25                            ; Jump if pin not valid
 PF20:   MOV     bx,NPINS                        ; Address of pinned piece count
         INC     byte ptr [ebp+ebx]              ; Increment
         MOV     si,word ptr [ebp+NPINS]         ; Load pin list index
@@ -2562,18 +2562,12 @@ CP0C:   CALL    MOVE                            ; Produce move on board array
 CP10:   TEST    ch,2                            ; King side castle ?
         JZ      rel020                          ; No - jump
         PRTBLK  O.O,5                           ; Output "O-O"
-    mov     word ptr [ebp+MVEMSG],4f4fh ;"OO" ;* temp todo *
-    mov     word ptr [ebp+MVEMSG_2],0
         JMP     CP1C                            ; Jump
 rel020: TEST    ch,4                            ; Queen side castle ?
         JZ      rel021                          ; No - jump
         PRTBLK  O.O.O,5                         ; Output "O-O-O"
-    mov     word ptr [ebp+MVEMSG],4f4fh ;"OOO"
-    mov     word ptr [ebp+MVEMSG_2],4fh
         JMP     CP1C                            ; Jump
 rel021: PRTBLK  P.PEP,5                         ; Output "PxPep" - En passant
-    mov     word ptr [ebp+MVEMSG],5045h ;"EP"
-    mov     word ptr [ebp+MVEMSG_2],0
 CP1C:   MOV     al,byte ptr [ebp+COLOR]         ; Should computer call check ?
         MOV     ch,al
         XOR     al,80H                          ; Toggle color
