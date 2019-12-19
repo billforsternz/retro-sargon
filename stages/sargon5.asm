@@ -837,7 +837,7 @@ rel002: CPI     61              ; On en passant capture rank ?
         LIXD    MLPTRJ          ; Get pointer to previous move
         BIT     4,MLFLG(X)      ; First move for that piece ?
         RZ                      ; No - return
-        MOV     A,MLTOP(X)      ; Get "to" postition
+        MOV     A,MLTOP(X)      ; Get "to" position
         STA     M4              ; Store as index to board
         LIXD    M4              ; Load board index
         MOV     A,BOARD(X)      ; Get piece moved
@@ -2560,24 +2560,12 @@ CP0C:   CALL    MOVE            ; Produce move on board array
 CP10:   BIT     1,B             ; King side castle ?
         JRZ     rel020          ; No - jump
         PRTBLK  O.O,5           ; Output "O-O"
-        .IF_X86
-    mov     word ptr [ebp+MVEMSG],4f4fh ;"OO" ;* temp todo *
-    mov     word ptr [ebp+MVEMSG_2],0
-        .ENDIF
         JMPR    CP1C            ; Jump
 rel020: BIT     2,B             ; Queen side castle ?
         JRZ     rel021          ; No - jump
         PRTBLK  O.O.O,5         ; Output "O-O-O"
-        .IF_X86
-    mov     word ptr [ebp+MVEMSG],4f4fh ;"OOO"
-    mov     word ptr [ebp+MVEMSG_2],4fh
-        .ENDIF
         JMPR    CP1C            ; Jump
 rel021: PRTBLK  P.PEP,5         ; Output "PxPep" - En passant
-        .IF_X86
-    mov     word ptr [ebp+MVEMSG],5045h ;"EP"
-    mov     word ptr [ebp+MVEMSG_2],0
-        .ENDIF
 CP1C:   LDA     COLOR           ; Should computer call check ?
         MOV     B,A
         XRI     80H             ; Toggle color
