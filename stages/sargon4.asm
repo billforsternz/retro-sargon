@@ -572,7 +572,7 @@ rel002: CMP     a,61            ; On en passant capture rank ?
         LD      ix,(MLPTRJ)     ; Get pointer to previous move
         BIT     4,(ix+MLFLG)    ; First move for that piece ?
         RET     Z               ; No - return
-        LD      a,(ix+MLTOP)    ; Get "to" postition
+        LD      a,(ix+MLTOP)    ; Get "to" position
         LD      (M4),a          ; Store as index to board
         LD      ix,(M4)         ; Load board index
         LD      a,(ix+BOARD)    ; Get piece moved

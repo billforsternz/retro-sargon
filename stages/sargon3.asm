@@ -572,7 +572,7 @@ rel002: CPI     61              ; On en passant capture rank ?
         LIXD    MLPTRJ          ; Get pointer to previous move
         BIT     4,MLFLG(X)      ; First move for that piece ?
         RZ                      ; No - return
-        MOV     A,MLTOP(X)      ; Get "to" postition
+        MOV     A,MLTOP(X)      ; Get "to" position
         STA     M4              ; Store as index to board
         LIXD    M4              ; Load board index
         MOV     A,BOARD(X)      ; Get piece moved
