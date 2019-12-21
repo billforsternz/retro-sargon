@@ -393,6 +393,9 @@ bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
 
     static TEST tests[]=
     {
+        // From a game, expect castling
+        //{ "2kr1b1r/1ppq2pp/p1n1bp2/3p4/3Pp2B/2N1P3/PPP1NPPP/R2QK2R w KQ - 2 12", 5, "e1g1" },
+
         // Initial position, book move
         { "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 5, "d2d4" },
 

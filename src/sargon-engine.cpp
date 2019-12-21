@@ -29,7 +29,7 @@
 #include "sargon-interface.h"
 #include "sargon-asm-interface.h"
 #include "translate.h"
-
+//#define RANDOM_ENGINE
 
 struct NODE2
 {
@@ -42,6 +42,7 @@ struct NODE2
     NODE2( unsigned int l, unsigned char f, unsigned char t, unsigned char fs, unsigned char v ) : level(l), from(f), to(t), flags(fs), value(v) {}
 };
 
+static std::string logfile_name;
 static NODE2 pv[10];
 static std::vector< NODE2 > nodes;
 
@@ -294,6 +295,8 @@ void write_stdout()
 static FILE *file_log;
 int main( int argc, char *argv[] )
 {
+    std::string filename_base( argv[0] );
+    logfile_name = filename_base + "-log.txt";
     unsigned long tid1;
     HANDLE hThread1;
     HANDLE handle = (HANDLE)_get_osfhandle(_fileno(stdin));
@@ -389,8 +392,13 @@ bool process( const char *buf )
 const char *cmd_uci()
 {
     const char *rsp=
+#ifdef RANDOM_ENGINE
+    "id name Random Moves Engine\n"
+    "id author Bill Forster\n"
+#else
     "id name " ENGINE_NAME " " VERSION "\n"
     "id author Dan and Kathe Spracklin, Windows port by Bill Forster\n"
+#endif
  // "option name Hash type spin min 1 max 4096 default 32\n"
 //  "option name MultiPV type spin default 1 min 1 max 4\n"
     "uciok\n";
@@ -558,83 +566,35 @@ bool CalculateNextMove( thc::ChessRules &cr, bool new_game, std::vector<thc::Mov
                         int &depth )
 {
     bool have_move = false;
-    char buf[5];
     pokeb(MVEMSG,   0 );
     pokeb(MVEMSG+1, 0 );
     pokeb(MVEMSG+2, 0 );
     pokeb(MVEMSG+3, 0 );
-    if( cr.white )
-    {
-        pokeb(COLOR,0);
-        pokeb(KOLOR,0);
-    }
-    else
-    {
-        pokeb(COLOR,0x80);
-        pokeb(KOLOR,0x80);
-    }
     pokeb(PLYMAX,3);
     nodes.clear();
     sargon(api_INITBD);
     sargon_import_position(cr);
     sargon(api_ROYALT);
-    pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
+    pokeb( KOLOR, cr.white ? 0 : 0x80 );    // Sargon is side to move
+    thc::Move mv;
+#ifdef  RANDOM_ENGINE
+    std::vector<thc::Move> moves;
+    cr.GenLegalMoveList( moves );
+    int idx = rand() % moves.size();
+    mv = moves[idx];
+    have_move = true;
+#else
     sargon(api_CPTRMV);
     thc::ChessRules cr_after;
     sargon_export_position(cr_after);
-    memcpy( buf, peek(MVEMSG), 4 );
-    buf[4] = '\0';
-    bool trigger = false;
-    if( std::string(buf) == "OO" )
+    std::string terse = sargon_export_move(BESTM);
+    have_move = mv.TerseIn( &cr, terse.c_str() );
+    if( !have_move )
     {
-        strcpy(buf,cr.white?"e1g1":"e8g8");
-        trigger = true;
-    }
-    else if( std::string(buf) == "OOO" )
-    {
-        strcpy(buf,cr.white?"e1c1":"e8c8");
-        trigger = true;
-    }
-    else if( std::string(buf) == "EP" )
-    {
-        trigger = true;
-        int target = cr.enpassant_target;
-        int src=0;
-        if( 0<=target && target<64 && cr_after.squares[target] == (cr.white?'P':'p') )
-        {
-            if( cr.white )
-            {
-                int src1 = target + 7;
-                int src2 = target + 9;
-                if( cr.squares[src1]=='P' && cr_after.squares[src1]!='P' )
-                    src = src1;
-                else
-                    src = src2;
-            }
-            else
-            {
-                int src1 = target - 7;
-                int src2 = target - 9;
-                if( cr.squares[src1]=='p' && cr_after.squares[src1]!='p' )
-                    src = src1;
-                else
-                    src = src2;
-            }
-        }
-#define FILE(sq)    ( (char) (  ((sq)&0x07) + 'a' ) )           // eg c5->'c'
-#define RANK(sq)    ( (char) (  '8' - (((sq)>>3) & 0x07) ) )    // eg c5->'5'
-        buf[0] = FILE(src);
-        buf[1] = RANK(src);
-        buf[2] = FILE(target);
-        buf[3] = RANK(target);
-    }
-    thc::Move mv;
-    have_move = mv.TerseIn( &cr, buf );
-    if( !have_move || trigger )
-    {
-        log( "%s - %s\n%s", have_move?"Castling or En-Passant":"Sargon doesn't find move", buf, cr.ToDebugStr().c_str() );
+        log( "Sargon doesn't find move - %s\n%s", terse.c_str(), cr.ToDebugStr().c_str() );
         log( "(After)\n%s",cr_after.ToDebugStr().c_str() );
     }
+#endif
     bestmove = mv;
     return have_move;
 }
@@ -886,7 +846,7 @@ const char *cmd_position( const char *cmd )
 static void log( const char *fmt, ... )
 {
     if( file_log == 0 )
-        file_log = fopen("/Users/Bill/Documents/Github/sargon/sargon-log-file.txt","wt" );
+        file_log = fopen( logfile_name.c_str(), "wt" );
     if( file_log )
     {
         char buf[1024];
