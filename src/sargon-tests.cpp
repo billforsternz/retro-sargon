@@ -65,12 +65,12 @@ void probe_test_prime( const char *pos_probe, bool quiet, bool alpha_beta );
 int main( int argc, const char *argv[] )
 {
     util::tests();
-    on_exit_diagnostics();
     bool ok = sargon_tests_quiet_comprehensive();
     if( ok )
         printf( "All tests passed\n" );
     else
         printf( "Not all tests passed\n" );
+    on_exit_diagnostics();
     return ok ? 0 : -1;
 }
 
@@ -300,9 +300,10 @@ bool sargon_whole_game_tests( bool quiet, bool no_very_slow_tests )
                 printf( "Tarrasch static evaluator plays %s\n", s.c_str() );
             game_text += " ";
             game_text += s;
-            cr.PlayMove(mv);
             nbr_moves_played++;
+            pokeb(COLOR,0x80);
             ok = sargon_play_move(mv);
+            cr.PlayMove(mv);
             if( ok )
             {
                 sargon_export_position(cr_after);
@@ -392,13 +393,32 @@ bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
 
     static TEST tests[]=
     {
+        // Initial position, book move
+        { "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 5, "d2d4" },
+
+        // Initial position, other random book move
+        { "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 5, "e2e4" },
+
+        // Position after 1.d4, Black to play book move
+        { "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1", 5, "d7d5" },
+                   
+        // Position after 1.c4, Black to play book move
+        { "rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq c3 0 1", 5, "e7e5" },
+                   
+        // Test en-passant, black to move
+        { "7k/8/8/8/Pp6/4K3/8/8 b - a3 0 1", 5, "b4a3" },
+
+        // CTWBFK Pos 26, page 23 - solution Rc8xc4
+        { "2r1r1k1/p3q1pp/bp1pp3/8/2B5/4P3/PP2QPPP/2R2RK1 b - - 0 1", 5, "c8c4" },
+
         // Test en-passant
         { "8/8/3k4/6Pp/8/8/8/K7 w - h6 0 1", 5, "g5h6" },
 
         // Point where game test fails, PLYMAX=3 (now fixed, until we tweaked
         //  sargon_import_position_inner() to assume castled kings [if moved] and
         //  making unmoved rooks more likely we got "h1h5")
-        { "r4rk1/pR3p1p/8/5p2/2Bp4/5P2/PPP1KPP1/7R w - - 0 18", 3, "e2d3" },
+        { "r4rk1/pR3p1p/8/5p2/2Bp4/5P2/PPP1KPP1/7R w - - 0 18", 3, "h1h5" },
+                    // reverted from "e2d3" -> "h1h5 with automatic MOVENO calculation
 
         // Point where game test fails, PLYMAX=4 (now fixed, until we tweaked
         //  sargon_import_position_inner() to assume castled kings [if moved] and
@@ -462,12 +482,11 @@ bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
         nodes.clear();
         thc::ChessPosition cp;
         cp.Forsyth(pt->fen);
-        pokeb(KOLOR,0);
         pokeb(PLYMAX,pt->plymax_required);
         sargon(api_INITBD);
         sargon_import_position(cp);
-        pokeb(COLOR,0);
-        pokeb(KOLOR,0);
+        unsigned char color = peekb(COLOR); // who to move? white = 0x00, black = 0x80
+        pokeb(KOLOR,color);                 // set Sargon's colour = side to move
         sargon(api_ROYALT);
         if( !quiet )
         {
@@ -475,7 +494,7 @@ bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
             std::string s = cp.ToDebugStr( "Position after test position set" );
             printf( "%s\n", s.c_str() );
         }
-        pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
+        //pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
     /*  if( i<2 )
         {
             printf( "%s\n", cp.ToDebugStr().c_str() );
@@ -501,9 +520,6 @@ bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
             printf( "%s\n", s.c_str() );
         }
         std::string sargon_move = sargon_export_move(BESTM);
-        //char buf[5];
-        //memcpy( buf, peek(MVEMSG), 4 );
-        //buf[4] = '\0';
         bool pass = (sargon_move==std::string(pt->solution));
         printf( " %s\n", pass ? "PASS" : "FAIL" );
         if( !pass )

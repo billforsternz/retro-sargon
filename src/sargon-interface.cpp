@@ -159,6 +159,9 @@ bool sargon_play_move( thc::Move &mv )
     */
 
     bool ok=false;
+    unsigned char color = peekb(COLOR); // who to move?
+    unsigned char kolor = peekb(KOLOR); // which side is Sargon?
+    pokeb( KOLOR, color==0?0x80:0 );    // VALMOV validates a move against Sargon, so Sargon must be the opposite to the side to move
     std::string terse = mv.TerseOut();
     z80_registers regs;
     for( int i=0; i<2; i++ )
@@ -182,6 +185,13 @@ bool sargon_play_move( thc::Move &mv )
         if( ok )
             sargon( api_EXECMV, &regs );
     }
+
+    // Restore COLOR and KOLOR
+    pokeb( KOLOR, kolor );
+    if( ok )
+        pokeb( COLOR, color==0?0x80:0 );  // toggle side to move
+    else
+        pokeb( COLOR, color );
     return ok;
 }
 
@@ -220,64 +230,71 @@ void sargon_export_position( thc::ChessPosition &cp )
         }
     }
     cp.white = (peekb(COLOR) == 0x00);
+    cp.full_move_count = peekb(MOVENO);
 }
 
 // Write chess position into Sargon
-void sargon_import_position( thc::ChessPosition &cp )
+void sargon_import_position( const thc::ChessPosition &cp )
 {
     // Sargon's move evaluation takes some account of the full move number (it
     //  prioritises moving unmoved pieces early). So get an approximation to
-    //  that by counting pieces that are in their initial positions
+    //  that by counting pieces that aren't in their initial positions
     int moveno = 0;
     thc::ChessRules init;
+    thc::ChessPosition cp_work = cp;
+
+    // Get number of moved white and black pieces
+    int black_count=0, white_count=0;
+    for( int i=0; i<16; i++ )
+    {
+        if( init.squares[i] != cp_work.squares[i] )
+            black_count++;
+    }
+    for( int i=48; i<64; i++ )
+    {
+        if( init.squares[i] != cp_work.squares[i] )
+            white_count++;
+    }
 
     // Check initial and one half move played positions, set moveno = 1 for
     //  those cases only to get Book move
-    if( cp.WhiteToPlay() )
+    if( cp_work.WhiteToPlay() && white_count==0 )
     {
-        if( cp.ToDebugStr() == init.ToDebugStr() )
+        if( cp_work.ToDebugStr() == init.ToDebugStr() )
             moveno = 1;
     }
-    else
+    else if( !cp_work.WhiteToPlay() && black_count==0 )
     {
         std::vector<thc::Move> moves;
         init.GenLegalMoveList( moves );
         for( thc::Move mv: moves )
         {
             init.PushMove(mv);
-            if( cp.ToDebugStr() == init.ToDebugStr() )
+            if( cp_work.ToDebugStr() == init.ToDebugStr() )
                 moveno = 1;
             init.PopMove(mv);
         }
     }
 
     // Otherwise average number of moved black and white pieces, plus a
-    //  little to account for pieces moved twice etc. (and to avoid moveno == 1
-    //  unless it is one of the 21 known positions after 0 or 1 half moves)
+    //  little to account for pieces moved twice etc. and to compensate
+    //  for otherwise undercounting in mid length games (eg 40 move games)
+    //  and finally to avoid moveno == 1 unless it is one of the 21 known
+    //  positions after 0 or 1 half moves (since moveno==1 generates a
+    //  book move)
     if( moveno == 0 )
     {
-        int black_count=0, white_count=0;
-        for( int i=0; i<16; i++ )
-        {
-            if( init.squares[i] == cp.squares[i] )
-                black_count++;
-        }
-        for( int i=48; i<64; i++ )
-        {
-            if( init.squares[i] == cp.squares[i] )
-                white_count++;
-        }
         moveno = (black_count+white_count) / 2;
         moveno += 2;
     }
-    cp.full_move_count = moveno;
+    cp_work.full_move_count = moveno;
 
     // To support en-passant, create position before double pawn advance
     //  then play double pawn advance
     thc::Square sq = cp.enpassant_target;
     if( sq == thc::SQUARE_INVALID )
     {
-        sargon_import_position_inner( cp );
+        sargon_import_position_inner( cp_work );
     }
     else
     {
@@ -286,33 +303,33 @@ void sargon_import_position( thc::ChessPosition &cp )
 
         // If en-passant with White to play, en-passant target should be
         //  on 6th rank, eg if e6 undo 'p' e7 -> e5
-        if( cp.white && thc::get_rank(sq)=='6' && cp.squares[isq+8]=='p' )
+        if( cp_work.white && thc::get_rank(sq)=='6' && cp_work.squares[isq+8]=='p' )
         {
-            cp.white = false;
+            cp_work.white = false;
             from = isq - 8;
             to   = isq + 8;
-            cp.squares[from] = 'p';
-            cp.squares[to]   = ' ';
+            cp_work.squares[from] = 'p';
+            cp_work.squares[to]   = ' ';
         }
 
         // If en-passant with Black to play, en-passant target should be
         //  on 3rd rank, eg if e3 undo 'P' e2 -> e4
-        else if( !cp.white && thc::get_rank(sq)=='3' && cp.squares[isq-8]=='P' )
+        else if( !cp_work.white && thc::get_rank(sq)=='3' && cp_work.squares[isq-8]=='P' )
         {
-            cp.white = true;
+            cp_work.white = true;
             from = isq + 8;
             to   = isq - 8;
-            cp.squares[from] = 'P';
-            cp.squares[to]   = ' ';
+            cp_work.squares[from] = 'P';
+            cp_work.squares[to]   = ' ';
         }
-        sargon_import_position_inner( cp );
+        sargon_import_position_inner( cp_work );
         if( from != to )
         {
             thc::Move mv;
             mv.src = static_cast<thc::Square>(from);
             mv.dst = static_cast<thc::Square>(to);
             mv.capture = ' ';
-            mv.special = (cp.white ? thc::SPECIAL_WPAWN_2SQUARES : thc::SPECIAL_BPAWN_2SQUARES);
+            mv.special = (cp_work.white ? thc::SPECIAL_WPAWN_2SQUARES : thc::SPECIAL_BPAWN_2SQUARES);
             sargon_play_move( mv );
         }
     }
