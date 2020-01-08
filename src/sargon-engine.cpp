@@ -11,6 +11,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <setjmp.h>
 #include <io.h>
 #include <ctype.h>
 #include <string.h>
@@ -31,188 +32,28 @@
 #include "translate.h"
 //#define RANDOM_ENGINE
 
-struct NODE2
+struct NODE
 {
     unsigned int level;
     unsigned char from;
     unsigned char to;
     unsigned char flags;
     unsigned char value;
-    NODE2() : level(0), from(0), to(0), flags(0), value(0) {}
-    NODE2( unsigned int l, unsigned char f, unsigned char t, unsigned char fs, unsigned char v ) : level(l), from(f), to(t), flags(fs), value(v) {}
+    NODE() : level(0), from(0), to(0), flags(0), value(0) {}
+    NODE( unsigned int l, unsigned char f, unsigned char t, unsigned char fs, unsigned char v ) : level(l), from(f), to(t), flags(fs), value(v) {}
 };
 
 static std::string logfile_name;
-static NODE2 pv[10];
-static std::vector< NODE2 > nodes;
-
-extern "C" {
-    void callback( uint32_t edi, uint32_t esi, uint32_t ebp, uint32_t esp,
-                   uint32_t ebx, uint32_t edx, uint32_t ecx, uint32_t eax,
-                   uint32_t eflags )
-    {
-        uint32_t *sp = &edi;
-        sp--;
-        uint32_t ret_addr = *sp;
-        const unsigned char *code = (const unsigned char *)ret_addr;
-
-        // expecting 0xeb = 2 byte opcode, (0xeb + 8 bit relative jump),
-        //  if others skip over 4 operand bytes
-        const char *msg = ( code[0]==0xeb ? (char *)(code+2) : (char *)(code+6) );
-
-        if( std::string(msg) == "After FNDMOV()" )
-        {
-            printf( "After FNDMOV()\n" );
-        }
-        return; // return now to disable minimax tracing experiment
-
-        // For purposes of minimax tracing experiment, try to figure out
-        //  best move calculation
-        if( std::string(msg) == "Alpha beta cutoff?" )
-        {
-            unsigned int al  = eax&0xff;
-            unsigned int bx  = ebx&0xffff;
-            unsigned int val = peekb(bx);
-            bool jmp = (al < val);
-            if( jmp )
-            {
-                printf( "Ply level %d\n", peekb(NPLY));
-                printf( "Alpha beta cutoff? Yes if move value=%d/%.1f < 2 lower ply value=%d/%.1f, ",
-                    al,  sargon_export_value(al),
-                    val, sargon_export_value(val) );
-                printf( "So %s\n", jmp?"yes":"no" );
-            }
-        }
-        else if( std::string(msg) == "No. Best move?" )
-        {
-            unsigned int al  = eax&0xff;
-            unsigned int bx  = ebx&0xffff;
-            unsigned int val = peekb(bx);
-            bool jmp = (al < val);
-            if( !jmp )
-            {
-                printf( "Ply level %d\n", peekb(NPLY));
-                printf( "Best move? No if move value=%d/%.1f < 1 lower ply value=%d/%.1f, ",
-                    al,  sargon_export_value(al),
-                    val, sargon_export_value(val) );
-                printf( "So %s\n", jmp?"no":"yes" );
-            }
-        }
-        else if( std::string(msg) == "Yes! Best move" )
-        {
-            static int best_move_count;
-            unsigned int p      = peekw(MLPTRJ);
-            unsigned int level  = peekb(NPLY);
-            unsigned char from  = peekb(p+2);
-            unsigned char to    = peekb(p+3);
-            unsigned char flags = peekb(p+4);
-            unsigned char value = peekb(p+5);
-            NODE2 n(level,from,to,flags,value);
-            nodes.push_back(n);
-            printf( "Best move found: %s%s (%d)\n", algebraic(from).c_str(), algebraic(to).c_str(), ++best_move_count );
-            //diagnostics();
-        }
-    }
-};
-
-void dbg_ptrs()
-{
-    printf( "BESTM  = %04x\n", peekw(BESTM) );
-    printf( "MLPTRI = %04x\n", peekw(MLPTRI) );
-    printf( "MLPTRJ = %04x\n", peekw(MLPTRJ) );
-    printf( "MLLST  = %04x\n", peekw(MLLST) );
-    printf( "MLNXT  = %04x\n", peekw(MLNXT) );
-}
-
-void dbg_score()
-{
-    printf( "SCORE[0] = %d / %f\n", peekb(SCORE),   sargon_export_value(peekb(SCORE))   );
-    printf( "SCORE[1] = %d / %f\n", peekb(SCORE+1), sargon_export_value(peekb(SCORE+1)) );
-    printf( "SCORE[2] = %d / %f\n", peekb(SCORE+2), sargon_export_value(peekb(SCORE+2)) );
-    printf( "SCORE[3] = %d / %f\n", peekb(SCORE+3), sargon_export_value(peekb(SCORE+3)) );
-    printf( "SCORE[4] = %d / %f\n", peekb(SCORE+4), sargon_export_value(peekb(SCORE+4)) );
-}
-
-void dbg_plyix()
-{
-    printf( "PLYIX: " );
-    unsigned int p = PLYIX;
-    for( int i=0; i<20; i++ )
-    {
-        unsigned int x =peekw(p);
-        p += 2;
-        if( x )
-            printf( "%04x", x );
-        else
-            printf( "0" );
-        printf( "%s",  i+1<20 ? " " : "\n" );
-    }
-}
-
-void diagnostics()
-{
-    dbg_ptrs();
-    dbg_plyix();
-    dbg_score();
-    const char *s="";
-    unsigned int p=0;
-    for( int k=-1; k<24; k++ )
-    {
-        switch( k )
-        {
-            case -1: p = peekw(BESTM);     s = "BESTM";        break;
-            case 0:  p = peekw(MLPTRI);    s = "MLPTRI";       break;
-            case 1:  p = peekw(MLPTRJ);    s = "MLPTRJ";       break;
-            case 2:  p = peekw(MLLST);     s = "MLLST";        break;
-            case 3:  p = peekw(MLNXT);     s = "MLNXT";        break;
-            case 4:  p = peekw(PLYIX);     s = "PLYIX[0]";     break;
-            case 5:  p = peekw(PLYIX+2 );  s = "PLYIX[2]";     break;
-            case 6:  p = peekw(PLYIX+4 );  s = "PLYIX[4]";     break;
-            case 7:  p = peekw(PLYIX+6 );  s = "PLYIX[6]";     break;
-            case 8:  p = peekw(PLYIX+8 );  s = "PLYIX[8]";     break;
-            case 9:  p = peekw(PLYIX+10);  s = "PLYIX[10]";    break;
-            case 10: p = peekw(PLYIX+12);  s = "PLYIX[12]";    break;
-            case 11: p = peekw(PLYIX+14);  s = "PLYIX[14]";    break;
-            case 12: p = peekw(PLYIX+16);  s = "PLYIX[16]";    break;
-            case 13: p = peekw(PLYIX+18);  s = "PLYIX[18]";    break;
-            case 14: p = peekw(PLYIX+20);  s = "PLYIX[20]";    break;
-            case 15: p = peekw(PLYIX+22);  s = "PLYIX[22]";    break;
-            case 16: p = peekw(PLYIX+24);  s = "PLYIX[24]";    break;
-            case 17: p = peekw(PLYIX+26);  s = "PLYIX[26]";    break;
-            case 18: p = peekw(PLYIX+28);  s = "PLYIX[28]";    break;
-            case 19: p = peekw(PLYIX+30);  s = "PLYIX[30]";    break;
-            case 20: p = peekw(PLYIX+32);  s = "PLYIX[32]";    break;
-            case 21: p = peekw(PLYIX+34);  s = "PLYIX[34]";    break;
-            case 22: p = peekw(PLYIX+36);  s = "PLYIX[36]";    break;
-            case 23: p = peekw(PLYIX+38);  s = "PLYIX[38]";    break;
-        }
-        if( p )
-        {
-            printf( "%9s: ", s );
-            for( int i=0; i<50 && (p); i++ )
-            {
-                unsigned char from  = peekb(p+2);
-                unsigned char to    = peekb(p+3);
-                unsigned char flags = peekb(p+4);
-                unsigned char value = peekb(p+5);
-                double fvalue = sargon_export_value(value);
-                if( i > 0 )
-                    printf( "%9s: ", " " );
-                if( p < 0x400 )
-                    printf( "link=0x%04x\n", peekw(p) );
-                else
-                    printf( "link=0x%04x, from=%s, to=%s flags=0x%02x value=%d/%.1f\n", peekw(p), algebraic(from).c_str(), algebraic(to).c_str(), flags, value, fvalue );
-                p = peekw(p);
-            }
-        }
-    }
-}
+static std::vector< NODE > nodes;
 
 //-- preferences
 #define VERSION "1978"
 #define ENGINE_NAME "Sargon"
 
 static thc::ChessRules the_position;
+static std::vector<thc::Move> the_pv;
+static int the_pv_value;
+static int the_pv_depth;
 bool process( const char *buf );
 const char *cmd_uci();
 const char *cmd_isready();
@@ -223,14 +64,24 @@ void        cmd_multipv( const char *cmd );
 const char *cmd_position( const char *cmd );
 static bool is_new_game();
 static void log( const char *fmt, ... );
+static bool RunSargon();
 
 static HANDLE hSem;
 #define BIGBUF 8190
 static char cmdline[8][BIGBUF+2];
 static int cmd_put;
 static int cmd_get;
-extern bool gbl_stop;
+static bool gbl_stop;
 static thc::Move bestmove;
+
+/*
+setoption name MultiPV value 4
+isready
+position fen 8/8/q2pk3/2p5/8/3N4/8/4K2R w K - 0 1
+go infinite
+
+
+*/
 
 void read_stdin()
 {
@@ -246,12 +97,22 @@ void read_stdin()
         }
         else if( test == 1 )
         {
-            strcpy( &cmdline[cmd_put][0], "position fen r1b2rk1/1p1n1ppp/pBqp4/3Np1b1/2B1P3/1Q3P2/PPP3PP/2KR3R w - - 8 16\n" );
+            strcpy( &cmdline[cmd_put][0], "setoption name MultiPV value 4\n" );
             test++;
         }
         else if( test == 2 )
         {
-            strcpy( &cmdline[cmd_put][0], "go wtime 873260 btime 711020 movestogo 25\n" );
+            strcpy( &cmdline[cmd_put][0], "isready\n" );
+            test++;
+        }
+        else if( test == 3 )
+        {
+            strcpy( &cmdline[cmd_put][0], "position fen 8/8/q2pk3/2p5/8/3N4/8/4K2R w K - 0 1\n" );
+            test++;
+        }
+        else if( test == 4 )
+        {
+            strcpy( &cmdline[cmd_put][0], "go infinite\n" );
             test++;
         }
         else if( NULL == fgets(&cmdline[cmd_put][0],BIGBUF,stdin) )
@@ -314,6 +175,20 @@ int main( int argc, char *argv[] )
     if( file_log )
         fclose(file_log);
     return 0;
+}
+
+static jmp_buf jmp_buf_env;
+static bool RunSargon()
+{
+    bool aborted = false;
+    int val;
+    gbl_stop = false;
+    val = setjmp(jmp_buf_env);
+    if( val )
+        aborted = true;
+    else
+        sargon(api_CPTRMV);
+    return aborted;
 }
 
 // Case insensitive pattern match
@@ -400,7 +275,7 @@ const char *cmd_uci()
     "id author Dan and Kathe Spracklin, Windows port by Bill Forster\n"
 #endif
  // "option name Hash type spin min 1 max 4096 default 32\n"
-//  "option name MultiPV type spin default 1 min 1 max 4\n"
+ // "option name MultiPV type spin default 1 min 1 max 4\n"
     "uciok\n";
     return rsp;
 }
@@ -431,11 +306,9 @@ void cmd_multipv( const char *cmd )
         MULTIPV = 4;
 }
 
-#if 0
-void ReportOnProgress
+void ProgressReport
 (
     bool    init,
-    int     multipv,
     std::vector<thc::Move> &pv,
     int     score_cp,
     int     depth
@@ -443,15 +316,14 @@ void ReportOnProgress
 
 {
     static thc::ChessPosition pos;
-    if( init )
+    if(init)
     {
-        pos = the_position;
         base_time  = GetTickCount();
         base_nodes = DIAG_make_move_primary;
     }
     else
     {
-        thc::ChessRules ce = pos;
+        thc::ChessRules ce = the_position;
         int score_overide;
         static char buf[1024];
         static char buf_pv[1024];
@@ -534,35 +406,23 @@ void ReportOnProgress
             elapsed_time++;
         if( have_move )
         {
-            if( multipv )
-                sprintf( buf, "info multipv %d depth %d score %s hashfull 0 time %lu nodes %lu nps %lu pv%s\n",
-                            multipv,
-                            depth+1,
-                            buf_score,
-                            (unsigned long) elapsed_time,
-                            (unsigned long) nodes,
-                            1000L * ((unsigned long) nodes / (unsigned long)elapsed_time ),
-                            buf_pv );
-            else
-                sprintf( buf, "info depth %d score %s hashfull 0 time %lu nodes %lu nps %lu pv%s\n",
-                            depth+1,
-                            buf_score,
-                            (unsigned long) elapsed_time,
-                            (unsigned long) nodes,
-                            1000L * ((unsigned long) nodes / (unsigned long)elapsed_time ),
-                            buf_pv );
+            sprintf( buf, "info depth %d score %s hashfull 0 time %lu nodes %lu nps %lu pv%s\n",
+                        depth,
+                        buf_score,
+                        (unsigned long) elapsed_time,
+                        (unsigned long) nodes,
+                        1000L * ((unsigned long) nodes / (unsigned long)elapsed_time ),
+                        buf_pv );
             fprintf( stdout, buf );
             fflush( stdout );
             log( "rsp>%s", buf );
         }
     }
 }
-#endif
 
 bool CalculateNextMove( thc::ChessRules &cr, bool new_game, std::vector<thc::Move> &pv, thc::Move &bestmove, int &score_cp,
                         unsigned long ms_time,
                         unsigned long ms_budget,
-                        int balance,
                         int &depth )
 {
     bool have_move = false;
@@ -570,8 +430,7 @@ bool CalculateNextMove( thc::ChessRules &cr, bool new_game, std::vector<thc::Mov
     pokeb(MVEMSG+1, 0 );
     pokeb(MVEMSG+2, 0 );
     pokeb(MVEMSG+3, 0 );
-    pokeb(PLYMAX,3);
-    nodes.clear();
+    pokeb(PLYMAX,5);
     sargon(api_INITBD);
     sargon_import_position(cr);
     sargon(api_ROYALT);
@@ -584,7 +443,8 @@ bool CalculateNextMove( thc::ChessRules &cr, bool new_game, std::vector<thc::Mov
     mv = moves[idx];
     have_move = true;
 #else
-    sargon(api_CPTRMV);
+    nodes.clear();
+    RunSargon();
     thc::ChessRules cr_after;
     sargon_export_position(cr_after);
     std::string terse = sargon_export_move(BESTM);
@@ -604,7 +464,6 @@ const char *cmd_go( const char *cmd )
     stop_rsp_buf[0] = '\0';
     int depth=5;
     static char buf[128];
-    #define BALANCE 4
 
     // Work out our time and increment
     // eg cmd ="wtime 30000 btime 30000 winc 0 binc 0"
@@ -664,26 +523,30 @@ const char *cmd_go( const char *cmd )
     thc::Move bestmove;
     int score_cp=0;
     bestmove.Invalid();
-    std::vector<thc::Move> pv;
     bool new_game = is_new_game();
-    bool have_move = CalculateNextMove( the_position, new_game, pv, bestmove, score_cp, ms_time, ms_budget, BALANCE, depth );
+    ProgressReport
+    (
+        true,
+        the_pv,
+        0,
+        0
+    );
+    bool have_move = CalculateNextMove( the_position, new_game, the_pv, bestmove, score_cp, ms_time, ms_budget, depth );
 
 /*
     // Public interface to version for repitition avoidance
     bool CalculateNextMove( vector<thc::Move> &pv, Move &bestmove, int &score_cp,
-                            unsigned long ms_time, int balance,
+                            unsigned long ms_time,
                             int &depth, unsigned long &nodes  );
  */
 
-/*  // Commented out - let the function report its own progress
-    ReportOnProgress
+    ProgressReport
     (
         false,
-        1,
-        pv,
+        the_pv,
         score_cp,
         depth
-    );  */
+    );
 
     sprintf( buf, "bestmove %s\n", bestmove.TerseOut().c_str() );
     return buf;
@@ -691,64 +554,24 @@ const char *cmd_go( const char *cmd )
 
 const char *cmd_go_infinite()
 {
-#if 0
-    stop_rsp_buf[0] = '\0';
-    static char buf[1024];
-    #define BALANCE 4
-    thc::ChessPosition pos = the_position;
-    bool done=false;
-    thc::Move bestmove_so_far;
-    bestmove_so_far.Invalid();
-    std::vector<thc::Move> pv;
-    ReportOnProgress
-    (
-        true,
-        1,
-        pv,
-        0,
-        0
-    );
-    for( int depth=0; !done && depth<20; depth++ )
+    int plymax=3;
+    bool aborted = false;
+    while( !aborted )
     {
-        for( int multi=1; multi<=MULTIPV; multi++ )
-        {
-            the_position = pos;
-            int score;
-            bestmove.Invalid();
-            bool have_move = the_position.CalculateNextMove( score, bestmove, BALANCE, depth, multi==1 );
-
-            /*
-                // A version for Multi-PV mode, called repeatedly, removes best move from
-                //  movelist each time
-                bool CalculateNextMove( int &score, thc::Move &move, int balance, int depth, bool first );
-            */
-
-            if( gbl_stop || (multi==1 && !have_move) )
-            {
-                done = true;
-                break;
-            }
-            if( !have_move )
-                break;
-            if( multi==1 && bestmove.Valid() )
-                bestmove_so_far = bestmove;
-            int score_cp = (score*10)/BALANCE;  // convert to centipawns
-            if( score_cp > 30000 )
-                score_cp = 30000 + (score_cp-30000)/10000;
-            else if( score < -30000 )
-                score_cp = -30000 + (score_cp+30000)/10000;
-            the_position.GetPV( pv );
-            ReportOnProgress
-            (
-                false,
-                multi,
-                pv,
-                score_cp,
-                depth
-            );
-        }
-    } 
-    if( gbl_stop && bestmove_so_far.Valid() )
+        pokeb(MVEMSG,   0 );
+        pokeb(MVEMSG+1, 0 );
+        pokeb(MVEMSG+2, 0 );
+        pokeb(MVEMSG+3, 0 );
+        pokeb(PLYMAX,plymax++);
+        sargon(api_INITBD);
+        sargon_import_position(the_position,true);  // note avoid_book = true
+        thc::ChessRules cr = the_position;
+        sargon(api_ROYALT);
+        pokeb( KOLOR, the_position.white ? 0 : 0x80 );    // Sargon is side to move
+        nodes.clear();
+        aborted = RunSargon();
+    }
+    if( aborted && the_pv.size() > 0 )
     {
         unsigned long now_time = GetTickCount();	
         int nodes = DIAG_make_move_primary-base_nodes;
@@ -760,9 +583,8 @@ const char *cmd_go_infinite()
                                (unsigned long) elapsed_time,
                                (unsigned long) nodes,
                                1000L * ((unsigned long) nodes / (unsigned long)elapsed_time ),
-                               bestmove_so_far.TerseOut().c_str() ); 
+                               the_pv[0].TerseOut().c_str() ); 
     }
-#endif
     return NULL;
 }
 
@@ -866,3 +688,119 @@ static void log( const char *fmt, ... )
         va_end(args);
     }
 }
+
+void ShowPv()
+{
+    ProgressReport
+    (
+        false,
+        the_pv,
+        the_pv_value,
+        the_pv_depth
+    );
+}
+
+
+void BuildPv()
+{
+    the_pv.clear();
+    std::vector<NODE> nodes_pv;
+    int nbr = nodes.size();
+    int target = 1;
+    int plymax = peekb(PLYMAX);
+    for( int i=nbr-1; i>=0; i-- )
+    {
+        NODE *p = &nodes[i];
+        if( p->level == target )
+        {
+            nodes_pv.push_back( *p );
+            double fvalue = sargon_export_value(p->value);
+            log( "level=%d, from=%s, to=%s value=%d/%.1f\n", p->level, algebraic(p->from).c_str(), algebraic(p->to).c_str(), p->value, fvalue );
+            if( target == plymax )
+                break;
+            target++;
+        }
+    }
+    thc::ChessRules cr = the_position;
+    nbr = nodes_pv.size();
+    bool ok = true;
+    for( int i=0; ok && i<nbr; i++ )
+    {
+        NODE *p = &nodes_pv[i];
+        thc::Square src;
+        ok = sargon_export_square( p->from, src );
+        if( ok )
+        {
+            thc::Square dst;
+            ok = sargon_export_square( p->to, dst );
+            if( ok )
+            {
+                char buf[5];
+                buf[0] = thc::get_file(src);
+                buf[1] = thc::get_rank(src);
+                buf[2] = thc::get_file(dst);
+                buf[3] = thc::get_rank(dst);
+                buf[4] = '\0';
+                thc::Move mv;
+                mv.TerseIn( &cr, buf );
+                cr.PlayMove(mv);
+                the_pv.push_back(mv);
+            }
+        }
+    }
+    the_pv_depth = plymax;
+    double fvalue = sargon_export_value( nodes_pv[nbr-1].value );
+
+    // Sargon's values are negated at alternate levels, transforming minimax to maximax.
+    //  If White to move, maximise conventional values at level 0,2,4
+    //  If Black to move, maximise negated values at level 0,2,4
+    bool odd = ((nbr-1)%2 == 1);
+    bool negate = odd; //(the_position.WhiteToPlay() ? odd : !odd );
+    double centipawns = (negate ? -100.0 : 100.0) * fvalue;
+    the_pv_value = static_cast<int>(centipawns);
+}
+
+
+extern "C" {
+    void callback( uint32_t reg_edi, uint32_t reg_esi, uint32_t reg_ebp, uint32_t reg_esp,
+                   uint32_t reg_ebx, uint32_t reg_edx, uint32_t reg_ecx, uint32_t reg_eax,
+                   uint32_t reg_eflags )
+    {
+        uint32_t *sp = &reg_edi;
+        sp--;
+
+        // expecting code at return address to be 0xeb = 2 byte opcode, (0xeb + 8 bit relative jump),
+        uint32_t ret_addr = *sp;
+        const unsigned char *code = (const unsigned char *)ret_addr;
+        const char *msg = (const char *)(code+2);   // ASCIIZ text should come after that
+
+        if( 0 == strcmp(msg,"Yes! Best move") )
+        {
+            static int previous_plymax;
+            int plymax = peekb(PLYMAX);
+            if( plymax != previous_plymax )
+                ShowPv();
+            previous_plymax = plymax;
+            unsigned int p      = peekw(MLPTRJ);
+            unsigned int level  = peekb(NPLY);
+            unsigned char from  = peekb(p+2);
+            unsigned char to    = peekb(p+3);
+            unsigned char flags = peekb(p+4);
+            unsigned char value = peekb(p+5);
+            NODE n(level,from,to,flags,value);
+            nodes.push_back(n);
+            if( level == 1 )
+            {
+                BuildPv();
+                nodes.clear();
+            }
+        }
+
+        // Abort RunSargon() if signalled by gbl_stop being set
+        if( gbl_stop )
+        {
+            longjmp( jmp_buf_env, 1 );
+        }
+    }
+};
+
