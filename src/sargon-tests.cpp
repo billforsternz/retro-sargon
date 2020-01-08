@@ -172,7 +172,6 @@ bool sargon_algorithm_explore( bool quiet, bool alpha_beta  )
     callback_kingmove_suppressed = true;
     callback_quiet = quiet;
     cardinal_list.clear();
-    nodes.clear();
     thc::ChessPosition cp;
     cp.Forsyth(pos_probe);
     pokeb(MLPTRJ,0); //need to set this ptr to 0 to get Root position recognised in callback()
@@ -187,6 +186,7 @@ bool sargon_algorithm_explore( bool quiet, bool alpha_beta  )
         printf("Expect 3 of 15 positions (8,13 and 14) to be skipped\n" );
     else
         printf("Expect all 15 positions 0-14 to be traversed in order\n" );
+    nodes.clear();
     sargon(api_CPTRMV);
     bool pass=false;
     if( alpha_beta )
@@ -247,13 +247,13 @@ bool sargon_whole_game_tests( bool quiet, bool no_very_slow_tests )
             pokeb(MVEMSG+3, 0 );
             pokeb(KOLOR,0); // Sargon is white
             pokeb(PLYMAX, plymax );
-            nodes.clear();
             if( regenerate_position )
             {
                 sargon(api_INITBD);
                 sargon_import_position(cr);
                 sargon(api_ROYALT);
             }
+            nodes.clear();
             sargon(api_CPTRMV);
             thc::ChessRules cr_after;
             sargon_export_position(cr_after);
@@ -482,7 +482,6 @@ bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
     for( int i=0; i<nbr_tests; i++ )
     {
         TEST *pt = &tests[i];
-        nodes.clear();
         thc::ChessPosition cp;
         cp.Forsyth(pt->fen);
         pokeb(PLYMAX,pt->plymax_required);
@@ -515,6 +514,7 @@ bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
             else
                 printf( " (sorry this particular test is very slow) :" );
         }
+        nodes.clear();
         sargon(api_CPTRMV);
         if( !quiet )
         {
@@ -546,13 +546,16 @@ bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
                     unsigned int level = n->level;
                     if( level == target )
                     {
-                        target++;
                         last_found = i;
                         unsigned char from  = n->from;
                         unsigned char to    = n->to;
                         unsigned char value = n->value;
                         double fvalue = sargon_export_value(value);
                         printf( "level=%d, from=%s, to=%s value=%d/%.1f\n", n->level, algebraic(from).c_str(), algebraic(to).c_str(), value, fvalue );
+                        if( level == pt->plymax_required )
+                            break;
+                        else
+                            target++;
                     }
                 }
                 if( target == 1 )
@@ -572,9 +575,9 @@ bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
                 unsigned char to    = n->to;
                 unsigned char value = n->value;
                 double fvalue = sargon_export_value(value);
-                printf( "level=%d, from=%s, to=%s value=%d/%.1f\n", n->level, algebraic(from).c_str(), algebraic(to).c_str(), value, fvalue );
+                printf( " level=%d, from=%s, to=%s value=%d/%.1f\n", n->level, algebraic(from).c_str(), algebraic(to).c_str(), value, fvalue );
             }
-            diagnostics();
+            //diagnostics();
         }
     }
     if( !quiet )
@@ -1051,6 +1054,17 @@ extern "C" {
             *peax = a_reg;
             return;
         }
+        else if( 0 == strcmp(msg,"Yes! Best move") )
+        {
+            unsigned int  p     = peekw(MLPTRJ);
+            unsigned int  level = peekb(NPLY);
+            unsigned char from  = peekb(p+2);
+            unsigned char to    = peekb(p+3);
+            unsigned char flags = peekb(p+4);
+            unsigned char value = peekb(p+5);
+            NODE n(level,from,to,flags,value);
+            nodes.push_back(n);
+        }
         if( !callback_enabled )
             return;
         if( std::string(msg) == "After FNDMOV()" )
@@ -1163,18 +1177,10 @@ extern "C" {
         {
             static int best_move_count;
             unsigned int p      = peekw(MLPTRJ);
-            unsigned int level  = peekb(NPLY);
             unsigned char from  = peekb(p+2);
             unsigned char to    = peekb(p+3);
-            unsigned char flags = peekb(p+4);
-            unsigned char value = peekb(p+5);
-            NODE n(level,from,to,flags,value);
-            nodes.push_back(n);
             if( !callback_quiet )
-            {
                 printf( "Best move found: %s%s (%d)\n", algebraic(from).c_str(), algebraic(to).c_str(), ++best_move_count );
-                //diagnostics();
-            }
         }
     }
 };
