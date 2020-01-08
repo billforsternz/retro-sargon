@@ -234,7 +234,7 @@ void sargon_export_position( thc::ChessPosition &cp )
 }
 
 // Write chess position into Sargon
-void sargon_import_position( const thc::ChessPosition &cp )
+void sargon_import_position( const thc::ChessPosition &cp, bool avoid_book )
 {
     // Sargon's move evaluation takes some account of the full move number (it
     //  prioritises moving unmoved pieces early). So get an approximation to
@@ -287,7 +287,7 @@ void sargon_import_position( const thc::ChessPosition &cp )
         moveno = (black_count+white_count) / 2;
         moveno += 2;
     }
-    cp_work.full_move_count = moveno;
+    cp_work.full_move_count = avoid_book ? 3 : moveno;
 
     // To support en-passant, create position before double pawn advance
     //  then play double pawn advance
