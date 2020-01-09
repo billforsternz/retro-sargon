@@ -54,6 +54,9 @@ static thc::ChessRules the_position;
 static std::vector<thc::Move> the_pv;
 static int the_pv_value;
 static int the_pv_depth;
+static std::vector<thc::Move> the_pv_provisional;
+static int the_pv_value_provisional;
+static int the_pv_depth_provisional;
 bool process( const char *buf );
 const char *cmd_uci();
 const char *cmd_isready();
@@ -65,10 +68,13 @@ const char *cmd_position( const char *cmd );
 static bool is_new_game();
 static void log( const char *fmt, ... );
 static bool RunSargon();
+static void AcceptPv();
+static void BuildPv();
 
 static HANDLE hSem;
-#define BIGBUF 8190
-static char cmdline[8][BIGBUF+2];
+#define BIGBUF 512
+#define CMD_BUF_NBR 64
+static char cmdline[CMD_BUF_NBR][BIGBUF+2];
 static int cmd_put;
 static int cmd_get;
 static bool gbl_stop;
@@ -83,6 +89,70 @@ go infinite
 
 */
 
+static const char *test_sequence[] =
+{
+#if 0
+    "uci\n",
+    "setoption name MultiPV value 4\n",
+    "isready\n",
+    "position fen 8/8/q2pk3/2p5/8/3N4/8/4K2R w K - 0 1\n",
+    "go infinite\n"
+#else
+    "uci\n",
+    "isready\n",
+    "position startpos moves g2g3\n",
+    "go wtime 1500218 btime 179100 winc 5000 binc 1000\n",
+    "isready\n",
+    "position fen rnbqkbnr/pppp1ppp/8/4p3/8/6P1/PPPPPP1P/RNBQKBNR w KQkq e6 0 2\n",
+    "go infinite\n",
+    "stop\n",
+    "isready\n",
+    "isready\n",
+    "position startpos moves g2g3 e7e5 f1g2\n",
+    "go wtime 1498296 btime 179960 winc 5000 binc 1000\n",
+    "isready\n",
+    "position fen r1bqkbnr/pppp1ppp/2n5/4p3/8/6P1/PPPPPPBP/RNBQK1NR w KQkq - 2 3\n",
+    "go infinite\n",
+    "stop\n",
+    "isready\n",
+    "isready\n",
+    "position startpos moves g2g3 e7e5 f1g2 b8c6 b1c3\n",
+    "go wtime 1502077 btime 176101 winc 5000 binc 1000\n",
+    "isready\n",
+    "position fen r1bqkb1r/pppp1ppp/2n2n2/4p3/8/2N3P1/PPPPPPBP/R1BQK1NR w KQkq - 4 4\n",
+    "go infinite\n",
+    "stop\n",
+    "isready\n",
+    "isready\n",
+    "position startpos moves g2g3 e7e5 f1g2 b8c6 b1c3 g8f6 d2d3\n",
+    "go wtime 1505187 btime 171710 winc 5000 binc 1000\n",
+    "isready\n",
+    "position fen r1bqk2r/pppp1ppp/2n2n2/4p3/1b6/2NP2P1/PPP1PPBP/R1BQK1NR w KQkq - 1 5\n",
+    "go infinite\n",
+    "stop\n",
+    "isready\n",
+    "isready\n",
+    "position startpos moves g2g3 e7e5 f1g2 b8c6 b1c3 g8f6 d2d3 f8b4 e2e3\n",
+    "go wtime 1507672 btime 166100 winc 5000 binc 1000\n",
+    "isready\n",
+    "position fen r1bqk2r/ppp2ppp/2n2n2/3pp3/1b6/2NPP1P1/PPP2PBP/R1BQK1NR w KQkq d6 0 6\n",
+    "go infinite\n",
+    "stop\n",
+    "isready\n",
+    "isready\n",
+    "position startpos moves g2g3 e7e5 f1g2 b8c6 b1c3 g8f6 d2d3 f8b4 e2e3 d7d5 g1e2\n",
+    "go wtime 1510672 btime 161709 winc 5000 binc 1000\n",
+    "isready\n",
+    "position fen r1bq1rk1/ppp2ppp/2n2n2/3pp3/1b6/2NPP1P1/PPP1NPBP/R1BQK2R w KQ - 2 7\n",
+    "go infinite\n",
+    "stop\n",
+    "isready\n",
+    "isready\n",
+    "position startpos moves g2g3 e7e5 f1g2 b8c6 b1c3 g8f6 d2d3 f8b4 e2e3 d7d5 g1e2 e8g8 e1g1\n",
+    "go wtime 1512609 btime 161631 winc 5000 binc 1000\n"
+#endif
+};
+
 void read_stdin()
 {
     bool quit=false;
@@ -90,31 +160,8 @@ void read_stdin()
     {
         #if 0
         static int test;
-        if( test == 0 )
-        {
-            strcpy( &cmdline[cmd_put][0], "uci\n" );
-            test++;
-        }
-        else if( test == 1 )
-        {
-            strcpy( &cmdline[cmd_put][0], "setoption name MultiPV value 4\n" );
-            test++;
-        }
-        else if( test == 2 )
-        {
-            strcpy( &cmdline[cmd_put][0], "isready\n" );
-            test++;
-        }
-        else if( test == 3 )
-        {
-            strcpy( &cmdline[cmd_put][0], "position fen 8/8/q2pk3/2p5/8/3N4/8/4K2R w K - 0 1\n" );
-            test++;
-        }
-        else if( test == 4 )
-        {
-            strcpy( &cmdline[cmd_put][0], "go infinite\n" );
-            test++;
-        }
+        if( test < sizeof(test_sequence) / sizeof(test_sequence[0]) )
+            strcpy( &cmdline[cmd_put][0], test_sequence[test++] );
         else if( NULL == fgets(&cmdline[cmd_put][0],BIGBUF,stdin) )
             quit = true;
         if( !quit )
@@ -137,7 +184,7 @@ void read_stdin()
         }
         ReleaseSemaphore(hSem, 1, 0);
         cmd_put++;
-        cmd_put &= 7;
+        cmd_put &= (CMD_BUF_NBR-1);
     }
 }
 
@@ -149,7 +196,7 @@ void write_stdout()
         WaitForSingleObject(hSem, INFINITE);
         quit = process(&cmdline[cmd_get][0]);
         cmd_get++;
-        cmd_get &= 7;
+        cmd_get &= (CMD_BUF_NBR-1);
     }
 } 
 
@@ -187,7 +234,10 @@ static bool RunSargon()
     if( val )
         aborted = true;
     else
+    {
         sargon(api_CPTRMV);
+        AcceptPv();
+    }
     return aborted;
 }
 
@@ -306,163 +356,192 @@ void cmd_multipv( const char *cmd )
         MULTIPV = 4;
 }
 
-void ProgressReport
-(
-    bool    init,
-    std::vector<thc::Move> &pv,
-    int     score_cp,
-    int     depth
-)
-
+void ProgressReport()
 {
-    static thc::ChessPosition pos;
-    if(init)
+    int     score_cp = the_pv_value;
+    int     depth = the_pv_depth;
+    thc::ChessRules ce = the_position;
+    int score_overide;
+    static char buf[1024];
+    static char buf_pv[1024];
+    static char buf_score[128];
+    bool done=false;
+    bool have_move=false;
+    thc::Move bestmove_so_far;
+    bestmove_so_far.Invalid();
+    unsigned long now_time = GetTickCount();	
+    int nodes = DIAG_make_move_primary-base_nodes;
+    unsigned long elapsed_time = now_time-base_time;
+    buf_pv[0] = '\0';
+    char *s;
+    bool overide = false;
+    for( unsigned int i=0; i<the_pv.size(); i++ )
     {
-        base_time  = GetTickCount();
-        base_nodes = DIAG_make_move_primary;
+        bool okay;
+        thc::Move move=the_pv[i];
+        ce.PlayMove( move );
+        have_move = true;
+        if( i == 0 )
+            bestmove_so_far = move;    
+        s = strchr(buf_pv,'\0');
+        sprintf( s, " %s", move.TerseOut().c_str() );
+        thc::TERMINAL score_terminal;
+        okay = ce.Evaluate( score_terminal );
+        if( okay )
+        {
+            if( score_terminal == thc::TERMINAL_BCHECKMATE ||
+                score_terminal == thc::TERMINAL_WCHECKMATE )
+            {
+                overide = true;
+                score_overide = (i+2)/2;    // 0,1 -> 1; 2,3->2; 4,5->3 etc 
+                if( score_terminal == thc::TERMINAL_WCHECKMATE )
+                    score_overide = 0-score_overide; //negative if black is winning
+            }
+            else if( score_terminal == thc::TERMINAL_BSTALEMATE ||
+                        score_terminal == thc::TERMINAL_WSTALEMATE )
+            {
+                overide = true;
+                score_overide = 0;
+            }
+        }
+        if( !okay || overide )
+            break;
+    }    
+    if( the_position.white )
+    {
+        if( overide ) 
+        {
+            if( score_overide > 0 ) // are we mating ?
+                sprintf( buf_score, "mate %d", score_overide );
+            else if( score_overide < 0 ) // are me being mated ?
+                sprintf( buf_score, "mate -%d", (0-score_overide) );
+            else if( score_overide == 0 ) // is it a stalemate draw ?
+                sprintf( buf_score, "cp 0" );
+        }
+        else
+        {
+            sprintf( buf_score, "cp %d", score_cp );
+        }
     }
     else
     {
-        thc::ChessRules ce = the_position;
-        int score_overide;
-        static char buf[1024];
-        static char buf_pv[1024];
-        static char buf_score[128];
-        bool done=false;
-        bool have_move=false;
-        thc::Move bestmove_so_far;
-        bestmove_so_far.Invalid();
-        unsigned long now_time = GetTickCount();	
-        int nodes = DIAG_make_move_primary-base_nodes;
-        unsigned long elapsed_time = now_time-base_time;
-        buf_pv[0] = '\0';
-        char *s;
-        bool overide = false;
-        for( unsigned int i=0; i<pv.size(); i++ )
+        if( overide ) 
         {
-            bool okay;
-            thc::Move move=pv[i];
-            ce.PlayMove( move );
-            have_move = true;
-            if( i == 0 )
-                bestmove_so_far = move;    
-            s = strchr(buf_pv,'\0');
-            sprintf( s, " %s", move.TerseOut().c_str() );
+            if( score_overide < 0 ) // are we mating ?
+                sprintf( buf_score, "mate %d", 0-score_overide );
+            else if( score_overide > 0 ) // are me being mated ?        
+                sprintf( buf_score, "mate -%d", score_overide );
+            else if( score_overide == 0 ) // is it a stalemate draw ?
+                sprintf( buf_score, "cp 0" );
+        }
+        else
+        {
+            sprintf( buf_score, "cp %d", 0-score_cp );
+        }
+    }
+    if( elapsed_time == 0 )
+        elapsed_time++;
+    if( have_move )
+    {
+        sprintf( buf, "info depth %d score %s hashfull 0 time %lu nodes %lu nps %lu pv%s\n",
+                    depth,
+                    buf_score,
+                    (unsigned long) elapsed_time,
+                    (unsigned long) nodes,
+                    1000L * ((unsigned long) nodes / (unsigned long)elapsed_time ),
+                    buf_pv );
+        fprintf( stdout, buf );
+        fflush( stdout );
+        log( "rsp>%s", buf );
+    }
+}
+
+void CalculateNextMove( bool new_game, thc::Move &bestmove, unsigned long ms_budget )
+{
+    bool aborted = false;
+    the_pv.clear();
+    the_pv_depth = 0;
+    the_pv_value = 0;
+    int plymax = 3;
+    std::string bestmove_terse;
+    unsigned long base = GetTickCount();
+    std::vector<unsigned long> elapsedv;
+    while( !aborted )
+    {
+        pokeb(MVEMSG,   0 );
+        pokeb(MVEMSG+1, 0 );
+        pokeb(MVEMSG+2, 0 );
+        pokeb(MVEMSG+3, 0 );
+        pokeb(PLYMAX,plymax++);
+        sargon(api_INITBD);
+        sargon_import_position(the_position);
+        int moveno=the_position.full_move_count;
+        sargon(api_ROYALT);
+        pokeb( KOLOR, the_position.white ? 0 : 0x80 );    // Sargon is side to move
+        nodes.clear();
+        aborted = RunSargon();
+        log( "aborted=%s, the_pv.size()=%d moveno=%d\n", aborted?"true":"false", the_pv.size(), moveno );
+        if( !aborted )
+            ProgressReport();   
+        if( the_pv.size() > 0 )    
+        {
+            bestmove_terse = the_pv[0].TerseOut();
             thc::TERMINAL score_terminal;
-            okay = ce.Evaluate( score_terminal );
+            thc::ChessRules ce = the_position;
+            ce.PlayMove(the_pv[0]);
+            bool okay = ce.Evaluate( score_terminal );
             if( okay )
             {
                 if( score_terminal == thc::TERMINAL_BCHECKMATE ||
                     score_terminal == thc::TERMINAL_WCHECKMATE )
                 {
-                    overide = true;
-                    score_overide = (i+2)/2;    // 0,1 -> 1; 2,3->2; 4,5->3 etc 
-                    if( score_terminal == thc::TERMINAL_WCHECKMATE )
-                        score_overide = 0-score_overide; //negative if black is winning
+                    break;  // We're done, play the move to checkmate opponent
                 }
-                else if( score_terminal == thc::TERMINAL_BSTALEMATE ||
-                         score_terminal == thc::TERMINAL_WSTALEMATE )
+            }
+            unsigned long now = GetTickCount();
+            unsigned long elapsed = (now-base);
+            log( "elapsed = %lu, ms_budget = %lu\n", elapsed, ms_budget );
+            if( elapsed >= ms_budget )
+                break;  // We're done, we've spent too much time
+
+            // Elapsed time increases a lot with each additional ply, predict the
+            //  elapsed time if we do another ply
+            elapsedv.push_back(elapsed);
+            unsigned long accum=0, multiplier=0, nsamples=0, prev=0;
+            for( unsigned long t: elapsedv )
+            {
+                if( t>prev && prev>0 )
                 {
-                    overide = true;
-                    score_overide = 0;
+                    multiplier = t/prev;
+                    accum += multiplier;
+                    nsamples++;
                 }
+                prev = t;
             }
-            if( !okay || overide )
-                break;
-        }    
-        if( pos.white )
-        {
-            if( overide ) 
+            if( nsamples > 0 )
             {
-                if( score_overide > 0 ) // are we mating ?
-                    sprintf( buf_score, "mate %d", score_overide );
-                else if( score_overide < 0 ) // are me being mated ?
-                    sprintf( buf_score, "mate -%d", (0-score_overide) );
-                else if( score_overide == 0 ) // is it a stalemate draw ?
-                    sprintf( buf_score, "cp 0" );
-            }
-            else
-            {
-                sprintf( buf_score, "cp %d", score_cp );
+                unsigned long avg = accum/nsamples;
+                unsigned long predict = elapsed * avg;
+                log( "avg = %lu, predict = %lu, ms_budget/2 = %lu\n", avg, predict, ms_budget/2 );
+                if( predict > ms_budget/2 )
+                    break;  // We're done, we predict we'll spend almost all our time
             }
         }
         else
         {
-            if( overide ) 
-            {
-                if( score_overide < 0 ) // are we mating ?
-                    sprintf( buf_score, "mate %d", 0-score_overide );
-                else if( score_overide > 0 ) // are me being mated ?        
-                    sprintf( buf_score, "mate -%d", score_overide );
-                else if( score_overide == 0 ) // is it a stalemate draw ?
-                    sprintf( buf_score, "cp 0" );
-            }
-            else
-            {
-                sprintf( buf_score, "cp %d", 0-score_cp );
-            }
-        }
-        if( elapsed_time == 0 )
-            elapsed_time++;
-        if( have_move )
-        {
-            sprintf( buf, "info depth %d score %s hashfull 0 time %lu nodes %lu nps %lu pv%s\n",
-                        depth,
-                        buf_score,
-                        (unsigned long) elapsed_time,
-                        (unsigned long) nodes,
-                        1000L * ((unsigned long) nodes / (unsigned long)elapsed_time ),
-                        buf_pv );
-            fprintf( stdout, buf );
-            fflush( stdout );
-            log( "rsp>%s", buf );
+            // maybe book move
+            bestmove_terse = sargon_export_move(BESTM);
+            break;
         }
     }
-}
-
-bool CalculateNextMove( thc::ChessRules &cr, bool new_game, std::vector<thc::Move> &pv, thc::Move &bestmove, int &score_cp,
-                        unsigned long ms_time,
-                        unsigned long ms_budget,
-                        int &depth )
-{
-    bool have_move = false;
-    pokeb(MVEMSG,   0 );
-    pokeb(MVEMSG+1, 0 );
-    pokeb(MVEMSG+2, 0 );
-    pokeb(MVEMSG+3, 0 );
-    pokeb(PLYMAX,5);
-    sargon(api_INITBD);
-    sargon_import_position(cr);
-    sargon(api_ROYALT);
-    pokeb( KOLOR, cr.white ? 0 : 0x80 );    // Sargon is side to move
-    thc::Move mv;
-#ifdef  RANDOM_ENGINE
-    std::vector<thc::Move> moves;
-    cr.GenLegalMoveList( moves );
-    int idx = rand() % moves.size();
-    mv = moves[idx];
-    have_move = true;
-#else
-    nodes.clear();
-    RunSargon();
-    thc::ChessRules cr_after;
-    sargon_export_position(cr_after);
-    std::string terse = sargon_export_move(BESTM);
-    have_move = mv.TerseIn( &cr, terse.c_str() );
+    bool have_move = bestmove.TerseIn( &the_position, bestmove_terse.c_str() );
     if( !have_move )
-    {
-        log( "Sargon doesn't find move - %s\n%s", terse.c_str(), cr.ToDebugStr().c_str() );
-        log( "(After)\n%s",cr_after.ToDebugStr().c_str() );
-    }
-#endif
-    bestmove = mv;
-    return have_move;
+        log( "Sargon doesn't find move - %s\n%s", bestmove_terse.c_str(), the_position.ToDebugStr().c_str() );
 }
 
 const char *cmd_go( const char *cmd )
 {
     stop_rsp_buf[0] = '\0';
-    int depth=5;
     static char buf[128];
 
     // Work out our time and increment
@@ -519,35 +598,11 @@ const char *cmd_go( const char *cmd )
     // When time gets really short get serious
     if( ms_budget < 50 )
         ms_budget = 0;
-    log( "Output ms_budget%d\n", ms_budget );
+    log( "Output ms_budget = %d\n", ms_budget );
     thc::Move bestmove;
-    int score_cp=0;
-    bestmove.Invalid();
     bool new_game = is_new_game();
-    ProgressReport
-    (
-        true,
-        the_pv,
-        0,
-        0
-    );
-    bool have_move = CalculateNextMove( the_position, new_game, the_pv, bestmove, score_cp, ms_time, ms_budget, depth );
-
-/*
-    // Public interface to version for repitition avoidance
-    bool CalculateNextMove( vector<thc::Move> &pv, Move &bestmove, int &score_cp,
-                            unsigned long ms_time,
-                            int &depth, unsigned long &nodes  );
- */
-
-    ProgressReport
-    (
-        false,
-        the_pv,
-        score_cp,
-        depth
-    );
-
+    CalculateNextMove( new_game, bestmove, ms_budget );
+    ProgressReport();
     sprintf( buf, "bestmove %s\n", bestmove.TerseOut().c_str() );
     return buf;
 }
@@ -556,6 +611,9 @@ const char *cmd_go_infinite()
 {
     int plymax=3;
     bool aborted = false;
+    the_pv.clear();
+    the_pv_depth = 0;
+    the_pv_value = 0;
     while( !aborted )
     {
         pokeb(MVEMSG,   0 );
@@ -570,6 +628,8 @@ const char *cmd_go_infinite()
         pokeb( KOLOR, the_position.white ? 0 : 0x80 );    // Sargon is side to move
         nodes.clear();
         aborted = RunSargon();
+        if( !aborted )
+            ProgressReport();   
     }
     if( aborted && the_pv.size() > 0 )
     {
@@ -657,7 +717,7 @@ const char *cmd_position( const char *cmd )
                 {
                     // Yes it is! so we are still playing the same game
                     different_game = false;
-                    log( "cmd_position(): Setting different_game = false\n" );
+                    log( "cmd_position(): Setting different_game = false %s\n", the_position.ToDebugStr().c_str() );
                 }
             }
         }
@@ -689,21 +749,16 @@ static void log( const char *fmt, ... )
     }
 }
 
-void ShowPv()
+static void AcceptPv()
 {
-    ProgressReport
-    (
-        false,
-        the_pv,
-        the_pv_value,
-        the_pv_depth
-    );
+    the_pv         = the_pv_provisional;
+    the_pv_value   = the_pv_value_provisional;
+    the_pv_depth   = the_pv_depth_provisional;
 }
 
-
-void BuildPv()
+static void BuildPv()
 {
-    the_pv.clear();
+    the_pv_provisional.clear();
     std::vector<NODE> nodes_pv;
     int nbr = nodes.size();
     int target = 1;
@@ -715,7 +770,7 @@ void BuildPv()
         {
             nodes_pv.push_back( *p );
             double fvalue = sargon_export_value(p->value);
-            log( "level=%d, from=%s, to=%s value=%d/%.1f\n", p->level, algebraic(p->from).c_str(), algebraic(p->to).c_str(), p->value, fvalue );
+            // log( "level=%d, from=%s, to=%s value=%d/%.1f\n", p->level, algebraic(p->from).c_str(), algebraic(p->to).c_str(), p->value, fvalue );
             if( target == plymax )
                 break;
             target++;
@@ -744,20 +799,20 @@ void BuildPv()
                 thc::Move mv;
                 mv.TerseIn( &cr, buf );
                 cr.PlayMove(mv);
-                the_pv.push_back(mv);
+                the_pv_provisional.push_back(mv);
             }
         }
     }
-    the_pv_depth = plymax;
+    the_pv_depth_provisional = plymax;
     double fvalue = sargon_export_value( nodes_pv[nbr-1].value );
 
     // Sargon's values are negated at alternate levels, transforming minimax to maximax.
     //  If White to move, maximise conventional values at level 0,2,4
     //  If Black to move, maximise negated values at level 0,2,4
     bool odd = ((nbr-1)%2 == 1);
-    bool negate = odd; //(the_position.WhiteToPlay() ? odd : !odd );
+    bool negate = the_position.WhiteToPlay() ? odd : !odd;
     double centipawns = (negate ? -100.0 : 100.0) * fvalue;
-    the_pv_value = static_cast<int>(centipawns);
+    the_pv_value_provisional = static_cast<int>(centipawns);
 }
 
 
@@ -776,11 +831,6 @@ extern "C" {
 
         if( 0 == strcmp(msg,"Yes! Best move") )
         {
-            static int previous_plymax;
-            int plymax = peekb(PLYMAX);
-            if( plymax != previous_plymax )
-                ShowPv();
-            previous_plymax = plymax;
             unsigned int p      = peekw(MLPTRJ);
             unsigned int level  = peekb(NPLY);
             unsigned char from  = peekb(p+2);
