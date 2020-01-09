@@ -91,13 +91,14 @@ go infinite
 
 static const char *test_sequence[] =
 {
-#if 0
+#if 1
     "uci\n",
     "setoption name MultiPV value 4\n",
     "isready\n",
     "position fen 8/8/q2pk3/2p5/8/3N4/8/4K2R w K - 0 1\n",
     "go infinite\n"
 #else
+    // sadly this doesn't work - the stop commands aren't processed at the right time
     "uci\n",
     "isready\n",
     "position startpos moves g2g3\n",
