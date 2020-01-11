@@ -2,8 +2,13 @@ The book "Sargon, a computer chess program", by Dan and Kathe Spracklen publishe
 presents the source code to the classic early chess program Sargon in Z80 assembly language.
 This is a project to bring the code back to life in the modern era.
 
-The project is coming along very well, I have Sargon basically running well and I'm in the
-"make it into a pretty package stage".
+The project is approaching completion. Sargon runs well, it's pretty decent at tactics and
+will tear you apart if you don't pay attention. It doesn't understand the endgame - finishing
+the opponent off in that stage (even with say K+Q v K) is beyond its horizon. I am tempted
+to add a simple "king in a decreasing sized box" type positional factor to the scoring
+function to fix that - but that's not really software archaeology is it? A similar problem,
+probably fixable in the same way is that Sargon will sometimes dridt and concede a draw
+by repeating moves even in an overwhelming position.
 
 Some notes on the project organisation. The Sargon assembly language source, in original and
 transformed versions is in directory "stages" (the name indicates the stages it has been
@@ -19,13 +24,14 @@ There are currently three C++ projects (Visual Studio parlance for C++ executabl
 with main() functions);
 
 1) Transform source code program to convert the assembly language line by line. This program
-transforms stages/sargon5/asm into src/translated.asm (it also throws out stages/sargon4.asm
+transforms stages/sargon5.asm into src/translated.asm (it also throws out stages/sargon4.asm
 as a nice side effect)
 2) A test suite which grew out of a program to get translated.asm working initially, then
-working reliably with regressing tests.
+working reliably with regression tests.
 3) A simple Windows UCI chess engine wrapper so Sargon can run in standard GUIs.
 
-All three projects are working. I am refining 2) and 3) in particular.
+All three projects are working well now. There's a bit more refinement and then I'll publish a
+"release" and move on to something else.
 
 I acknowledge the ownership of legendary
 programmers Dan and Kathe Spracklen, and if they contact me in respect of this project, I will
