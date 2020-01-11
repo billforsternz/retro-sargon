@@ -77,80 +77,23 @@ static HANDLE hSem;
 static char cmdline[CMD_BUF_NBR][BIGBUF+2];
 static int cmd_put;
 static int cmd_get;
-static bool gbl_stop;
+static bool signal_stop;
 static thc::Move bestmove;
-
-/*
-setoption name MultiPV value 4
-isready
-position fen 8/8/q2pk3/2p5/8/3N4/8/4K2R w K - 0 1
-go infinite
-
-
-*/
 
 static const char *test_sequence[] =
 {
-#if 1
+#if 0
     "uci\n",
     "setoption name MultiPV value 4\n",
     "isready\n",
     "position fen 8/8/q2pk3/2p5/8/3N4/8/4K2R w K - 0 1\n",
     "go infinite\n"
 #else
-    // sadly this doesn't work - the stop commands aren't processed at the right time
+    // For debugging subtle timing problem
     "uci\n",
     "isready\n",
-    "position startpos moves g2g3\n",
-    "go wtime 1500218 btime 179100 winc 5000 binc 1000\n",
-    "isready\n",
-    "position fen rnbqkbnr/pppp1ppp/8/4p3/8/6P1/PPPPPP1P/RNBQKBNR w KQkq e6 0 2\n",
+    "position fen r2q1rk1/ppp2ppp/2n1bn2/3pp3/1b6/2NPP1P1/PPP1NPBP/R1BQ1RK1 w - - 0 1\n",
     "go infinite\n",
-    "stop\n",
-    "isready\n",
-    "isready\n",
-    "position startpos moves g2g3 e7e5 f1g2\n",
-    "go wtime 1498296 btime 179960 winc 5000 binc 1000\n",
-    "isready\n",
-    "position fen r1bqkbnr/pppp1ppp/2n5/4p3/8/6P1/PPPPPPBP/RNBQK1NR w KQkq - 2 3\n",
-    "go infinite\n",
-    "stop\n",
-    "isready\n",
-    "isready\n",
-    "position startpos moves g2g3 e7e5 f1g2 b8c6 b1c3\n",
-    "go wtime 1502077 btime 176101 winc 5000 binc 1000\n",
-    "isready\n",
-    "position fen r1bqkb1r/pppp1ppp/2n2n2/4p3/8/2N3P1/PPPPPPBP/R1BQK1NR w KQkq - 4 4\n",
-    "go infinite\n",
-    "stop\n",
-    "isready\n",
-    "isready\n",
-    "position startpos moves g2g3 e7e5 f1g2 b8c6 b1c3 g8f6 d2d3\n",
-    "go wtime 1505187 btime 171710 winc 5000 binc 1000\n",
-    "isready\n",
-    "position fen r1bqk2r/pppp1ppp/2n2n2/4p3/1b6/2NP2P1/PPP1PPBP/R1BQK1NR w KQkq - 1 5\n",
-    "go infinite\n",
-    "stop\n",
-    "isready\n",
-    "isready\n",
-    "position startpos moves g2g3 e7e5 f1g2 b8c6 b1c3 g8f6 d2d3 f8b4 e2e3\n",
-    "go wtime 1507672 btime 166100 winc 5000 binc 1000\n",
-    "isready\n",
-    "position fen r1bqk2r/ppp2ppp/2n2n2/3pp3/1b6/2NPP1P1/PPP2PBP/R1BQK1NR w KQkq d6 0 6\n",
-    "go infinite\n",
-    "stop\n",
-    "isready\n",
-    "isready\n",
-    "position startpos moves g2g3 e7e5 f1g2 b8c6 b1c3 g8f6 d2d3 f8b4 e2e3 d7d5 g1e2\n",
-    "go wtime 1510672 btime 161709 winc 5000 binc 1000\n",
-    "isready\n",
-    "position fen r1bq1rk1/ppp2ppp/2n2n2/3pp3/1b6/2NPP1P1/PPP1NPBP/R1BQK2R w KQ - 2 7\n",
-    "go infinite\n",
-    "stop\n",
-    "isready\n",
-    "isready\n",
-    "position startpos moves g2g3 e7e5 f1g2 b8c6 b1c3 g8f6 d2d3 f8b4 e2e3 d7d5 g1e2 e8g8 e1g1\n",
-    "go wtime 1512609 btime 161631 winc 5000 binc 1000\n"
 #endif
 };
 
@@ -174,18 +117,17 @@ void read_stdin()
         {
             if( strchr(&cmdline[cmd_put][0],'\n') )
                 *strchr(&cmdline[cmd_put][0],'\n') = '\0';
-            log( "cmd>%s\n", &cmdline[cmd_put][0] );
             if( 0 == _strcmpi(&cmdline[cmd_put][0],"quit") )
             {
-                gbl_stop = true;
+                signal_stop = true;
                 quit = true;
             }
             else if( 0 == _strcmpi(&cmdline[cmd_put][0],"stop") )
-                gbl_stop = true;
+                signal_stop = true;
         }
-        ReleaseSemaphore(hSem, 1, 0);
         cmd_put++;
         cmd_put &= (CMD_BUF_NBR-1);
+        ReleaseSemaphore(hSem, 1, 0);
     }
 }
 
@@ -195,23 +137,22 @@ void write_stdout()
     while(!quit)
     {
         WaitForSingleObject(hSem, INFINITE);
-        quit = process(&cmdline[cmd_get][0]);
+        signal_stop = false;
+        const char *cmd = &cmdline[cmd_get][0];
+        log( "cmd>%s\n", cmd );     // moved from read_stdin(), not good to use non-reentrant log() in both processes
+        quit = process(cmd);
         cmd_get++;
         cmd_get &= (CMD_BUF_NBR-1);
     }
 } 
 
-static FILE *file_log;
 int main( int argc, char *argv[] )
 {
     std::string filename_base( argv[0] );
     logfile_name = filename_base + "-log.txt";
     unsigned long tid1;
-    HANDLE hThread1;
-    HANDLE handle = (HANDLE)_get_osfhandle(_fileno(stdin));
-    int last=34;
     hSem = CreateSemaphore(NULL,0,10,NULL);
-    hThread1 = CreateThread(0,
+    HANDLE hThread1 = CreateThread(0,
                             0,
                             (LPTHREAD_START_ROUTINE) read_stdin,
                             0,
@@ -220,8 +161,6 @@ int main( int argc, char *argv[] )
     write_stdout();
     CloseHandle(hSem);
     CloseHandle(hThread1);
-    if( file_log )
-        fclose(file_log);
     return 0;
 }
 
@@ -230,7 +169,6 @@ static bool RunSargon()
 {
     bool aborted = false;
     int val;
-    gbl_stop = false;
     val = setjmp(jmp_buf_env);
     if( val )
         aborted = true;
@@ -728,26 +666,32 @@ const char *cmd_position( const char *cmd )
 
 static void log( const char *fmt, ... )
 {
+	va_list args;
+	va_start( args, fmt );
+    static FILE *file_log;
+    static bool first=true;
+    static char buf[1024];
     if( file_log == 0 )
-        file_log = fopen( logfile_name.c_str(), "wt" );
+        file_log = fopen( logfile_name.c_str(), first? "wt" : "at" );
+    first = false;
     if( file_log )
     {
-        char buf[1024];
         time_t t = time(NULL);
         struct tm *ptm = localtime(&t);
         const char *s = asctime(ptm);
         strcpy( buf, s );
-        if( strchr(buf,'\n') )
-            *strchr(buf,'\n') = '\0';
+        char *p = strchr(buf,'\n');
+        if( p )
+            *p = '\0';
         fputs(buf,file_log);
-        fputs(": ",file_log);
-	    va_list args;
-	    va_start( args, fmt );
-        char *p = buf;
-        vsnprintf( p, sizeof(buf)-2-(p-buf), fmt, args ); 
+        buf[0] = ':';
+        buf[1] = ' ';
+        vsnprintf( buf+2, sizeof(buf)-4, fmt, args ); 
         fputs(buf,file_log);
-        va_end(args);
+        fclose(file_log);
+        file_log = 0;
     }
+    va_end(args);
 }
 
 static void AcceptPv()
@@ -847,8 +791,8 @@ extern "C" {
             }
         }
 
-        // Abort RunSargon() if signalled by gbl_stop being set
-        if( gbl_stop )
+        // Abort RunSargon() if signalled by signal_stop being set
+        if( signal_stop )
         {
             longjmp( jmp_buf_env, 1 );
         }
