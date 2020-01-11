@@ -5,9 +5,9 @@ This is a project to bring the code back to life in the modern era.
 The project is approaching completion. Sargon runs well, it's pretty decent at tactics and
 will tear you apart if you don't pay attention. It doesn't understand the endgame - finishing
 the opponent off in that stage (even with say K+Q v K) is beyond its horizon. I am tempted
-to add a simple "king in a decreasing sized box" type positional factor to the scoring
+to add a simple "king in a decreasing sized box" type heuristic to the scoring
 function to fix that - but that's not really software archaeology is it? A similar problem,
-probably fixable in the same way is that Sargon will sometimes dridt and concede a draw
+probably fixable in the same way is that Sargon will sometimes drift and concede a draw
 by repeating moves even in an overwhelming position.
 
 Some notes on the project organisation. The Sargon assembly language source, in original and
