@@ -946,10 +946,10 @@ void translate_init()
     xlat["XRI"] = { "XOR\tal,%s", "XOR\ta,%s", "XOR\tal,%s", imm8 };
 
     // CMP reg8_mem8 -> CMP al,reg8_mem8
-    xlat["CMP"] = { "CMP\tal,%s", "CMP\ta,%s", "CMP\tal,%s", reg8_mem8 };
+    xlat["CMP"] = { "CMP\tal,%s", "CP\ta,%s", "CP\tal,%s", reg8_mem8 };
 
     // CPI imm8 -> CMP al, imm8
-    xlat["CPI"] = { "CMP\tal,%s", "CMP\ta,%s", "CMP\tal,%s", imm8 };
+    xlat["CPI"] = { "CMP\tal,%s", "CP\ta,%s", "CP\tal,%s", imm8 };
 
     // DCR reg8 -> DEC reg8
     xlat["DCR"] = { "DEC\t%s", "DEC\t%s", NULL, reg8 };
@@ -996,6 +996,43 @@ void translate_init()
     // Rotate and Shift
     //
 
+    /*
+      Rotate and shift reference info
+
+              8080 (ext)               Z80                              X86
+              ----                     ---                              ---
+              RLC  (rotate A left)     RLCA                             ROL al,1
+              RLCR reg (ext)           RLC reg *                        ROL reg,1
+              RAL  (RL thru CY)        RLA                              RCL al,1
+              RALR reg (ext)           RL reg *                         RCL reg,1
+              RRC  (rotate A right)    RRCA                             ROR al,1
+              RRCR reg (ext)           RRC reg  *                       ROR reg,1
+              RAR  (RR thru CY)        RRA                              RCR al,1
+              RARR reg (ext)           RR reg *                         RCR reg,1
+              SRLR reg (ext)           SRL reg (shift right logical) ^  SHR reg,1  (shift right)
+              SRAR reg (ext)           SRA reg (shift right arithmetic) SAR reg,1  (shift arithmetic right)
+              SLAR reg (ext)           SLA reg (shift left arithmetic)  SAL reg,1  (or SHL reg,1)
+              RLD (ext)                RLD (rotate BCD digit left)      - 
+              RRD (ext)                RRD (rotate BCD digit right)     -
+
+              The (ext) instructions here are not present at all in the actual
+              8080, but these mnemonics are 8080 style extensions for the Z80
+              in the TDL macro assembler used for the original Sargon source
+
+              * RLC stands for "Rotate Left Circular", the CY bit is set to
+                reflect the bit rotated from bit 7 to bit 0. Also RLC A (etc)
+                is not quite a two byte equivalent to the one byte original
+                8080 instruction set RLCA because it affects the flags differently
+
+              ^ arithmetic right shifts copy bit 7, logic right shifts clear it
+                arithmetic and logic left shifts are the same, clearing bit 0
+                for X86 'shift' = shift logical (logical is assumed) and both
+                forms of left shifts are allowed, as synonyms.
+
+    */
+
+    // Only implement the instructions that are present in the Sargon source code
+
     // RAL -> RCL al,1             # rotate left through CY
     xlat["RAL"] = { "RCL\tal,1",  "RLA", NULL, none };
 
@@ -1020,6 +1057,35 @@ void translate_init()
     //
     // Calls
     //
+
+    /*
+
+      Conditional branches reference info
+
+      There is an excellent X86 Jump reference at www.unixwiz.net/techtips/x86-jumps.html
+      that explains all the X86 synonyms. For our purposes only S=1, S=0 are potential
+      hazards, and I did indeed handle these wrongly first time through
+
+      The Z80 has both JP and JR instructions. The JR (R=relative) instructions are only
+      two bytes. The JR instruction is restricted to unconditional or C,NC,Z and NZ
+      conditionals only.
+
+      The X86 does not allow conditional calls or returns, and the assembler determines
+      whether to use short/long relative/absolute operands.
+
+              8080                     Z80                        X86
+              ----                     ---                        ---
+     C=1      C  (JC, RC, CC)          C  (JP C, RET C, CALL C)   C  (JC)
+     C=0      NC                       NC                         NC
+     Z=1      Z                        Z                          Z
+     Z=0      NZ                       NZ                         NZ
+     S=1      M                        M                          S
+     S=0      P                        P                          NS
+     P=1      PE                       PE                         PE
+     P=0      PO                       PO                         PO
+
+    */
+
 
     // CALL addr -> CALL addr
     xlat["CALL"] = { "CALL\t%s", "CALL\t%s", NULL, echo };
@@ -1056,31 +1122,32 @@ void translate_init()
     // Jumps
     //
 
+
     // DJNZ addr -> LAHF; DEC ch; JNZ addr; SAHF; ## flags affected at addr (sadly not much to be done)
     xlat["DJNZ"] = { "LAHF\n\tDEC ch\n\tJNZ\t%s\n\tSAHF", "DJNZ\t%s", NULL, echo };
 
     // JC addr -> JC addr
-    xlat["JC"] = { "JC\t%s", "JMP\tC,%s", NULL, echo };
+    xlat["JC"] = { "JC\t%s", "JP\tC,%s", NULL, echo };
 
     // JM addr -> JS addr  (jump if sign bit true = most sig bit true = negative)
-    xlat["JM"] = { "JS\t%s", "JMP\tM,%s", NULL, echo };
+    xlat["JM"] = { "JS\t%s", "JP\tM,%s", NULL, echo };
 
     // JMP addr -> JMP addr
-    xlat["JMP"] = { "JMP\t%s", "JMP\t%s", NULL, echo };
+    xlat["JMP"] = { "JMP\t%s", "JP\t%s", NULL, echo };
 
     // JMPR addr -> JMP addr (avoid relative jumps unless we get into mega optimisation)
     xlat["JMPR"] = { "JMP\t%s", "JR\t%s", NULL, echo };
 
     // JNZ addr -> JNZ addr
-    xlat["JNZ"] = { "JNZ\t%s", "JMP\tNZ,%s", NULL, echo };
+    xlat["JNZ"] = { "JNZ\t%s", "JP\tNZ,%s", NULL, echo };
 
     // JP addr -> JNS addr  (jump sign not set [i.e.positive])
-    xlat["JP"] = { "JNS\t%s", "JMP\tP,%s", NULL, echo };
+    xlat["JP"] = { "JNS\t%s", "JP\tP,%s", NULL, echo };
 
     // JPE addr -> JPE addr  (jump parity even - check this one, parity bit not 100% compatible) 
-    xlat["JPE"] = { "JPE\t%s",  "JMP\tPE,%s", NULL, echo };
+    xlat["JPE"] = { "JPE\t%s",  "JP\tPE,%s", NULL, echo };
 
-    // JRC addr -> JC addr (avoid relative jumps unless we get into mega optimisation)
+    // JRC addr -> JC addr
     xlat["JRC"] = { "JC\t%s", "JR\tC,%s", NULL, echo };
 
     // JRNC addr -> JNC addr
@@ -1153,13 +1220,13 @@ void translate_init()
     xlat["XCHG"] = { "XCHG\tbx,dx", "EX\tde,hl", "EX\tdx,bx", none };
 
     // EXAF -> macro/call
-    xlat["EXAF"] = { "Z80_EXAF", "EXAF", NULL, none };
+    xlat["EXAF"] = { "Z80_EXAF", "EX\taf,af'", NULL, none };
 
     // EXX -> macro/call
     xlat["EXX"] = { "Z80_EXX", "EXX", NULL, none };
 
     // LDAR -> Load A with incrementing R (RAM refresh) register (to get a random number)
-    xlat["LDAR"] = { "Z80_LDAR", "LDAR", NULL, none };
+    xlat["LDAR"] = { "Z80_LDAR", "LD\ta,r", NULL, none };
 
     // CPIR (CCIR in quirky assembler) -> macro/call
     xlat["CCIR"] = { "Z80_CPIR", "CPIR", NULL, none };
