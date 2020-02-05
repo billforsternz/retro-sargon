@@ -72,8 +72,8 @@ static void AcceptPv();
 static void BuildPv();
 
 static HANDLE hSem;
-#define BIGBUF 512
-#define CMD_BUF_NBR 64
+#define BIGBUF 8192
+#define CMD_BUF_NBR 8
 static char cmdline[CMD_BUF_NBR][BIGBUF+2];
 static int cmd_put;
 static int cmd_get;
@@ -297,8 +297,8 @@ void cmd_multipv( const char *cmd )
 
 void ProgressReport()
 {
-    int     score_cp = the_pv_value;
-    int     depth = the_pv_depth;
+    int     score_cp   = the_pv_value;
+    int     depth      = the_pv_depth;
     thc::ChessRules ce = the_position;
     int score_overide;
     static char buf[1024];
@@ -395,8 +395,84 @@ void ProgressReport()
     }
 }
 
-void CalculateNextMove( bool new_game, thc::Move &bestmove, unsigned long ms_budget )
+/*
+
+Concept:
+
+Try to run with consistent n (=plymax) each move. For each move, establish a window,
+repeat algorthithm with increasing n until elapsed time is in the window.
+
+If we hit the window, but n is less than previous move, increase the window to give
+us a chance of continuing to use the higher n.
+
+If we hit the window, and n is greater than previous move, decrease the window
+
+Window is LO to HI. LO is always 0.5 Goal. HI ranges from 1*Goal to 4* goal (2 initially)
+
+goal   =  time/100 + inc
+window =  lo to hi = LO*goal to HI*goal, LO = 0.5, HI = 2.0 initially
+cutoff =  time/2 + inc or hi whichever is greater
+
+RUN with n=plymax = 3 initially, increment for each repeat
+    if t >= cutoff
+        USE result
+    if t < lo
+        n++ and REPEAT
+    else if t < hi
+        if n == n_previous
+            USE
+        if n > n_previous
+            reduce HI and USE
+        if n < n_previous
+            increase HI and REPEAT
+    else if t >= hi
+            increase HI and USE
+
+*/
+
+void CalculateNextMove( bool new_game, thc::Move &bestmove, unsigned long ms_time, unsigned long ms_inc )
 {
+    log( "Input ms_time=%d, ms_inc=%d\n", ms_time, ms_inc );
+    double lo_factor = 0.3;
+    static double hi_factor;
+    static int plymax_previous;
+    static unsigned long divisor;
+    if( new_game )
+    {
+        hi_factor = 3.0;
+        plymax_previous = 3;
+        divisor = 50;
+    }
+    unsigned long ms_goal=0, ms_cutoff=0, ms_lo=0, ms_hi=0, ms_mid=0;
+
+    ms_goal = ms_time / divisor;
+    /*
+
+    if( ms_time == 0 )
+        ms_goal = 0;
+    else if( ms_inc == 0 )
+        ms_goal = ms_time/40;
+    else if( ms_time > 100*ms_inc )
+        ms_goal = ms_time/30;
+    else if( ms_time > 50*ms_inc )
+        ms_goal = ms_time/20;
+    else if( ms_time > 10*ms_inc )
+        ms_goal = ms_time/10;
+    else if( ms_time > ms_inc )
+        ms_goal = ms_time/5;
+    else
+        ms_goal = ms_time/2; */
+
+    // When time gets really short get serious
+    if( ms_goal < 50 )
+        ms_goal = 1;
+
+    ms_cutoff = ms_time/2;
+    if( ms_cutoff < ms_goal )
+        ms_cutoff = ms_goal;
+    ms_lo = static_cast<unsigned long>( static_cast<double>(ms_goal) * lo_factor );
+    ms_hi = static_cast<unsigned long>( static_cast<double>(ms_goal) * hi_factor );
+    ms_mid = (ms_lo+ms_hi) / 2;
     bool aborted = false;
     the_pv.clear();
     the_pv_depth = 0;
@@ -411,7 +487,7 @@ void CalculateNextMove( bool new_game, thc::Move &bestmove, unsigned long ms_bud
         pokeb(MVEMSG+1, 0 );
         pokeb(MVEMSG+2, 0 );
         pokeb(MVEMSG+3, 0 );
-        pokeb(PLYMAX,plymax++);
+        pokeb(PLYMAX, plymax );
         sargon(api_INITBD);
         sargon_import_position(the_position);
         int moveno=the_position.full_move_count;
@@ -422,9 +498,20 @@ void CalculateNextMove( bool new_game, thc::Move &bestmove, unsigned long ms_bud
         log( "aborted=%s, the_pv.size()=%d moveno=%d\n", aborted?"true":"false", the_pv.size(), moveno );
         if( !aborted )
             ProgressReport();   
-        if( the_pv.size() > 0 )    
+        if( the_pv.size() == 0 )    
+        {
+            // maybe book move
+            bestmove_terse = sargon_export_move(BESTM);
+            break;
+        }
+        else
         {
             bestmove_terse = the_pv[0].TerseOut();
+            std::string bestm = sargon_export_move(BESTM);
+            if( bestmove_terse != bestm )
+            {
+                log( "Unexpected event: BESTM=%s != PV[0]=%s\n%s", bestm.c_str(), bestmove_terse.c_str(), the_position.ToDebugStr().c_str() );
+            }
             thc::TERMINAL score_terminal;
             thc::ChessRules ce = the_position;
             ce.PlayMove(the_pv[0]);
@@ -439,40 +526,71 @@ void CalculateNextMove( bool new_game, thc::Move &bestmove, unsigned long ms_bud
             }
             unsigned long now = GetTickCount();
             unsigned long elapsed = (now-base);
-            log( "elapsed = %lu, ms_budget = %lu\n", elapsed, ms_budget );
-            if( elapsed >= ms_budget )
-                break;  // We're done, we've spent too much time
+            log( "elapsed=%lu, window=%lu-%lu, cutoff=%lu, plymax=%d\n", elapsed, ms_lo, ms_hi, ms_cutoff, plymax );
 
-            // Elapsed time increases a lot with each additional ply, predict the
-            //  elapsed time if we do another ply
-            elapsedv.push_back(elapsed);
-            unsigned long accum=0, multiplier=0, nsamples=0, prev=0;
-            for( unsigned long t: elapsedv )
+            // if t >= cutoff
+            //   USE result
+            if( elapsed > ms_cutoff )
             {
-                if( t>prev && prev>0 )
+                log( "@USE@ elapsed > ms_cutoff, plymax = %d\n", plymax );
+                break;
+            }
+
+            // else if t < lo
+            //   n++ and REPEAT
+            else if( elapsed < ms_lo )
+            {
+                plymax++;
+                continue;
+            }
+
+            // else if t < hi
+            else if( elapsed < ms_hi )
+            {
+                // if n >= n_previous
+                //   USE
+                if( plymax >= plymax_previous )
                 {
-                    multiplier = t/prev;
-                    accum += multiplier;
-                    nsamples++;
+                    bool upper_half = elapsed > ms_mid;
+                    if( upper_half )
+                    {
+                        //divisor -= 2;
+                        //if( divisor < 30 )
+                            divisor = 30;
+                    }
+                    else
+                    {
+                        //divisor += 2;
+                        //if( divisor > 100 )
+                            divisor = 100;
+                    }
+                    log( "in window, @USE@: %s, plymax=%d, divisor=%lu\n", upper_half?"Upper half of range so reduce divisor"
+                                                                                   :"Lower half of range so increase divisor"
+                                    , plymax, divisor );
+                    break;
                 }
-                prev = t;
+
+                // if n < n_previous
+                //   REPEAT
+                else if( plymax < plymax_previous )
+                {
+                    plymax++;
+                    log( "in window CONTINUE: new plymax=%d, divisor=%lu\n", plymax, divisor );
+                    continue;
+                }
             }
-            if( nsamples > 0 )
+
+            // else if t >= hi
+            //   increase HI and USE
+            else if( elapsed >= ms_hi )
             {
-                unsigned long avg = accum/nsamples;
-                unsigned long predict = elapsed * avg;
-                log( "avg = %lu, predict = %lu, ms_budget/2 = %lu\n", avg, predict, ms_budget/2 );
-                if( predict > ms_budget/2 )
-                    break;  // We're done, we predict we'll spend almost all our time
+                divisor = 50;
+                log( "beyond window @USE@: new plymax target=%d, divisor=%lu\n", --plymax, divisor );
+                break;
             }
-        }
-        else
-        {
-            // maybe book move
-            bestmove_terse = sargon_export_move(BESTM);
-            break;
         }
     }
+    plymax_previous = plymax;
     bool have_move = bestmove.TerseIn( &the_position, bestmove_terse.c_str() );
     if( !have_move )
         log( "Sargon doesn't find move - %s\n%s", bestmove_terse.c_str(), the_position.ToDebugStr().c_str() );
@@ -517,30 +635,9 @@ const char *cmd_go( const char *cmd )
         ms_inc = atoi(q);
     }
 
-    // Allocate an amount of time based on how long we've got
-    log( "Input ms_time=%d, ms_inc=%d\n", ms_time, ms_inc );
-    if( ms_time == 0 )
-        ms_budget = 0;
-    else if( ms_inc == 0 )
-        ms_budget = ms_time/40;
-    else if( ms_time > 100*ms_inc )
-        ms_budget = ms_time/30;
-    else if( ms_time > 50*ms_inc )
-        ms_budget = ms_time/20;
-    else if( ms_time > 10*ms_inc )
-        ms_budget = ms_time/10;
-    else if( ms_time > ms_inc )
-        ms_budget = ms_time/5;
-    else
-        ms_budget = ms_time/2;
-
-    // When time gets really short get serious
-    if( ms_budget < 50 )
-        ms_budget = 0;
-    log( "Output ms_budget = %d\n", ms_budget );
     thc::Move bestmove;
     bool new_game = is_new_game();
-    CalculateNextMove( new_game, bestmove, ms_budget );
+    CalculateNextMove( new_game, bestmove, ms_time, ms_inc );
     ProgressReport();
     sprintf( buf, "bestmove %s\n", bestmove.TerseOut().c_str() );
     return buf;
@@ -586,7 +683,6 @@ const char *cmd_go_infinite()
     }
     return NULL;
 }
-
 static bool different_game;
 static bool is_new_game()
 {
@@ -598,6 +694,7 @@ const char *cmd_position( const char *cmd )
     static thc::ChessPosition prev_position;
     static thc::Move last_move, last_move_but_one;
     different_game = true;
+    log( "cmd_position(): %s\n", cmd );
     log( "cmd_position(): Setting different_game = true\n" );
     thc::ChessEngine tmp;
     the_position = tmp;    //init
@@ -643,6 +740,7 @@ const char *cmd_position( const char *cmd )
                 last_move_but_one = last_move;
                 last_move         = move;
             }
+            log( "cmd_position(): position set = %s\n", the_position.ToDebugStr().c_str() );
 
             // Previous position updated with latest moves
             prev_position = the_position;
