@@ -1,3 +1,4 @@
+
 Comparing sargon2.asm to sargon3.asm we find all instances where we
 replaced anonymous relative jumps with named relative jumps, for
 example;
@@ -60,3 +61,4 @@ offset  code   anonymous ok? mnemonic  named        comment
 2011 = 200B + 6                         
 200F    1801   $+3       Y   JR         rel024    
 201C    2801   $+3       Y   JR         Z,rel025  
+
