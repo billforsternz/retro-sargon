@@ -2075,22 +2075,22 @@ LINECT: .BYTE   0       ; Current line number
 ;*** OUTPUT <CR><LF> ***
         .DEFINE CARRET=
         [RST    7
-        .BYTE   92H,lAH
+        .BYTE   92H,1AH
         .WORD   0]
 ;*** CLEAR SCREEN ***
         .DEFINE CLRSCR=
         [RST    7
-        .BYTE   0B2H,lAH
+        .BYTE   0B2H,1AH
         .WORD   BLANKR,1]
 ;*** PRINT ANY LINE (NAME, LENGTH) ***
         .DEFINE PRTLIN[NAME,LNGTH)=
         [RST    7
-        .BYTE   0B2H,lAH
+        .BYTE   0B2H,1AH
         .WORD   NAME,LNGTH]
 ;*** PRINT ANY BLOCK (NAME, LENGTH) ***
         .DEFINE PRTBLK[NAME,LNGTH]=
         [RST    7
-        .BYTE   0B3H,lAH
+        .BYTE   0B3H,1AH
         .WORD   NAME,LNGTH]
 ;*** EXIT TO MONITOR ***
         .DEFINE EXIT=

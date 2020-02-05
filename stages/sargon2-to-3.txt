@@ -1,0 +1,62 @@
+Comparing sargon2.asm to sargon3.asm we find all instances where we
+replaced anonymous relative jumps with named relative jumps, for
+example;
+
+    DJNZ $-3  -> DJNZ back01
+
+We did this initially just by eyeballing and manually assembling to
+machine code at least to the extent of being able to count the number
+of bytes generated. Now that we can assemble sargon4.asm we can
+check that we calculated the right place for the named jump (either
+backnn for backward jumps or relnnn for forward jumps).
+
+Bottom line? Every instance below checks out ok (so Y for yes in ok?
+column).
+    
+Backward jumps, FE=$, FD=$-1  FC=$-2 FB=$-3
+
+offset  code   anonymous  ok? mnemonic  named        comment
+======  ====   =========  === ========  =====        ========
+0B08    10FB   $-3        Y   DJNZ      back01    
+0F6F    10FC   $-2        Y   DJNZ      back02    
+1009    28FC   $-2        Y   JR        Z,back03     ; Jump if empty
+1077    2802   $+4        Y   JR        Z,PT6D       ; Jump if white
+1088    10FC   $-2        Y   DJNZ      back04    
+12EB    10FC   $-2        Y   DJNZ      back05    
+1EAC    10FB   $-3        Y   DJNZ      back06    
+               
+Forward jumps, FE=$, FF=$+1  00=$+2 01=$+3 etc.
+
+offset  code   anonymous ok? mnemonic  named        comment
+======  ====   ========= === ========  =====        ========
+0B7F    2001   $+3       Y   JR         NZ,rel001    ; No-Skip
+0C25    2802   $+4       Y   JR         Z,rel002     ; Yes - skip
+0C54    F2590C $+5       Y   JP         P,rel003     ; Positive ? Yes - Jump
+0C59 = 0C54 + 5             
+0D2B    2005   $+7       Y   JR         NZ,rel004    ; Yes - jump
+0D9F    2801   $+3       Y   JR         Z,rel005     ; Yes - Skip
+0E87    2802   $+4       Y   JR         Z,rel006     ; Yes - jump
+0E90    2802   $+4       Y   JR         Z,rel007     ; No - jump
+0F84    2801   $+3       Y   JR         Z,rel008     ; Yes - skip
+0FBA    2801   $+3       Y   JR         Z,rel009     ; Yes - jump
+0FF0    2802   $+4       Y   JR         Z,rel010     ; Jump if defender
+10D1    3802   $+4       Y   JR         C,rel011     ; Jump if greater than
+10E2    2802   $+4       Y   JR         Z,rel012     ; Jump if white
+1108    2801   $+3       Y   JR         Z,rel013     ; Yes - jump
+1110    2809   $+11      Y   JR         Z,rel014     ; Yes - jump
+1116    2803   $+5       Y   JR         Z,rel014     ; Yes - jump
+1121    2802   $+4       Y   JR         Z,rel015     ; Yes - jump
+1140    2802   $+4       Y   JR         Z,rel026     ; Yes - jump
+1153    2002   $+4       Y   JR         NZ,rel016    ; No - jump
+1344    2806   $+8       Y   JR         Z,rel017     ; Yes - jump
+1379    2004   $+6       Y   JR         NZ,rel018    ; No - jump
+1413    2804   $+6       Y   JR         Z,rel019     ; Yes - jump
+1B59    2809   $+11      Y   JR         Z,rel020     ; No - jump
+1B66    2809   $+11      Y   JR         Z,rel021     ; No - jump
+1D80    2807   $+9       Y   JR         Z,rel23      ; Yes - skip
+1E0F    2002   $+4       Y   JR         NZ,rel022    ; No - skip
+1EBF    2801   $+3       Y   JR         Z,rel023     ; Jump if white
+200B    FA1120 $+6       Y   JP         M,rel027
+2011 = 200B + 6                         
+200F    1801   $+3       Y   JR         rel024    
+201C    2801   $+3       Y   JR         Z,rel025  
