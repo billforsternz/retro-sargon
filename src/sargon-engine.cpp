@@ -1,3 +1,12 @@
+/* NOTES:
+
+   Consider a model where we start with depth 5 say,
+   each move we check what % of our time we used. If more than
+   10% reduce depth, if less that 2% increase depth. Also need
+   effective dead mans brake.
+
+*/
+
 /*
 
   A primitive Windows UCI chess engine interface around the classic program Sargon,
@@ -21,17 +30,17 @@
 #include <fstream>
 #include <string>
 #include <vector>
-#include <deque>
-#include <map>
-#include <set>
-#include <algorithm>
 #include "util.h"
 #include "thc.h"
 #include "sargon-interface.h"
 #include "sargon-asm-interface.h"
-#include "translate.h"
-//#define RANDOM_ENGINE
 
+//-- preferences
+#define VERSION "1978"
+#define ENGINE_NAME "Sargon"
+
+// A move in Sargon's evaluation graph, in this program a move that is marked as
+//  the best move found so far at a given level
 struct NODE
 {
     unsigned int level;
@@ -43,20 +52,28 @@ struct NODE
     NODE( unsigned int l, unsigned char f, unsigned char t, unsigned char fs, unsigned char v ) : level(l), from(f), to(t), flags(fs), value(v) {}
 };
 
+// A principal variation
+struct PV
+{
+    std::vector<thc::Move> variation;
+    int value;
+    int depth;
+    void clear() {variation.clear(),value=0,depth=0;}
+    PV () {clear();}
+};
+
+// When a node is indicated as 'BEST' at level one, we can look back through
+//  previously indicated nodes at higher level and construct a PV
+static PV the_pv;
+static PV provisional;
+
 static std::string logfile_name;
 static std::vector< NODE > nodes;
 
-//-- preferences
-#define VERSION "1978"
-#define ENGINE_NAME "Sargon"
-
+// The current 'Master' postion
 static thc::ChessRules the_position;
-static std::vector<thc::Move> the_pv;
-static int the_pv_value;
-static int the_pv_depth;
-static std::vector<thc::Move> the_pv_provisional;
-static int the_pv_value_provisional;
-static int the_pv_depth_provisional;
+
+// Command line interface
 bool process( const char *buf );
 const char *cmd_uci();
 const char *cmd_isready();
@@ -68,9 +85,9 @@ const char *cmd_position( const char *cmd );
 static bool is_new_game();
 static void log( const char *fmt, ... );
 static bool RunSargon();
-static void AcceptPv();
-static void BuildPv();
+static void BuildPV( PV &pv );
 
+// A couple of threads and primitive shared memory ring buffer
 static HANDLE hSem;
 #define BIGBUF 8192
 #define CMD_BUF_NBR 8
@@ -78,23 +95,14 @@ static char cmdline[CMD_BUF_NBR][BIGBUF+2];
 static int cmd_put;
 static int cmd_get;
 static bool signal_stop;
-static thc::Move bestmove;
 
 static const char *test_sequence[] =
 {
-#if 0
     "uci\n",
     "setoption name MultiPV value 4\n",
     "isready\n",
     "position fen 8/8/q2pk3/2p5/8/3N4/8/4K2R w K - 0 1\n",
     "go infinite\n"
-#else
-    // For debugging subtle timing problem
-    "uci\n",
-    "isready\n",
-    "position fen r2q1rk1/ppp2ppp/2n1bn2/3pp3/1b6/2NPP1P1/PPP1NPBP/R1BQ1RK1 w - - 0 1\n",
-    "go infinite\n",
-#endif
 };
 
 void read_stdin()
@@ -174,8 +182,10 @@ static bool RunSargon()
         aborted = true;
     else
     {
+        the_pv.clear();
+        provisional.clear();
         sargon(api_CPTRMV);
-        AcceptPv();
+        the_pv = provisional;
     }
     return aborted;
 }
@@ -222,6 +232,7 @@ const char *str_pattern( const char *str, const char *pattern, bool more )
     return str;
 }
 
+// Command line top level handler
 bool process( const char *buf )
 {
     bool quit=false;
@@ -256,13 +267,8 @@ bool process( const char *buf )
 const char *cmd_uci()
 {
     const char *rsp=
-#ifdef RANDOM_ENGINE
-    "id name Random Moves Engine\n"
-    "id author Bill Forster\n"
-#else
     "id name " ENGINE_NAME " " VERSION "\n"
     "id author Dan and Kathe Spracklin, Windows port by Bill Forster\n"
-#endif
  // "option name Hash type spin min 1 max 4096 default 32\n"
  // "option name MultiPV type spin default 1 min 1 max 4\n"
     "uciok\n";
@@ -297,8 +303,8 @@ void cmd_multipv( const char *cmd )
 
 void ProgressReport()
 {
-    int     score_cp   = the_pv_value;
-    int     depth      = the_pv_depth;
+    int     score_cp   = the_pv.value;
+    int     depth      = the_pv.depth;
     thc::ChessRules ce = the_position;
     int score_overide;
     static char buf[1024];
@@ -314,10 +320,10 @@ void ProgressReport()
     buf_pv[0] = '\0';
     char *s;
     bool overide = false;
-    for( unsigned int i=0; i<the_pv.size(); i++ )
+    for( unsigned int i=0; i<the_pv.variation.size(); i++ )
     {
         bool okay;
-        thc::Move move=the_pv[i];
+        thc::Move move=the_pv.variation[i];
         ce.PlayMove( move );
         have_move = true;
         if( i == 0 )
@@ -430,8 +436,9 @@ RUN with n=plymax = 3 initially, increment for each repeat
 
 */
 
-void CalculateNextMove( bool new_game, thc::Move &bestmove, unsigned long ms_time, unsigned long ms_inc )
+thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long ms_inc )
 {
+    thc::Move bestmove;
     log( "Input ms_time=%d, ms_inc=%d\n", ms_time, ms_inc );
     double lo_factor = 0.3;
     static double hi_factor;
@@ -474,9 +481,6 @@ void CalculateNextMove( bool new_game, thc::Move &bestmove, unsigned long ms_tim
     ms_hi = static_cast<unsigned long>( static_cast<double>(ms_goal) * hi_factor );
     ms_mid = (ms_lo+ms_hi) / 2;
     bool aborted = false;
-    the_pv.clear();
-    the_pv_depth = 0;
-    the_pv_value = 0;
     int plymax = 3;
     std::string bestmove_terse;
     unsigned long base = GetTickCount();
@@ -495,10 +499,10 @@ void CalculateNextMove( bool new_game, thc::Move &bestmove, unsigned long ms_tim
         pokeb( KOLOR, the_position.white ? 0 : 0x80 );    // Sargon is side to move
         nodes.clear();
         aborted = RunSargon();
-        log( "aborted=%s, the_pv.size()=%d moveno=%d\n", aborted?"true":"false", the_pv.size(), moveno );
+        log( "aborted=%s, pv.variation.size()=%d moveno=%d\n", aborted?"true":"false", the_pv.variation.size(), moveno );
         if( !aborted )
             ProgressReport();   
-        if( the_pv.size() == 0 )    
+        if( the_pv.variation.size() == 0 )    
         {
             // maybe book move
             bestmove_terse = sargon_export_move(BESTM);
@@ -506,7 +510,7 @@ void CalculateNextMove( bool new_game, thc::Move &bestmove, unsigned long ms_tim
         }
         else
         {
-            bestmove_terse = the_pv[0].TerseOut();
+            bestmove_terse = the_pv.variation[0].TerseOut();
             std::string bestm = sargon_export_move(BESTM);
             if( bestmove_terse != bestm )
             {
@@ -514,7 +518,7 @@ void CalculateNextMove( bool new_game, thc::Move &bestmove, unsigned long ms_tim
             }
             thc::TERMINAL score_terminal;
             thc::ChessRules ce = the_position;
-            ce.PlayMove(the_pv[0]);
+            ce.PlayMove(the_pv.variation[0]);
             bool okay = ce.Evaluate( score_terminal );
             if( okay )
             {
@@ -593,7 +597,11 @@ void CalculateNextMove( bool new_game, thc::Move &bestmove, unsigned long ms_tim
     plymax_previous = plymax;
     bool have_move = bestmove.TerseIn( &the_position, bestmove_terse.c_str() );
     if( !have_move )
+    {
         log( "Sargon doesn't find move - %s\n%s", bestmove_terse.c_str(), the_position.ToDebugStr().c_str() );
+        bestmove.Invalid();
+    }
+    return bestmove;
 }
 
 const char *cmd_go( const char *cmd )
@@ -635,9 +643,8 @@ const char *cmd_go( const char *cmd )
         ms_inc = atoi(q);
     }
 
-    thc::Move bestmove;
     bool new_game = is_new_game();
-    CalculateNextMove( new_game, bestmove, ms_time, ms_inc );
+    thc::Move bestmove = CalculateNextMove( new_game, ms_time, ms_inc );
     ProgressReport();
     sprintf( buf, "bestmove %s\n", bestmove.TerseOut().c_str() );
     return buf;
@@ -647,9 +654,6 @@ const char *cmd_go_infinite()
 {
     int plymax=3;
     bool aborted = false;
-    the_pv.clear();
-    the_pv_depth = 0;
-    the_pv_value = 0;
     while( !aborted )
     {
         pokeb(MVEMSG,   0 );
@@ -667,7 +671,7 @@ const char *cmd_go_infinite()
         if( !aborted )
             ProgressReport();   
     }
-    if( aborted && the_pv.size() > 0 )
+    if( aborted && the_pv.variation.size() > 0 )
     {
         unsigned long now_time = GetTickCount();	
         int nodes = DIAG_make_move_primary-base_nodes;
@@ -679,10 +683,11 @@ const char *cmd_go_infinite()
                                (unsigned long) elapsed_time,
                                (unsigned long) nodes,
                                1000L * ((unsigned long) nodes / (unsigned long)elapsed_time ),
-                               the_pv[0].TerseOut().c_str() ); 
+                               the_pv.variation[0].TerseOut().c_str() ); 
     }
     return NULL;
 }
+
 static bool different_game;
 static bool is_new_game()
 {
@@ -691,14 +696,14 @@ static bool is_new_game()
 
 const char *cmd_position( const char *cmd )
 {
-    static thc::ChessPosition prev_position;
-    static thc::Move last_move, last_move_but_one;
+    static thc::ChessRules prev_position;
     different_game = true;
     log( "cmd_position(): %s\n", cmd );
-    log( "cmd_position(): Setting different_game = true\n" );
+    const char *s, *parm;
+
+    // Get base starting position
     thc::ChessEngine tmp;
     the_position = tmp;    //init
-    const char *s, *parm;
     bool look_for_moves = false;
     if( NULL != (parm=str_pattern(cmd,"fen",true)) )
     {
@@ -712,16 +717,13 @@ const char *cmd_position( const char *cmd )
         look_for_moves = true;
     }
 
-    // Previous position
-    thc::ChessRules temp=prev_position;
-
-    // Previous position updated
-    prev_position = the_position;
+    // Add moves
     if( look_for_moves )
     {
         s = strstr(parm,"moves ");
         if( s )
         {
+            thc::Move last_move, last_move_but_one;
             last_move_but_one.Invalid();
             last_move.Invalid();
             s = s+5;
@@ -742,15 +744,12 @@ const char *cmd_position( const char *cmd )
             }
             log( "cmd_position(): position set = %s\n", the_position.ToDebugStr().c_str() );
 
-            // Previous position updated with latest moves
-            prev_position = the_position;
-
             // Maybe this latest position is the old one with two new moves ?
             if( last_move_but_one.Valid() && last_move.Valid() )
             {
-                temp.PlayMove( last_move_but_one );
-                temp.PlayMove( last_move );
-                if( prev_position == temp )
+                prev_position.PlayMove( last_move_but_one );
+                prev_position.PlayMove( last_move );
+                if( the_position == prev_position )
                 {
                     // Yes it is! so we are still playing the same game
                     different_game = false;
@@ -759,6 +758,9 @@ const char *cmd_position( const char *cmd )
             }
         }
     }
+
+    // For next time
+    prev_position = the_position;
     return NULL;
 }
 
@@ -766,14 +768,12 @@ static void log( const char *fmt, ... )
 {
 	va_list args;
 	va_start( args, fmt );
-    static FILE *file_log;
     static bool first=true;
-    static char buf[1024];
-    if( file_log == 0 )
-        file_log = fopen( logfile_name.c_str(), first? "wt" : "at" );
+    FILE *file_log = fopen( logfile_name.c_str(), first? "wt" : "at" );
     first = false;
     if( file_log )
     {
+        static char buf[1024];
         time_t t = time(NULL);
         struct tm *ptm = localtime(&t);
         const char *s = asctime(ptm);
@@ -787,21 +787,13 @@ static void log( const char *fmt, ... )
         vsnprintf( buf+2, sizeof(buf)-4, fmt, args ); 
         fputs(buf,file_log);
         fclose(file_log);
-        file_log = 0;
     }
     va_end(args);
 }
 
-static void AcceptPv()
+static void BuildPV( PV &pv )
 {
-    the_pv         = the_pv_provisional;
-    the_pv_value   = the_pv_value_provisional;
-    the_pv_depth   = the_pv_depth_provisional;
-}
-
-static void BuildPv()
-{
-    the_pv_provisional.clear();
+    pv.variation.clear();
     std::vector<NODE> nodes_pv;
     int nbr = nodes.size();
     int target = 1;
@@ -842,11 +834,11 @@ static void BuildPv()
                 thc::Move mv;
                 mv.TerseIn( &cr, buf );
                 cr.PlayMove(mv);
-                the_pv_provisional.push_back(mv);
+                pv.variation.push_back(mv);
             }
         }
     }
-    the_pv_depth_provisional = plymax;
+    pv.depth = plymax;
     double fvalue = sargon_export_value( nodes_pv[nbr-1].value );
 
     // Sargon's values are negated at alternate levels, transforming minimax to maximax.
@@ -855,7 +847,7 @@ static void BuildPv()
     bool odd = ((nbr-1)%2 == 1);
     bool negate = the_position.WhiteToPlay() ? odd : !odd;
     double centipawns = (negate ? -100.0 : 100.0) * fvalue;
-    the_pv_value_provisional = static_cast<int>(centipawns);
+    pv.value = static_cast<int>(centipawns);
 }
 
 
@@ -884,7 +876,7 @@ extern "C" {
             nodes.push_back(n);
             if( level == 1 )
             {
-                BuildPv();
+                BuildPV( provisional );
                 nodes.clear();
             }
         }
