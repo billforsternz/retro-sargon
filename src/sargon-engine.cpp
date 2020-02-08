@@ -28,8 +28,13 @@
 #include <assert.h>
 #include <iostream>
 #include <fstream>
+#include <queue>
 #include <string>
 #include <vector>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+
 #include "util.h"
 #include "thc.h"
 #include "sargon-interface.h"
@@ -87,13 +92,54 @@ static void log( const char *fmt, ... );
 static bool RunSargon();
 static void BuildPV( PV &pv );
 
+// A threadsafe-queue.
+template <class T>
+class SafeQueue
+{
+public:
+    SafeQueue() : q(), m(), c() {}
+
+    ~SafeQueue() {}
+
+    // Add an element to the queue.
+    void enqueue(T t)
+    {
+        std::lock_guard<std::mutex> lock(m);
+        q.push(t);
+        c.notify_one();
+    }
+
+    // Get the "front"-element.
+    //  if the queue is empty, wait till a element is available
+    T dequeue(void)
+    {
+        std::unique_lock<std::mutex> lock(m);
+        while(q.empty())
+        {
+            // release lock as long as the wait and reaquire it afterwards
+            c.wait(lock);
+        }
+        T val = q.front();
+        q.pop();
+        return val;
+    }
+
+private:
+    std::queue<T> q;
+    mutable std::mutex m;
+    std::condition_variable c;
+};
+
+
 // A couple of threads and primitive shared memory ring buffer
-static HANDLE hSem;
 #define BIGBUF 8192
+#if 0
 #define CMD_BUF_NBR 8
+static HANDLE hSem;
 static char cmdline[CMD_BUF_NBR][BIGBUF+2];
 static int cmd_put;
 static int cmd_get;
+#endif
 static bool signal_stop;
 
 static const char *test_sequence[] =
@@ -105,37 +151,47 @@ static const char *test_sequence[] =
     "go infinite\n"
 };
 
+std::mutex m;
+std::condition_variable cv;
+std::string data;
+bool ready = false;
+bool processed = false;
+
+void read_stdin();
+void write_stdout();
+
+ 
+int main()
+{
+    std::thread first (read_stdin);
+    std::thread second (write_stdout);
+
+    // Wait for both threads to finish
+    first.join();                // pauses until first finishes
+    second.join();               // pauses until second finishes
+    return 0;
+}
+
+static SafeQueue<std::string> async_queue;
+
 void read_stdin()
 {
     bool quit=false;
+    static char buf[BIGBUF+2];
     while(!quit)
     {
-        #if 0
-        static int test;
-        if( test < sizeof(test_sequence) / sizeof(test_sequence[0]) )
-            strcpy( &cmdline[cmd_put][0], test_sequence[test++] );
-        else if( NULL == fgets(&cmdline[cmd_put][0],BIGBUF,stdin) )
-            quit = true;
-        if( !quit )
-        #else
-        if( NULL == fgets(&cmdline[cmd_put][0],BIGBUF,stdin) )
+        if( NULL == fgets(buf,BIGBUF,stdin) )
             quit = true;
         else
-        #endif
         {
-            if( strchr(&cmdline[cmd_put][0],'\n') )
-                *strchr(&cmdline[cmd_put][0],'\n') = '\0';
-            if( 0 == _strcmpi(&cmdline[cmd_put][0],"quit") )
-            {
-                signal_stop = true;
+            std::string s(buf);
+            util::rtrim(s);
+            async_queue.enqueue(s);
+            if( s=="quit" )
                 quit = true;
-            }
-            else if( 0 == _strcmpi(&cmdline[cmd_put][0],"stop") )
+            if( s=="stop" || s=="quit" )
                 signal_stop = true;
         }
-        cmd_put++;
-        cmd_put &= (CMD_BUF_NBR-1);
-        ReleaseSemaphore(hSem, 1, 0);
     }
 }
 
@@ -144,16 +200,15 @@ void write_stdout()
     bool quit=false;
     while(!quit)
     {
-        WaitForSingleObject(hSem, INFINITE);
+        std::string s = async_queue.dequeue();
         signal_stop = false;
-        const char *cmd = &cmdline[cmd_get][0];
-        log( "cmd>%s\n", cmd );     // moved from read_stdin(), not good to use non-reentrant log() in both processes
+        const char *cmd = s.c_str();
+        log( "cmd>%s\n", cmd );
         quit = process(cmd);
-        cmd_get++;
-        cmd_get &= (CMD_BUF_NBR-1);
     }
 } 
 
+#if 0
 int main( int argc, char *argv[] )
 {
     std::string filename_base( argv[0] );
@@ -171,6 +226,7 @@ int main( int argc, char *argv[] )
     CloseHandle(hThread1);
     return 0;
 }
+#endif
 
 static jmp_buf jmp_buf_env;
 static bool RunSargon()
