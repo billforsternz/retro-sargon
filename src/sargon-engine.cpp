@@ -1,12 +1,3 @@
-/* NOTES:
-
-   Consider a model where we start with depth 5 say,
-   each move we check what % of our time we used. If more than
-   10% reduce depth, if less that 2% increase depth. Also need
-   effective dead mans brake.
-
-*/
-
 /*
 
   A primitive Windows UCI chess engine interface around the classic program Sargon,
@@ -33,6 +24,7 @@
 #include <vector>
 #include <thread>
 #include <mutex>
+#include <chrono>
 #include <condition_variable>
 
 #include "util.h"
@@ -98,8 +90,10 @@ class SafeQueue
 {
 public:
     SafeQueue() : q(), m(), c() {}
-
     ~SafeQueue() {}
+
+    // Is queue empty ?
+    bool empty()  { return q.empty(); }
 
     // Add an element to the queue.
     void enqueue(T t)
@@ -109,8 +103,8 @@ public:
         c.notify_one();
     }
 
-    // Get the "front"-element.
-    //  if the queue is empty, wait till a element is available
+    // Get the "front" element.
+    //  if the queue is empty, wait until an element is available
     T dequeue(void)
     {
         std::unique_lock<std::mutex> lock(m);
@@ -140,42 +134,108 @@ static char cmdline[CMD_BUF_NBR][BIGBUF+2];
 static int cmd_put;
 static int cmd_get;
 #endif
-static bool signal_stop;
 
-static const char *test_sequence[] =
-{
-    "uci\n",
-    "setoption name MultiPV value 4\n",
-    "isready\n",
-    "position fen 8/8/q2pk3/2p5/8/3N4/8/4K2R w K - 0 1\n",
-    "go infinite\n"
-};
-
-std::mutex m;
-std::condition_variable cv;
-std::string data;
-bool ready = false;
-bool processed = false;
-
+void timer_thread();
 void read_stdin();
 void write_stdout();
 
  
-int main()
+static SafeQueue<std::string> async_queue;
+static std::mutex future_time_mtx;
+static long future_time;
+void set_future_time( long t )
 {
+    std::lock_guard<std::mutex> lck(future_time_mtx);
+    future_time = t;
+}
+
+int main( int argc, char *argv[] )
+{
+    std::string filename_base( argv[0] );
+    logfile_name = filename_base + "-log.txt";
     std::thread first (read_stdin);
     std::thread second (write_stdout);
+    std::thread third (timer_thread);
 
-    // Wait for both threads to finish
+    // Wait for main threads to finish
     first.join();                // pauses until first finishes
     second.join();               // pauses until second finishes
+
+    // Tell timer thread to finish, then wait for it too
+    set_future_time(-1);
+    third.join();
     return 0;
 }
 
-static SafeQueue<std::string> async_queue;
+void timer_thread()
+{
+    for(;;)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        if( future_time == -1 )
+            break;
+        else if( future_time != 0 )
+        {
+            long now_time = GetTickCount();	
+            long time_remaining = future_time - now_time;
+            if( time_remaining < 0 )
+            {
+                set_future_time(0);
+                async_queue.enqueue( "TIMEOUT" );
+            }
+        }
+    }
+}
+
+void SetTimer( int ms )
+{
+    // Prevent generation of a stale "TIMEOUT" event
+    set_future_time(0);
+
+    // Remove stale "TIMEOUT" events from queue
+    std::queue<std::string> temp;
+    while( !async_queue.empty() )
+    {
+        std::string s = async_queue.dequeue();
+        if( s != "TIMEOUT" )
+            temp.push(s);
+    }
+    while( !temp.empty() )
+    {
+        std::string s = temp.front();
+        temp.pop();
+        async_queue.enqueue(s);
+    }
+
+    // Schedule a new "TIMEOUT" event
+    if( ms != 0 )
+    {
+        long now_time = GetTickCount();	
+        long ft = now_time + ms;
+        if( ft==0 || ft==-1 )   // avoid special values
+            ft = 1;             //  at cost of 1 or 2 millisecs of error!
+        set_future_time(ft);
+    }
+}
+
 
 void read_stdin()
 {
+#if 1
+    static const char *test_sequence[] =
+    {
+        "uci\n",
+        "setoption name MultiPV value 4\n",
+        "isready\n",
+        "position fen 7k/8/8/4R3/8/8/8/7K w - - 0 1\n",
+        "go infinite\n"
+    };
+    for( int i=0; i<sizeof(test_sequence)/sizeof(test_sequence[0]); i++ )
+    {
+        std::string s(test_sequence[i]);
+        async_queue.enqueue(s);
+    }
+#endif
     bool quit=false;
     static char buf[BIGBUF+2];
     while(!quit)
@@ -189,8 +249,6 @@ void read_stdin()
             async_queue.enqueue(s);
             if( s=="quit" )
                 quit = true;
-            if( s=="stop" || s=="quit" )
-                signal_stop = true;
         }
     }
 }
@@ -201,7 +259,6 @@ void write_stdout()
     while(!quit)
     {
         std::string s = async_queue.dequeue();
-        signal_stop = false;
         const char *cmd = s.c_str();
         log( "cmd>%s\n", cmd );
         quit = process(cmd);
@@ -238,8 +295,6 @@ static bool RunSargon()
         aborted = true;
     else
     {
-        the_pv.clear();
-        provisional.clear();
         sargon(api_CPTRMV);
         the_pv = provisional;
     }
@@ -294,7 +349,9 @@ bool process( const char *buf )
     bool quit=false;
     const char *parm;
     const char *rsp = NULL;
-    if( str_pattern(buf,"quit") )
+    if( str_pattern(buf,"TIMEOUT") )
+        log( "TIMEOUT event\n" );
+    else if( str_pattern(buf,"quit") )
         quit = true;
     else if( str_pattern(buf,"uci") )
         rsp = cmd_uci();
@@ -312,7 +369,7 @@ bool process( const char *buf )
         rsp = cmd_position( parm );
     if( rsp )
     {
-        log( "rsp>%s", rsp );
+        log( "rsp>%s\n", rsp );
         fprintf( stdout, "%s", rsp );
         fflush( stdout );
     }
@@ -453,95 +510,71 @@ void ProgressReport()
                     buf_pv );
         fprintf( stdout, buf );
         fflush( stdout );
-        log( "rsp>%s", buf );
+        log( "rsp>%s\n", buf );
     }
 }
 
 /*
 
-Concept:
+    Calculate next move efficiently using the available time.
 
-Try to run with consistent n (=plymax) each move. For each move, establish a window,
-repeat algorthithm with increasing n until elapsed time is in the window.
+    What is the time management algorithm?
 
-If we hit the window, but n is less than previous move, increase the window to give
-us a chance of continuing to use the higher n.
+    Each move we loop increasing plymax. We set a timer to cut us off if
+    we spend too long.
 
-If we hit the window, and n is greater than previous move, decrease the window
+    Basic idea is to loop the same number of times as on the previous
+    move - i.e. we target the same plymax. The first time through
+    we don't know the target unfortunately, so use the cut off timer
+    to set the initial target. Later on the cut off timer should only
+    kick in for unexpectedly long calculations (because we expect to
+    take about the same amount of time as last time).
+    
+    Our algorithm is;
 
-Window is LO to HI. LO is always 0.5 Goal. HI ranges from 1*Goal to 4* goal (2 initially)
+    loop
+      if first time through
+        set CUT to 1/20 of total time, establishes target
+      else
+        set CUT to 1/10 of total time, loop to target
+        if hit target in less that 1/100 total time
+          increment target and loop again
+        if we are cut
+          decrement target
 
-goal   =  time/100 + inc
-window =  lo to hi = LO*goal to HI*goal, LO = 0.5, HI = 2.0 initially
-cutoff =  time/2 + inc or hi whichever is greater
-
-RUN with n=plymax = 3 initially, increment for each repeat
-    if t >= cutoff
-        USE result
-    if t < lo
-        n++ and REPEAT
-    else if t < hi
-        if n == n_previous
-            USE
-        if n > n_previous
-            reduce HI and USE
-        if n < n_previous
-            increase HI and REPEAT
-    else if t >= hi
-            increase HI and USE
+    in this call 1/100, 1/20 and 1/10 thresholds LO, MED and HI
 
 */
 
 thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long ms_inc )
 {
-    thc::Move bestmove;
     log( "Input ms_time=%d, ms_inc=%d\n", ms_time, ms_inc );
-    double lo_factor = 0.3;
-    static double hi_factor;
-    static int plymax_previous;
-    static unsigned long divisor;
-    if( new_game )
+    static int plymax_target;
+    const unsigned long LO =100;
+    const unsigned long MED=20;
+    const unsigned long HI =10;
+    unsigned long ms_lo  = ms_time / LO;
+    unsigned long ms_med = ms_time / MED;
+    unsigned long ms_hi  = ms_time / HI;
+
+    // Use the cut off timer, with a medium cutoff if we haven't yet
+    //  established a target plymax
+    if( new_game || plymax_target == 0 )
     {
-        hi_factor = 3.0;
-        plymax_previous = 3;
-        divisor = 50;
+        plymax_target = 0;
+        SetTimer( ms_med );
     }
-    unsigned long ms_goal=0, ms_cutoff=0, ms_lo=0, ms_hi=0, ms_mid=0;
 
-    ms_goal = ms_time / divisor;
-    /*
-
-    if( ms_time == 0 )
-        ms_goal = 0;
-    else if( ms_inc == 0 )
-        ms_goal = ms_time/40;
-    else if( ms_time > 100*ms_inc )
-        ms_goal = ms_time/30;
-    else if( ms_time > 50*ms_inc )
-        ms_goal = ms_time/20;
-    else if( ms_time > 10*ms_inc )
-        ms_goal = ms_time/10;
-    else if( ms_time > ms_inc )
-        ms_goal = ms_time/5;
+    // Else the cut off timer, is more of an emergency brake, and normally
+    //  we just re-run Sargon until we hit plymax_target
     else
-        ms_goal = ms_time/2; */
-
-    // When time gets really short get serious
-    if( ms_goal < 50 )
-        ms_goal = 1;
-
-    ms_cutoff = ms_time/2;
-    if( ms_cutoff < ms_goal )
-        ms_cutoff = ms_goal;
-    ms_lo = static_cast<unsigned long>( static_cast<double>(ms_goal) * lo_factor );
-    ms_hi = static_cast<unsigned long>( static_cast<double>(ms_goal) * hi_factor );
-    ms_mid = (ms_lo+ms_hi) / 2;
-    bool aborted = false;
+    {
+        SetTimer( ms_hi );
+    }
     int plymax = 3;
     std::string bestmove_terse;
     unsigned long base = GetTickCount();
-    std::vector<unsigned long> elapsedv;
-    while( !aborted )
+    for(;;)
     {
         pokeb(MVEMSG,   0 );
         pokeb(MVEMSG+1, 0 );
@@ -554,21 +587,35 @@ thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long
         sargon(api_ROYALT);
         pokeb( KOLOR, the_position.white ? 0 : 0x80 );    // Sargon is side to move
         nodes.clear();
-        aborted = RunSargon();
-        log( "aborted=%s, pv.variation.size()=%d moveno=%d\n", aborted?"true":"false", the_pv.variation.size(), moveno );
+        bool aborted = RunSargon();
+        unsigned long now = GetTickCount();
+        unsigned long elapsed = (now-base);
+        if( aborted  || the_pv.variation.size()==0 )
+        {
+            log( "aborted=%s, pv.variation.size()=%d, elapsed=%lu, ms_lo=%lu, plymax=%d, plymax_target=%d\n",
+                    aborted?"true @@":"false", the_pv.variation.size(), //@@ marks move in log
+                    elapsed, ms_lo, plymax, plymax_target );
+        }
+
+        // Report on each normally concluded iteration
         if( !aborted )
-            ProgressReport();   
+            ProgressReport();
+
+        // Check for situations where Sargon minimax never ran
         if( the_pv.variation.size() == 0 )    
         {
             // maybe book move
             bestmove_terse = sargon_export_move(BESTM);
+            plymax = 0; // to set plymax_target for next time
             break;
         }
         else
         {
+
+            // If we have a move, and it checkmates opponent, play it!
             bestmove_terse = the_pv.variation[0].TerseOut();
             std::string bestm = sargon_export_move(BESTM);
-            if( bestmove_terse != bestm )
+            if( !aborted && bestmove_terse.substr(0,4) != bestm )
             {
                 log( "Unexpected event: BESTM=%s != PV[0]=%s\n%s", bestm.c_str(), bestmove_terse.c_str(), the_position.ToDebugStr().c_str() );
             }
@@ -584,79 +631,33 @@ thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long
                     break;  // We're done, play the move to checkmate opponent
                 }
             }
-            unsigned long now = GetTickCount();
-            unsigned long elapsed = (now-base);
-            log( "elapsed=%lu, window=%lu-%lu, cutoff=%lu, plymax=%d\n", elapsed, ms_lo, ms_hi, ms_cutoff, plymax );
 
-            // if t >= cutoff
-            //   USE result
-            if( elapsed > ms_cutoff )
+            // If we timed out, target plymax should be reduced
+            if( aborted )
             {
-                log( "@USE@ elapsed > ms_cutoff, plymax = %d\n", plymax );
+                plymax--;
                 break;
             }
 
-            // else if t < lo
-            //   n++ and REPEAT
-            else if( elapsed < ms_lo )
-            {
-                plymax++;
-                continue;
-            }
-
-            // else if t < hi
-            else if( elapsed < ms_hi )
-            {
-                // if n >= n_previous
-                //   USE
-                if( plymax >= plymax_previous )
-                {
-                    bool upper_half = elapsed > ms_mid;
-                    if( upper_half )
-                    {
-                        //divisor -= 2;
-                        //if( divisor < 30 )
-                            divisor = 30;
-                    }
-                    else
-                    {
-                        //divisor += 2;
-                        //if( divisor > 100 )
-                            divisor = 100;
-                    }
-                    log( "in window, @USE@: %s, plymax=%d, divisor=%lu\n", upper_half?"Upper half of range so reduce divisor"
-                                                                                   :"Lower half of range so increase divisor"
-                                    , plymax, divisor );
-                    break;
-                }
-
-                // if n < n_previous
-                //   REPEAT
-                else if( plymax < plymax_previous )
-                {
-                    plymax++;
-                    log( "in window CONTINUE: new plymax=%d, divisor=%lu\n", plymax, divisor );
-                    continue;
-                }
-            }
-
-            // else if t >= hi
-            //   increase HI and USE
-            else if( elapsed >= ms_hi )
-            {
-                divisor = 50;
-                log( "beyond window @USE@: new plymax target=%d, divisor=%lu\n", --plymax, divisor );
+            // Otherwise keep iterating or not, according to the time management algorithm
+            bool keep_going = false;
+            if( plymax_target<=0 || plymax<plymax_target )
+                keep_going = true;  // no target or haven't reached target
+            if( plymax_target>0 && plymax>=plymax_target && elapsed<ms_lo )
+                keep_going = true;  // reached target very quickly, so extend target
+            log( "elapsed=%lu, ms_lo=%lu, plymax=%d, plymax_target=%d, keep_going=%s\n", elapsed, ms_lo, plymax, plymax_target, keep_going?"true":"false @@" );  // @@ marks move in log
+            if( !keep_going )
                 break;
-            }
+            plymax++;
         }
     }
-    plymax_previous = plymax;
+    SetTimer(0);    // clear timer
+    plymax_target = plymax;
+    thc::Move bestmove;
+    bestmove.Invalid();
     bool have_move = bestmove.TerseIn( &the_position, bestmove_terse.c_str() );
     if( !have_move )
-    {
         log( "Sargon doesn't find move - %s\n%s", bestmove_terse.c_str(), the_position.ToDebugStr().c_str() );
-        bestmove.Invalid();
-    }
     return bestmove;
 }
 
@@ -664,6 +665,7 @@ const char *cmd_go( const char *cmd )
 {
     stop_rsp_buf[0] = '\0';
     static char buf[128];
+    the_pv.clear();
 
     // Work out our time and increment
     // eg cmd ="wtime 30000 btime 30000 winc 0 binc 0"
@@ -671,7 +673,6 @@ const char *cmd_go( const char *cmd )
     const char *sinc;
     int ms_time   = 0;
     int ms_inc    = 0;
-    int ms_budget = 0;
     if( the_position.white )
     {
         stime = "wtime";
@@ -710,13 +711,14 @@ const char *cmd_go_infinite()
 {
     int plymax=3;
     bool aborted = false;
+    the_pv.clear();
     while( !aborted )
     {
         pokeb(MVEMSG,   0 );
         pokeb(MVEMSG+1, 0 );
         pokeb(MVEMSG+2, 0 );
         pokeb(MVEMSG+3, 0 );
-        pokeb(PLYMAX,plymax++);
+        pokeb(PLYMAX, plymax++);
         sargon(api_INITBD);
         sargon_import_position(the_position,true);  // note avoid_book = true
         thc::ChessRules cr = the_position;
@@ -744,17 +746,16 @@ const char *cmd_go_infinite()
     return NULL;
 }
 
-static bool different_game;
+static bool cmd_position_is_new_game;
 static bool is_new_game()
 {
-    return different_game;
+    return cmd_position_is_new_game;
 }
 
 const char *cmd_position( const char *cmd )
 {
     static thc::ChessRules prev_position;
-    different_game = true;
-    log( "cmd_position(): %s\n", cmd );
+    bool position_changed = true;
     const char *s, *parm;
 
     // Get base starting position
@@ -798,22 +799,43 @@ const char *cmd_position( const char *cmd )
                 last_move_but_one = last_move;
                 last_move         = move;
             }
-            log( "cmd_position(): position set = %s\n", the_position.ToDebugStr().c_str() );
+            thc::ChessPosition initial;
+            if( the_position == initial )
+                position_changed = true;
+            else if( the_position == prev_position )
+                position_changed = false;
 
-            // Maybe this latest position is the old one with two new moves ?
-            if( last_move_but_one.Valid() && last_move.Valid() )
+            // Maybe this latest position is the old one with one new move ?
+            else if( last_move.Valid() )
             {
-                prev_position.PlayMove( last_move_but_one );
-                prev_position.PlayMove( last_move );
-                if( the_position == prev_position )
+                thc::ChessRules temp = prev_position;
+                temp.PlayMove( last_move );
+                if( the_position == temp )
                 {
                     // Yes it is! so we are still playing the same game
-                    different_game = false;
-                    log( "cmd_position(): Setting different_game = false %s\n", the_position.ToDebugStr().c_str() );
+                    position_changed = false;
+                }
+
+                // Maybe this latest position is the old one with two new moves ?
+                else if( last_move_but_one.Valid() )
+                {
+                    prev_position.PlayMove( last_move_but_one );
+                    prev_position.PlayMove( last_move );
+                    if( the_position == prev_position )
+                    {
+                        // Yes it is! so we are still playing the same game
+                        position_changed = false;
+                    }
                 }
             }
         }
     }
+
+    cmd_position_is_new_game = position_changed;
+    log( "cmd_position(): %s\nSetting cmd_position_is_new_game=%s, %s",
+        cmd,
+        cmd_position_is_new_game?"true":"false",
+        the_position.ToDebugStr().c_str() );
 
     // For next time
     prev_position = the_position;
@@ -937,8 +959,8 @@ extern "C" {
             }
         }
 
-        // Abort RunSargon() if signalled by signal_stop being set
-        if( signal_stop )
+        // Abort RunSargon() if new event in queue (and it has found something)
+        if( !async_queue.empty() && the_pv.variation.size()>0 )
         {
             longjmp( jmp_buf_env, 1 );
         }
