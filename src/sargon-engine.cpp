@@ -84,7 +84,7 @@ static void log( const char *fmt, ... );
 static bool RunSargon();
 static void BuildPV( PV &pv );
 
-// A threadsafe-queue.
+// A threadsafe-queue. (from https://stackoverflow.com/questions/15278343/c11-thread-safe-queue)
 template <class T>
 class SafeQueue
 {
@@ -124,73 +124,80 @@ private:
     std::condition_variable c;
 };
 
-
-// A couple of threads and primitive shared memory ring buffer
-#define BIGBUF 8192
-#if 0
-#define CMD_BUF_NBR 8
-static HANDLE hSem;
-static char cmdline[CMD_BUF_NBR][BIGBUF+2];
-static int cmd_put;
-static int cmd_get;
-#endif
-
+// Threading declarations
+static SafeQueue<std::string> async_queue;
 void timer_thread();
 void read_stdin();
 void write_stdout();
+void TimerClear();          // Clear the timer
+void TimerEnd();            // End the timer subsystem system
+void TimerSet( int ms );    // Set a timeout event, ms millisecs into the future (0 and -1 are special values)
 
- 
-static SafeQueue<std::string> async_queue;
-static std::mutex future_time_mtx;
-static long future_time;
-void set_future_time( long t )
-{
-    std::lock_guard<std::mutex> lck(future_time_mtx);
-    future_time = t;
-}
 
+// main()
 int main( int argc, char *argv[] )
 {
     std::string filename_base( argv[0] );
     logfile_name = filename_base + "-log.txt";
-    std::thread first (read_stdin);
-    std::thread second (write_stdout);
-    std::thread third (timer_thread);
+    std::thread first(read_stdin);
+    std::thread second(write_stdout);
+    std::thread third(timer_thread);
 
     // Wait for main threads to finish
     first.join();                // pauses until first finishes
     second.join();               // pauses until second finishes
 
     // Tell timer thread to finish, then wait for it too
-    set_future_time(-1);
+    TimerEnd();
     third.join();
     return 0;
 }
 
+// Very simple timer thread, controlled by TimerSet(), TimerClear(), TimerEnd() 
+static std::mutex timer_mtx;
+static long future_time;
 void timer_thread()
 {
     for(;;)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        if( future_time == -1 )
-            break;
-        else if( future_time != 0 )
         {
-            long now_time = GetTickCount();	
-            long time_remaining = future_time - now_time;
-            if( time_remaining < 0 )
+            std::lock_guard<std::mutex> lck(timer_mtx);
+            if( future_time == -1 )
+                break;
+            else if( future_time != 0 )
             {
-                set_future_time(0);
-                async_queue.enqueue( "TIMEOUT" );
+                long now_time = GetTickCount();	
+                long time_remaining = future_time - now_time;
+                if( time_remaining <= 0 )
+                {
+                    future_time = 0;
+                    async_queue.enqueue( "TIMEOUT" );
+                }
             }
         }
     }
 }
 
-void SetTimer( int ms )
+// Clear the timer
+void TimerClear()
 {
+    TimerSet(0);  // set sentinel value 0
+}
+
+// End the timer subsystem system
+void TimerEnd()
+{
+    TimerSet(-1);  // set sentinel value -1
+}
+
+// Set a timeout event, ms millisecs into the future (0 and -1 are special values)
+void TimerSet( int ms )
+{
+    std::lock_guard<std::mutex> lck(timer_mtx);
+
     // Prevent generation of a stale "TIMEOUT" event
-    set_future_time(0);
+    future_time = 0;
 
     // Remove stale "TIMEOUT" events from queue
     std::queue<std::string> temp;
@@ -207,52 +214,61 @@ void SetTimer( int ms )
         async_queue.enqueue(s);
     }
 
-    // Schedule a new "TIMEOUT" event
-    if( ms != 0 )
+    // Check for TimerEnd()
+    if( ms == -1 )
+        future_time = -1;
+
+    // Schedule a new "TIMEOUT" event (unless 0 = TimerClear())
+    else if( ms != 0 )
     {
         long now_time = GetTickCount();	
         long ft = now_time + ms;
         if( ft==0 || ft==-1 )   // avoid special values
             ft = 1;             //  at cost of 1 or 2 millisecs of error!
-        set_future_time(ft);
+        future_time = ft;
     }
 }
 
-
+// Read commands from stdin and queue them
 void read_stdin()
 {
-#if 1
+    bool quit=false;
+#if 0
     static const char *test_sequence[] =
     {
         "uci\n",
         "setoption name MultiPV value 4\n",
         "isready\n",
-        "position fen 7k/8/8/4R3/8/8/8/7K w - - 0 1\n",
-        "go infinite\n"
+        "position fen rn2k1nr/1p4pp/4bp2/1P2p3/p2pN3/b1qP1NP1/4PPBP/1RBQ1RK1 b kq - 1 13\n",
+        //"position fen rn2k1nr/1p4p1/4bp2/1P2p3/p2pN3/b1qP1NP1/4PPBP/1RBQ1RK1 b kq - 1 13\n",
+        "go infinite\n",
+        //"quit\n"
     };
     for( int i=0; i<sizeof(test_sequence)/sizeof(test_sequence[0]); i++ )
     {
         std::string s(test_sequence[i]);
         async_queue.enqueue(s);
+        if( s=="quit\n" )
+            quit = true;
     }
 #endif
-    bool quit=false;
-    static char buf[BIGBUF+2];
     while(!quit)
     {
-        if( NULL == fgets(buf,BIGBUF,stdin) )
+        static char buf[8192];
+        if( NULL == fgets(buf,sizeof(buf)-2,stdin) )
             quit = true;
         else
         {
             std::string s(buf);
             util::rtrim(s);
             async_queue.enqueue(s);
-            if( s=="quit" )
+            if( s == "quit" )
                 quit = true;
         }
     }
 }
 
+// Read queued commands and process them
 void write_stdout()
 {
     bool quit=false;
@@ -265,26 +281,7 @@ void write_stdout()
     }
 } 
 
-#if 0
-int main( int argc, char *argv[] )
-{
-    std::string filename_base( argv[0] );
-    logfile_name = filename_base + "-log.txt";
-    unsigned long tid1;
-    hSem = CreateSemaphore(NULL,0,10,NULL);
-    HANDLE hThread1 = CreateThread(0,
-                            0,
-                            (LPTHREAD_START_ROUTINE) read_stdin,
-                            0,
-                            0,
-                            &tid1);
-    write_stdout();
-    CloseHandle(hSem);
-    CloseHandle(hThread1);
-    return 0;
-}
-#endif
-
+// Run Sargon analysis, until completion or timer abort (see callback() for timer abort)
 static jmp_buf jmp_buf_env;
 static bool RunSargon()
 {
@@ -562,16 +559,17 @@ thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long
     if( new_game || plymax_target == 0 )
     {
         plymax_target = 0;
-        SetTimer( ms_med );
+        TimerSet( ms_med );
     }
 
-    // Else the cut off timer, is more of an emergency brake, and normally
+    // Else the cut off timer is more of an emergency brake, and normally
     //  we just re-run Sargon until we hit plymax_target
     else
     {
-        SetTimer( ms_hi );
+        TimerSet( ms_hi );
     }
     int plymax = 3;
+    int stalemates = 0;
     std::string bestmove_terse;
     unsigned long base = GetTickCount();
     for(;;)
@@ -580,6 +578,8 @@ thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long
         pokeb(MVEMSG+1, 0 );
         pokeb(MVEMSG+2, 0 );
         pokeb(MVEMSG+3, 0 );
+        pokeb(MLPTRJ,0);
+        pokeb(MLPTRJ+1,0);
         pokeb(PLYMAX, plymax );
         sargon(api_INITBD);
         sargon_import_position(the_position);
@@ -630,6 +630,11 @@ thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long
                 {
                     break;  // We're done, play the move to checkmate opponent
                 }
+                if( score_terminal == thc::TERMINAL_BSTALEMATE ||
+                    score_terminal == thc::TERMINAL_WSTALEMATE )
+                {
+                    stalemates++;
+                }
             }
 
             // If we timed out, target plymax should be reduced
@@ -643,15 +648,17 @@ thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long
             bool keep_going = false;
             if( plymax_target<=0 || plymax<plymax_target )
                 keep_going = true;  // no target or haven't reached target
-            if( plymax_target>0 && plymax>=plymax_target && elapsed<ms_lo )
+            else if( plymax_target>0 && plymax>=plymax_target && elapsed<ms_lo )
                 keep_going = true;  // reached target very quickly, so extend target
+            else if( stalemates == 1 )
+                keep_going = true;  // try one more ply if we stalemate opponent!
             log( "elapsed=%lu, ms_lo=%lu, plymax=%d, plymax_target=%d, keep_going=%s\n", elapsed, ms_lo, plymax, plymax_target, keep_going?"true":"false @@" );  // @@ marks move in log
             if( !keep_going )
                 break;
             plymax++;
         }
     }
-    SetTimer(0);    // clear timer
+    TimerClear();
     plymax_target = plymax;
     thc::Move bestmove;
     bestmove.Invalid();
@@ -719,6 +726,8 @@ const char *cmd_go_infinite()
         pokeb(MVEMSG+2, 0 );
         pokeb(MVEMSG+3, 0 );
         pokeb(PLYMAX, plymax++);
+        pokeb(MLPTRJ,0);
+        pokeb(MLPTRJ+1,0);
         sargon(api_INITBD);
         sargon_import_position(the_position,true);  // note avoid_book = true
         thc::ChessRules cr = the_position;
@@ -729,7 +738,8 @@ const char *cmd_go_infinite()
         if( !aborted )
             ProgressReport();   
     }
-    if( aborted && the_pv.variation.size() > 0 )
+    stop_rsp_buf[0] = '\0';
+    if( the_pv.variation.size() > 0 )
     {
         unsigned long now_time = GetTickCount();	
         int nodes = DIAG_make_move_primary-base_nodes;
@@ -743,13 +753,14 @@ const char *cmd_go_infinite()
                                1000L * ((unsigned long) nodes / (unsigned long)elapsed_time ),
                                the_pv.variation[0].TerseOut().c_str() ); 
     }
-    return NULL;
+    return NULL;    // results are returned by the stop command instead
 }
 
-static bool cmd_position_is_new_game;
+// cmd_position(), set a new (or same or same plus one or two half moves) position
+static bool cmd_position_signals_new_game;
 static bool is_new_game()
 {
-    return cmd_position_is_new_game;
+    return cmd_position_signals_new_game;
 }
 
 const char *cmd_position( const char *cmd )
@@ -831,10 +842,10 @@ const char *cmd_position( const char *cmd )
         }
     }
 
-    cmd_position_is_new_game = position_changed;
-    log( "cmd_position(): %s\nSetting cmd_position_is_new_game=%s, %s",
+    cmd_position_signals_new_game = position_changed;
+    log( "cmd_position(): %s\nSetting cmd_position_signals_new_game=%s, %s",
         cmd,
-        cmd_position_is_new_game?"true":"false",
+        cmd_position_signals_new_game?"true":"false",
         the_position.ToDebugStr().c_str() );
 
     // For next time
@@ -842,8 +853,11 @@ const char *cmd_position( const char *cmd )
     return NULL;
 }
 
+// Simple logging facility lets us debug runs under control of a GUI
 static void log( const char *fmt, ... )
 {
+    static std::mutex mtx;
+    std::lock_guard<std::mutex> lck(mtx);
 	va_list args;
 	va_start( args, fmt );
     static bool first=true;
@@ -869,6 +883,7 @@ static void log( const char *fmt, ... )
     va_end(args);
 }
 
+// Use our knowledge for the way Sargon does minimax/alpha-beta to build a PV
 static void BuildPV( PV &pv )
 {
     pv.variation.clear();
@@ -925,7 +940,36 @@ static void BuildPV( PV &pv )
     bool odd = ((nbr-1)%2 == 1);
     bool negate = the_position.WhiteToPlay() ? odd : !odd;
     double centipawns = (negate ? -100.0 : 100.0) * fvalue;
-    pv.value = static_cast<int>(centipawns);
+
+    // Values are calculated as a weighted combination of net material plus net mobility
+    //  plus an adjustment for possible exchanges in the terminal position. The value is
+    //  also *relative* to the ply0 score
+    //  We want to present the *absolute* value in centipawns, so we need to know the
+    //  ply0 score. It is the same weighted combination of net material plus net mobility.
+    //  The actual ply0 score is available, but since it also adds the possible exchanges
+    //  adjustment and we don't want that, calculate the weighted combination of net
+    //  material and net mobility at ply0 instead.
+    char mv0 = peekb(MV0);      // net ply 0 material (pawn=2, knight/bishop=6, rook=10...)
+    if( mv0 > 30 )              // Sargon limits this to +-30 (so 15 pawns) to avoid overflow
+        mv0 = 30;
+    if( mv0 < -30 )
+        mv0 = -30;
+    char bc0 = peekb(BC0);      // net ply 0 mobility
+    if( bc0 > 6 )               // also limited to +-6
+        bc0 = 6;
+    if( bc0 < -6 )
+        bc0 = -6;
+    int ply0 = mv0*4 + bc0;     // Material gets 4 times weight as mobility (4*30 + 6 = 126 doesn't overflow signed char)
+    double centipawns_ply0 = ply0 * 100.0/8.0;   // pawn is 2*4 = 8 -> 100 centipawns 
+
+    // Avoid this apparently simpler alternative, because don't want exchange adjustment at ply 0
+#if 0
+    double fvalue_ply0 = sargon_export_value( peekb(5) ); //Where root node value ends up if MLPTRJ=0, which it does initially
+#endif
+
+    // So actual value is ply0 + score relative to ply0
+    pv.value = static_cast<int>(centipawns_ply0+centipawns);
+    log( "centipawns=%f, centipawns_ply0=%f, plymax=%d\n", centipawns, centipawns_ply0, plymax );
 }
 
 
@@ -941,7 +985,47 @@ extern "C" {
         uint32_t ret_addr = *sp;
         const unsigned char *code = (const unsigned char *)ret_addr;
         const char *msg = (const char *)(code+2);   // ASCIIZ text should come after that
-
+#if 0
+        thc::ChessPosition cp;
+        unsigned char al = reg_eax & 0xff;
+        if( 0 == strcmp(msg,"MATERIAL") )
+        {
+            sargon_export_position(cp);
+            log( "Position is %s\n", cp.ToDebugStr().c_str() );
+            log( "MATERIAL=0x%02x\n", al );
+        }
+        else if( 0 == strcmp(msg,"SUM") )
+        {
+            char val = reg_eax & 0xff;
+            sargon_export_position(cp);
+            log( "Adding material in loop, piece=%d\n", val );
+        }
+        else if( 0 == strcmp(msg,"MATERIAL - PLY0") )
+        {
+            log( "MATERIAL-PLY0=0x%02x\n", al );
+        }
+        else if( 0 == strcmp(msg,"MATERIAL LIMITED") )
+        {
+            log( "MATERIAL LIMITED=0x%02x\n", al );
+        }
+        else if( 0 == strcmp(msg,"MOBILITY") )
+        {
+            log( "MOBILITY=0x%02x\n", al );
+        }
+        else if( 0 == strcmp(msg,"MOBILITY - PLY0") )
+        {
+            log( "MOBILITY - PLY0=0x%02x\n", al );
+        }
+        else if( 0 == strcmp(msg,"MOBILITY LIMITED") )
+        {
+            log( "MOBILITY LIMITED=0x%02x\n", al );
+        }
+        else if( 0 == strcmp(msg,"end of POINTS()") )
+        {
+            log( "val=0x%02x\n", al );
+        }
+        else
+#endif
         if( 0 == strcmp(msg,"Yes! Best move") )
         {
             unsigned int p      = peekw(MLPTRJ);
