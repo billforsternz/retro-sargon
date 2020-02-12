@@ -1821,6 +1821,7 @@ PT23:   MOV     bx,P1                           ; Get piece
         JZ      rel012                          ; Jump if white
         NEG     al                              ; Negate for black
 rel012: MOV     bx,MTRL                         ; Get addrs of material total
+        ;CALLBACK "SUM"
         ADD     al,byte ptr [ebp+ebx]           ; Add new value
         MOV     byte ptr [ebp+ebx],al           ; Store
 PT25:   MOV     al,byte ptr [ebp+M3]            ; Get current board position
@@ -1854,15 +1855,20 @@ rel014: SUB     al,ch                           ; Subtract points lost
         NEG     al                              ; Negate for black
 rel015: MOV     bx,MTRL                         ; Net material on board
         ADD     al,byte ptr [ebp+ebx]           ; Add exchange adjustments
+        ;CALLBACK "MATERIAL"
         MOV     bx,MV0                          ; Material at ply 0
         SUB     al,byte ptr [ebp+ebx]           ; Subtract from current
+        ;CALLBACK "MATERIAL - PLY0"
         MOV     ch,al                           ; Save
         MOV     al,30                           ; Load material limit
         CALL    LIMIT                           ; Limit to plus or minus value
+        ;CALLBACK "MATERIAL LIMITED"
         MOV     dl,al                           ; Save limited value
         MOV     al,byte ptr [ebp+BRDC]          ; Get board control points
+        ;CALLBACK "MOBILITY"
         MOV     bx,BC0                          ; Board control at ply zero
         SUB     al,byte ptr [ebp+ebx]           ; Get difference
+        ;CALLBACK "MOBILITY - PLY0"
         MOV     ch,al                           ; Save
         MOV     al,byte ptr [ebp+PTSCK]         ; Moving piece lost flag
         AND     al,al                           ; Is it zero ?
@@ -1870,6 +1876,7 @@ rel015: MOV     bx,MTRL                         ; Net material on board
         MOV     ch,0                            ; Zero board control points
 rel026: MOV     al,6                            ; Load board control limit
         CALL    LIMIT                           ; Limit to plus or minus value
+        ;CALLBACK "MOBILITY LIMITED"
         MOV     dh,al                           ; Save limited value
         MOV     al,dl                           ; Get material points
         ADD     al,al                           ; Multiply by 4
