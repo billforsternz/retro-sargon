@@ -35,6 +35,7 @@ BPAWN   =       BLACK+PAWN
         .IF_X86
 _DATA   SEGMENT
 PUBLIC  _sargon_base_address
+PUBLIC  _sargon_move_gen_counter
 _sargon_base_address:
         .ENDIF
         .LOC 100h
@@ -43,7 +44,13 @@ TBASE:
 ;extensively used trick is to test whether the hi byte of
 ;a pointer == 0 and to consider this as a equivalent to
 ;testing whether the whole pointer == 0 (works as long as
-;pointers never point to page 0)
+;pointers never point to page 0). Also there is an apparent
+;bug in Sargon, such that MLPTRJ is left at 0 for the root
+;node and the MLVAL for that root node is therefore written
+;to memory at offset 5 from 0 (so in page 0). It's a bit
+;wasteful to waste a whole 256 byte page for this, but it
+;is compatible with the goal of making as few changes as
+;possible to the inner heart of Sargon.
 ;**********************************************************
 ; DIRECT  --  Direction Table.  Used to determine the dir-
 ;             ection of movement of each piece.
@@ -399,6 +406,7 @@ shadow_ax  dw   0
 shadow_bx  dw   0
 shadow_cx  dw   0
 shadow_dx  dw   0
+_sargon_move_gen_counter dq 0
 _DATA    ENDS
         .ENDIF
 
@@ -983,6 +991,9 @@ ADMOVE: LDED    MLNXT           ; Addr of next loc in move list
         ANA     A               ; Clear carry flag
         DSBC    D               ; Calculate difference
         JRC     AM10            ; Jump if out of space
+        .IF_X86
+        inc     _sargon_move_gen_counter
+        .ENDIF
         LHLD    MLLST           ; Addr of prev. list area
         SDED    MLLST           ; Save next as previous
         MOV     M,E             ; Store link address

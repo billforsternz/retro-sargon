@@ -166,6 +166,9 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
     util::putline( h_out, "    // First byte of Sargon data"  );
     util::putline( h_out, "    extern unsigned char sargon_base_address;" );
     util::putline( h_out, "" );
+    util::putline( h_out, "    // // Count generated moves"  );
+    util::putline( h_out, "    extern int sargon_move_gen_counter;" );
+    util::putline( h_out, "" );
     util::putline( h_out, "    // Calls to sargon() can set and read back registers" );
     util::putline( h_out, "    struct z80_registers" );
     util::putline( h_out, "    {" );
