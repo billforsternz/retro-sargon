@@ -24,7 +24,7 @@ bool trim( std::string &s );
 void tests();
 void replace_all( std::string &s, const std::string from, const std::string to );
 void replace_once( std::string &s, const std::string from, const std::string to );
-void split( std::string &s, std::vector<std::string> &fields );
+void split( const std::string &s, std::vector<std::string> &fields );
 std::string toupper( const std::string &s );
 std::string tolower( const std::string &s );
 }

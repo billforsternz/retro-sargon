@@ -169,14 +169,14 @@ void replace_once( std::string &s, const std::string from, const std::string to 
         s.replace(offset,from.length(),to);
 }
 
-void split( std::string &s, std::vector<std::string> &fields )
+void split( const std::string &s, std::vector<std::string> &fields )
 {
     fields.clear();
-    size_t next = 0;
-    bool more = true;
-    while( more && s.length()>next)
+    size_t next = s.find_first_not_of(" \t\n\r");
+    bool more = (next != std::string::npos);
+    while( more )
     {
-        size_t offset = s.find('\t',next);
+        size_t offset = s.find_first_of(" \t\n\r",next);
         std::string frag;
         if( offset != std::string::npos )
             frag = s.substr(next,offset-next);
@@ -187,7 +187,10 @@ void split( std::string &s, std::vector<std::string> &fields )
         }
         fields.push_back(frag);
         if( more )
-            next = offset+1;
+        {
+            next = s.find_first_not_of(" \t\n\r",offset);
+            more = (next != std::string::npos);
+        }
     }
 }
 
