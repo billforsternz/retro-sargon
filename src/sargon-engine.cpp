@@ -7,7 +7,6 @@
   
   */
 
-#define _CRT_SECURE_NO_WARNINGS
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -64,6 +63,12 @@ struct PV
 static PV the_pv;
 static PV provisional;
 
+// Measure elapsed time, nodes    
+static unsigned long base_time;
+static int base_nodes;
+
+// Misc
+static int depth_option;    // 0=auto, other values for fixed depth play
 static std::string logfile_name;
 static std::vector< NODE > nodes;
 
@@ -71,14 +76,16 @@ static std::vector< NODE > nodes;
 static thc::ChessRules the_position;
 
 // Command line interface
-bool process( const char *buf );
-const char *cmd_uci();
-const char *cmd_isready();
-const char *cmd_stop();
-const char *cmd_go( const char *cmd );
-const char *cmd_go_infinite();
-void        cmd_multipv( const char *cmd );
-const char *cmd_position( const char *cmd );
+bool process( const std::string &s );
+std::string cmd_uci();
+std::string cmd_isready();
+std::string cmd_stop();
+std::string cmd_go( const std::vector<std::string> &fields );
+void        cmd_go_infinite();
+void        cmd_setoption( const std::vector<std::string> &fields );
+void        cmd_position( const std::string &whole_cmd_line, const std::vector<std::string> &fields );
+
+// Misc
 static bool is_new_game();
 static void log( const char *fmt, ... );
 static bool RunSargon();
@@ -237,18 +244,18 @@ void read_stdin()
     static const char *test_sequence[] =
     {
         "uci\n",
-        "setoption name MultiPV value 4\n",
         "isready\n",
         "position fen rn2k1nr/1p4pp/4bp2/1P2p3/p2pN3/b1qP1NP1/4PPBP/1RBQ1RK1 b kq - 1 13\n",
-        //"position fen rn2k1nr/1p4p1/4bp2/1P2p3/p2pN3/b1qP1NP1/4PPBP/1RBQ1RK1 b kq - 1 13\n",
         "go infinite\n",
+        "stop\n",
         //"quit\n"
     };
     for( int i=0; i<sizeof(test_sequence)/sizeof(test_sequence[0]); i++ )
     {
         std::string s(test_sequence[i]);
+        util::rtrim(s);
         async_queue.enqueue(s);
-        if( s=="quit\n" )
+        if( s == "quit" )
             quit = true;
     }
 #endif
@@ -275,9 +282,8 @@ void write_stdout()
     while(!quit)
     {
         std::string s = async_queue.dequeue();
-        const char *cmd = s.c_str();
-        log( "cmd>%s\n", cmd );
-        quit = process(cmd);
+        log( "cmd>%s\n", s.c_str() );
+        quit = process(s);
     }
 } 
 
@@ -298,117 +304,93 @@ static bool RunSargon()
     return aborted;
 }
 
-// Case insensitive pattern match
-// Return NULL if no match
-// Return ptr into string beyond matched part of string
-// Only if more is true, can the string be longer than the matching part
-// So if more is false, and NULL is not returned, the returned ptr always points at trailing '\0'
-const char *str_pattern( const char *str, const char *pattern, bool more=false );
-const char *str_pattern( const char *str, const char *pattern, bool more )
-{
-    bool match=true;
-    int c, d;
-    while( match && *str && *pattern )
-    {
-        c = *str++;
-        d = *pattern++;
-        if( c != d )
-        {
-            match = false;
-            if( isascii(c) && isascii(d) && toupper(c)==toupper(d) )
-                match = true;
-            else if( c=='\t' && d==' ' )
-                match = true;
-        }
-        if( match && (c==' '||c=='\t') )
-        {
-            while( *str == ' ' )
-                str++;
-        }
-    }
-    if( !match )
-        str = NULL;
-    else if( *pattern )
-        str = NULL;
-    else if( !more && *str )
-        str = NULL;
-    if( more && str )
-    {
-        while( *str == ' ' )
-            str++;
-    }
-    return str;
-}
-
 // Command line top level handler
-bool process( const char *buf )
+bool process( const std::string &s )
 {
     bool quit=false;
-    const char *parm;
-    const char *rsp = NULL;
-    if( str_pattern(buf,"TIMEOUT") )
+    std::string rsp;
+    std::vector<std::string> fields_raw, fields;
+    util::split( s, fields_raw );
+    for( std::string f: fields_raw )
+        fields.push_back( util::tolower(f) );
+    if( fields.size() == 0 )
+        return false;
+    std::string cmd = fields[0];
+    std::string parm1 = fields.size()<=1 ? "" : fields[1];
+    if( cmd == "timeout" )
         log( "TIMEOUT event\n" );
-    else if( str_pattern(buf,"quit") )
+    else if( cmd == "quit" )
         quit = true;
-    else if( str_pattern(buf,"uci") )
+    else if( cmd == "uci" )
         rsp = cmd_uci();
-    else if( str_pattern(buf,"isready") )
+    else if( cmd == "isready" )
         rsp = cmd_isready();
-    else if( str_pattern(buf,"stop") )
+    else if( cmd == "stop" )
         rsp = cmd_stop();
-    else if( str_pattern(buf,"go infinite") )
-        rsp = cmd_go_infinite();
-    else if( NULL != (parm=str_pattern(buf,"go",true)) )
-        rsp = cmd_go( parm );
-    else if( NULL != (parm=str_pattern(buf,"setoption name MultiPV value",true)) )
-        cmd_multipv( parm );
-    else if( NULL != (parm=str_pattern(buf,"position",true)) )
-        rsp = cmd_position( parm );
-    if( rsp )
+    else if( cmd=="go" && parm1=="infinite" )
+        cmd_go_infinite();
+    else if( cmd=="go" )
+        rsp = cmd_go(fields);
+    else if( cmd=="setoption" )
+        cmd_setoption(fields);
+    else if( cmd=="position" )
+        cmd_position( s, fields );
+    if( rsp != "" )
     {
-        log( "rsp>%s\n", rsp );
-        fprintf( stdout, "%s", rsp );
+        log( "rsp>%s\n", rsp.c_str() );
+        fprintf( stdout, "%s", rsp.c_str() );
         fflush( stdout );
     }
     return quit;
 }
 
-
-const char *cmd_uci()
+std::string cmd_uci()
 {
-    const char *rsp=
+    std::string rsp=
     "id name " ENGINE_NAME " " VERSION "\n"
     "id author Dan and Kathe Spracklin, Windows port by Bill Forster\n"
- // "option name Hash type spin min 1 max 4096 default 32\n"
- // "option name MultiPV type spin default 1 min 1 max 4\n"
+    "option name Depth type spin min 0 max 20 default 0\n"
+    "option name Hash type spin min 1 max 4096 default 4000\n"
     "uciok\n";
     return rsp;
 }
 
-const char *cmd_isready()
+std::string cmd_isready()
 {
-    const char *rsp = "readyok\n";
-    return rsp;
+    return "readyok\n";
 }
 
-// Measure elapsed time, nodes    
-static unsigned long base_time;
-extern int DIAG_make_move_primary;	
-static int base_nodes;
-static char stop_rsp_buf[128];
-const char *cmd_stop()
+std::string stop_rsp;
+std::string cmd_stop()
 {
-    return stop_rsp_buf;
+    return stop_rsp;
 }
 
-static int MULTIPV=1;
-void cmd_multipv( const char *cmd )
+void cmd_setoption( const std::vector<std::string> &fields )
 {
-    MULTIPV = atoi(cmd);
-    if( MULTIPV < 1 )
-        MULTIPV = 1;
-    if( MULTIPV > 4 )
-        MULTIPV = 4;
+    // Support 2 options "Depth" and "Hash".
+    //  Depth is 0-20, default is 0. 0 indicates auto depth selection,
+    //   others are fixed depth
+    //  Hash is actually not Hash - it's another way of setting depth.
+    //    Reason: Tarrasch lets you set Hash!
+    //    values are 4000-4020 representing Depth=0-20
+
+    // setoption name MultiPV value
+    if( fields.size()>4 && fields[1]=="name" && fields[3]=="value" )
+    {
+        if( fields[2]=="depth" )
+        {
+            depth_option = atoi(fields[4].c_str());
+            if( depth_option<0 || depth_option>20 )
+                depth_option = 0;
+        }
+        if( fields[2]=="hash" )
+        {
+            depth_option = atoi(fields[4].c_str()) - 4000;
+            if( depth_option<0 || depth_option>20 )
+                depth_option = 0;
+        }
+    }
 }
 
 void ProgressReport()
@@ -417,29 +399,22 @@ void ProgressReport()
     int     depth      = the_pv.depth;
     thc::ChessRules ce = the_position;
     int score_overide;
-    static char buf[1024];
-    static char buf_pv[1024];
-    static char buf_score[128];
+    std::string buf_pv;
+    std::string buf_score;
     bool done=false;
-    bool have_move=false;
-    thc::Move bestmove_so_far;
-    bestmove_so_far.Invalid();
     unsigned long now_time = GetTickCount();	
-    int nodes = DIAG_make_move_primary-base_nodes;
+    int nodes = sargon_move_gen_counter-base_nodes;
     unsigned long elapsed_time = now_time-base_time;
-    buf_pv[0] = '\0';
-    char *s;
+    if( elapsed_time == 0 )
+        elapsed_time++;
     bool overide = false;
     for( unsigned int i=0; i<the_pv.variation.size(); i++ )
     {
         bool okay;
         thc::Move move=the_pv.variation[i];
         ce.PlayMove( move );
-        have_move = true;
-        if( i == 0 )
-            bestmove_so_far = move;    
-        s = strchr(buf_pv,'\0');
-        sprintf( s, " %s", move.TerseOut().c_str() );
+        buf_pv += " ";
+        buf_pv += move.TerseOut();
         thc::TERMINAL score_terminal;
         okay = ce.Evaluate( score_terminal );
         if( okay )
@@ -467,15 +442,15 @@ void ProgressReport()
         if( overide ) 
         {
             if( score_overide > 0 ) // are we mating ?
-                sprintf( buf_score, "mate %d", score_overide );
+                buf_score = util::sprintf( "mate %d", score_overide );
             else if( score_overide < 0 ) // are me being mated ?
-                sprintf( buf_score, "mate -%d", (0-score_overide) );
+                buf_score = util::sprintf( "mate -%d", (0-score_overide) );
             else if( score_overide == 0 ) // is it a stalemate draw ?
-                sprintf( buf_score, "cp 0" );
+                buf_score = util::sprintf( "cp 0" );
         }
         else
         {
-            sprintf( buf_score, "cp %d", score_cp );
+            buf_score = util::sprintf( "cp %d", score_cp );
         }
     }
     else
@@ -483,31 +458,30 @@ void ProgressReport()
         if( overide ) 
         {
             if( score_overide < 0 ) // are we mating ?
-                sprintf( buf_score, "mate %d", 0-score_overide );
+                buf_score = util::sprintf( "mate %d", 0-score_overide );
             else if( score_overide > 0 ) // are me being mated ?        
-                sprintf( buf_score, "mate -%d", score_overide );
+                buf_score = util::sprintf( "mate -%d", score_overide );
             else if( score_overide == 0 ) // is it a stalemate draw ?
-                sprintf( buf_score, "cp 0" );
+                buf_score = util::sprintf( "cp 0" );
         }
         else
         {
-            sprintf( buf_score, "cp %d", 0-score_cp );
+            buf_score = util::sprintf( "cp %d", 0-score_cp );
         }
     }
-    if( elapsed_time == 0 )
-        elapsed_time++;
-    if( have_move )
+    if( the_pv.variation.size() > 0 )
     {
-        sprintf( buf, "info depth %d score %s hashfull 0 time %lu nodes %lu nps %lu pv%s\n",
+        std::string out = util::sprintf( "info depth %d score %s hashfull 0 time %lu nodes %lu nps %lu pv%s\n",
                     depth,
-                    buf_score,
+                    buf_score.c_str(),
                     (unsigned long) elapsed_time,
                     (unsigned long) nodes,
                     1000L * ((unsigned long) nodes / (unsigned long)elapsed_time ),
-                    buf_pv );
-        fprintf( stdout, buf );
+                    buf_pv.c_str() );
+        fprintf( stdout, out.c_str() );
         fflush( stdout );
-        log( "rsp>%s\n", buf );
+        log( "rsp>%s\n", out.c_str() );
+        stop_rsp = util::sprintf( "bestmove %s\n", the_pv.variation[0].TerseOut().c_str() ); 
     }
 }
 
@@ -668,57 +642,60 @@ thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long
     return bestmove;
 }
 
-const char *cmd_go( const char *cmd )
+std::string cmd_go( const std::vector<std::string> &fields )
 {
-    stop_rsp_buf[0] = '\0';
-    static char buf[128];
+    stop_rsp = "";
     the_pv.clear();
+    base_nodes = 0;
+    base_time = GetTickCount();
 
     // Work out our time and increment
     // eg cmd ="wtime 30000 btime 30000 winc 0 binc 0"
-    const char *stime;
-    const char *sinc;
-    int ms_time   = 0;
-    int ms_inc    = 0;
+    std::string stime = "btime";
+    std::string sinc  = "binc";
     if( the_position.white )
     {
         stime = "wtime";
         sinc  = "winc";
     }
-    else
+    bool expecting_time = false;
+    bool expecting_inc = false;
+    int ms_time   = 0;
+    int ms_inc    = 0;
+    for( std::string parm: fields )
     {
-        stime = "btime";
-        sinc  = "binc";
+        if( expecting_time )
+        {
+            ms_time = atoi(parm.c_str());
+            expecting_time = 0;
+        }
+        else if( expecting_inc )
+        {
+            ms_inc = atoi(parm.c_str());
+            expecting_inc = 0;
+        }
+        else
+        {
+            if( parm == stime )
+                expecting_time = true;
+            if( parm == sinc )
+                expecting_inc = true;
+        }
     }
-    const char *q = strstr(cmd,stime);
-    if( q )
-    {
-        q += 5;
-        while( *q == ' ' )
-            q++;
-        ms_time = atoi(q);
-    }
-    q = strstr(cmd,sinc);
-    if( q )
-    {
-        q += 4;
-        while( *q == ' ' )
-            q++;
-        ms_inc = atoi(q);
-    }
-
     bool new_game = is_new_game();
     thc::Move bestmove = CalculateNextMove( new_game, ms_time, ms_inc );
     ProgressReport();
-    sprintf( buf, "bestmove %s\n", bestmove.TerseOut().c_str() );
-    return buf;
+    return util::sprintf( "bestmove %s\n", bestmove.TerseOut().c_str() );
 }
 
-const char *cmd_go_infinite()
+void cmd_go_infinite()
 {
+    stop_rsp = "";
     int plymax=3;
     bool aborted = false;
     the_pv.clear();
+    base_nodes = 0;
+    base_time = GetTickCount();
     while( !aborted )
     {
         pokeb(MVEMSG,   0 );
@@ -730,30 +707,12 @@ const char *cmd_go_infinite()
         pokeb(MLPTRJ+1,0);
         sargon(api_INITBD);
         sargon_import_position(the_position,true);  // note avoid_book = true
-        thc::ChessRules cr = the_position;
         sargon(api_ROYALT);
         pokeb( KOLOR, the_position.white ? 0 : 0x80 );    // Sargon is side to move
         nodes.clear();
         aborted = RunSargon();
-        if( !aborted )
-            ProgressReport();   
+        ProgressReport();   
     }
-    stop_rsp_buf[0] = '\0';
-    if( the_pv.variation.size() > 0 )
-    {
-        unsigned long now_time = GetTickCount();	
-        int nodes = DIAG_make_move_primary-base_nodes;
-        unsigned long elapsed_time = now_time-base_time;
-        if( elapsed_time == 0 )
-            elapsed_time++;
-        sprintf( stop_rsp_buf, "info time %lu nodes %lu nps %lu\n" 
-                               "bestmove %s\n",
-                               (unsigned long) elapsed_time,
-                               (unsigned long) nodes,
-                               1000L * ((unsigned long) nodes / (unsigned long)elapsed_time ),
-                               the_pv.variation[0].TerseOut().c_str() ); 
-    }
-    return NULL;    // results are returned by the stop command instead
 }
 
 // cmd_position(), set a new (or same or same plus one or two half moves) position
@@ -763,22 +722,27 @@ static bool is_new_game()
     return cmd_position_signals_new_game;
 }
 
-const char *cmd_position( const char *cmd )
+void cmd_position( const std::string &whole_cmd_line, const std::vector<std::string> &fields )
 {
     static thc::ChessRules prev_position;
     bool position_changed = true;
-    const char *s, *parm;
 
     // Get base starting position
     thc::ChessEngine tmp;
     the_position = tmp;    //init
     bool look_for_moves = false;
-    if( NULL != (parm=str_pattern(cmd,"fen",true)) )
+    if( fields.size() > 2 && fields[1]=="fen" )
     {
-        the_position.Forsyth(parm);
-        look_for_moves = true;
+        size_t offset = whole_cmd_line.find("fen");
+        offset = whole_cmd_line.find_first_not_of(" \t",offset+3);
+        if( offset != std::string::npos )
+        {
+            std::string fen = whole_cmd_line.substr(offset);
+            the_position.Forsyth(fen.c_str());
+            look_for_moves = true;
+        }
     }
-    else if( NULL != (parm=str_pattern(cmd,"startpos",true)) )
+    else if( fields.size() > 1 && fields[1]=="startpos" )
     {
         thc::ChessEngine tmp;
         the_position = tmp;    //init
@@ -788,55 +752,51 @@ const char *cmd_position( const char *cmd )
     // Add moves
     if( look_for_moves )
     {
-        s = strstr(parm,"moves ");
-        if( s )
+        bool expect_move = false;
+        thc::Move last_move, last_move_but_one;
+        last_move_but_one.Invalid();
+        last_move.Invalid();
+        for( std::string parm: fields )
         {
-            thc::Move last_move, last_move_but_one;
-            last_move_but_one.Invalid();
-            last_move.Invalid();
-            s = s+5;
-            for(;;)
+            if( expect_move )
             {
-                while( *s == ' ' )
-                    s++;
-                if( *s == '\0' )
-                    break;
                 thc::Move move;
-                bool okay = move.TerseIn(&the_position,s);
-                s += 5;
+                bool okay = move.TerseIn(&the_position,parm.c_str());
                 if( !okay )
                     break;
                 the_position.PlayMove( move );
                 last_move_but_one = last_move;
                 last_move         = move;
             }
-            thc::ChessPosition initial;
-            if( the_position == initial )
-                position_changed = true;
-            else if( the_position == prev_position )
-                position_changed = false;
+            else if( parm == "moves" )
+                expect_move = true;
+        }
+        thc::ChessPosition initial;
+        if( the_position == initial )
+            position_changed = true;
+        else if( the_position == prev_position )
+            position_changed = false;
 
-            // Maybe this latest position is the old one with one new move ?
-            else if( last_move.Valid() )
+        // Maybe this latest position is the old one with one new move ?
+        else if( last_move.Valid() )
+        {
+            thc::ChessRules temp = prev_position;
+            temp.PlayMove( last_move );
+            if( the_position == temp )
             {
-                thc::ChessRules temp = prev_position;
-                temp.PlayMove( last_move );
-                if( the_position == temp )
+                // Yes it is! so we are still playing the same game
+                position_changed = false;
+            }
+
+            // Maybe this latest position is the old one with two new moves ?
+            else if( last_move_but_one.Valid() )
+            {
+                prev_position.PlayMove( last_move_but_one );
+                prev_position.PlayMove( last_move );
+                if( the_position == prev_position )
                 {
                     // Yes it is! so we are still playing the same game
                     position_changed = false;
-                }
-
-                // Maybe this latest position is the old one with two new moves ?
-                else if( last_move_but_one.Valid() )
-                {
-                    prev_position.PlayMove( last_move_but_one );
-                    prev_position.PlayMove( last_move );
-                    if( the_position == prev_position )
-                    {
-                        // Yes it is! so we are still playing the same game
-                        position_changed = false;
-                    }
                 }
             }
         }
@@ -844,13 +804,12 @@ const char *cmd_position( const char *cmd )
 
     cmd_position_signals_new_game = position_changed;
     log( "cmd_position(): %s\nSetting cmd_position_signals_new_game=%s, %s",
-        cmd,
+        whole_cmd_line.c_str(),
         cmd_position_signals_new_game?"true":"false",
         the_position.ToDebugStr().c_str() );
 
     // For next time
     prev_position = the_position;
-    return NULL;
 }
 
 // Simple logging facility lets us debug runs under control of a GUI
@@ -861,24 +820,25 @@ static void log( const char *fmt, ... )
 	va_list args;
 	va_start( args, fmt );
     static bool first=true;
-    FILE *file_log = fopen( logfile_name.c_str(), first? "wt" : "at" );
+    FILE *file_log;
+    errno_t err = fopen_s( &file_log, logfile_name.c_str(), first? "wt" : "at" );
     first = false;
-    if( file_log )
+    if( !err )
     {
         static char buf[1024];
         time_t t = time(NULL);
-        struct tm *ptm = localtime(&t);
-        const char *s = asctime(ptm);
-        strcpy( buf, s );
+        struct tm ptm;
+        localtime_s( &ptm, &t );
+        asctime_s( buf, sizeof(buf), &ptm );
         char *p = strchr(buf,'\n');
         if( p )
             *p = '\0';
-        fputs(buf,file_log);
+        fputs( buf, file_log);
         buf[0] = ':';
         buf[1] = ' ';
         vsnprintf( buf+2, sizeof(buf)-4, fmt, args ); 
-        fputs(buf,file_log);
-        fclose(file_log);
+        fputs( buf, file_log );
+        fclose( file_log );
     }
     va_end(args);
 }
