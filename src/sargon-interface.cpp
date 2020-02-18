@@ -276,18 +276,21 @@ void sargon_import_position( const thc::ChessPosition &cp, bool avoid_book )
         }
     }
 
-    // Otherwise average number of moved black and white pieces, plus a
-    //  little to account for pieces moved twice etc. and to compensate
-    //  for otherwise undercounting in mid length games (eg 40 move games)
-    //  and finally to avoid moveno == 1 unless it is one of the 21 known
-    //  positions after 0 or 1 half moves (since moveno==1 generates a
-    //  book move)
+    // Avoid book if caller requests that (eg infinite analysis of initial position)
+    if( moveno==1 && avoid_book )
+        moveno = 2;
+
+    // Otherwise average number of moved black and white pieces
     if( moveno == 0 )
     {
         moveno = (black_count+white_count) / 2;
-        moveno += 2;
+
+        // Avoid moveno == 1 unless it is one of the 21 known positions after
+        //  0 or 1 half moves (since moveno==1 generates a book move)
+        if( moveno < 2 )
+            moveno = 2;
     }
-    cp_work.full_move_count = avoid_book ? 3 : moveno;
+    cp_work.full_move_count = moveno;
 
     // To support en-passant, create position before double pawn advance
     //  then play double pawn advance
