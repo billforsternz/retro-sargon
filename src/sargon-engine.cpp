@@ -76,22 +76,24 @@ static std::vector< NODE > nodes;
 static thc::ChessRules the_position;
 
 // Command line interface
-bool process( const std::string &s );
-std::string cmd_uci();
-std::string cmd_isready();
-std::string cmd_stop();
-std::string cmd_go( const std::vector<std::string> &fields );
-void        cmd_go_infinite();
-void        cmd_setoption( const std::vector<std::string> &fields );
-void        cmd_position( const std::string &whole_cmd_line, const std::vector<std::string> &fields );
+static bool process( const std::string &s );
+static std::string cmd_uci();
+static std::string cmd_isready();
+static std::string cmd_stop();
+static std::string cmd_go( const std::vector<std::string> &fields );
+static void        cmd_go_infinite();
+static void        cmd_setoption( const std::vector<std::string> &fields );
+static void        cmd_position( const std::string &whole_cmd_line, const std::vector<std::string> &fields );
 
 // Misc
 static bool is_new_game();
 static void log( const char *fmt, ... );
 static bool RunSargon();
 static void BuildPV( PV &pv );
+static void ProgressReport();
+static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long ms_inc );
 
-// A threadsafe-queue. (from https://stackoverflow.com/questions/15278343/c11-thread-safe-queue)
+// A threadsafe-queue. (from https://stackoverflow.com/questions/15278343/c11-thread-safe-queue )
 template <class T>
 class SafeQueue
 {
@@ -133,12 +135,12 @@ private:
 
 // Threading declarations
 static SafeQueue<std::string> async_queue;
-void timer_thread();
-void read_stdin();
-void write_stdout();
-void TimerClear();          // Clear the timer
-void TimerEnd();            // End the timer subsystem system
-void TimerSet( int ms );    // Set a timeout event, ms millisecs into the future (0 and -1 are special values)
+static void timer_thread();
+static void read_stdin();
+static void write_stdout();
+static void TimerClear();          // Clear the timer
+static void TimerEnd();            // End the timer subsystem system
+static void TimerSet( int ms );    // Set a timeout event, ms millisecs into the future (0 and -1 are special values)
 
 
 // main()
@@ -163,7 +165,7 @@ int main( int argc, char *argv[] )
 // Very simple timer thread, controlled by TimerSet(), TimerClear(), TimerEnd() 
 static std::mutex timer_mtx;
 static long future_time;
-void timer_thread()
+static void timer_thread()
 {
     for(;;)
     {
@@ -187,19 +189,19 @@ void timer_thread()
 }
 
 // Clear the timer
-void TimerClear()
+static void TimerClear()
 {
     TimerSet(0);  // set sentinel value 0
 }
 
 // End the timer subsystem system
-void TimerEnd()
+static void TimerEnd()
 {
     TimerSet(-1);  // set sentinel value -1
 }
 
 // Set a timeout event, ms millisecs into the future (0 and -1 are special values)
-void TimerSet( int ms )
+static void TimerSet( int ms )
 {
     std::lock_guard<std::mutex> lck(timer_mtx);
 
@@ -237,7 +239,7 @@ void TimerSet( int ms )
 }
 
 // Read commands from stdin and queue them
-void read_stdin()
+static void read_stdin()
 {
     bool quit=false;
 #if 0
@@ -276,7 +278,7 @@ void read_stdin()
 }
 
 // Read queued commands and process them
-void write_stdout()
+static void write_stdout()
 {
     bool quit=false;
     while(!quit)
@@ -305,7 +307,7 @@ static bool RunSargon()
 }
 
 // Command line top level handler
-bool process( const std::string &s )
+static bool process( const std::string &s )
 {
     bool quit=false;
     std::string rsp;
@@ -344,56 +346,215 @@ bool process( const std::string &s )
     return quit;
 }
 
-std::string cmd_uci()
+static std::string cmd_uci()
 {
     std::string rsp=
     "id name " ENGINE_NAME " " VERSION "\n"
     "id author Dan and Kathe Spracklin, Windows port by Bill Forster\n"
     "option name Depth type spin min 0 max 20 default 0\n"
-    "option name Hash type spin min 1 max 4096 default 4000\n"
     "uciok\n";
     return rsp;
 }
 
-std::string cmd_isready()
+static std::string cmd_isready()
 {
     return "readyok\n";
 }
 
-std::string stop_rsp;
-std::string cmd_stop()
+static std::string stop_rsp;
+static std::string cmd_stop()
 {
     return stop_rsp;
 }
 
-void cmd_setoption( const std::vector<std::string> &fields )
+static void cmd_setoption( const std::vector<std::string> &fields )
 {
-    // Support 2 options "Depth" and "Hash".
+    // Support single option "Depth"
     //  Depth is 0-20, default is 0. 0 indicates auto depth selection,
     //   others are fixed depth
-    //  Hash is actually not Hash - it's another way of setting depth.
-    //    Reason: Tarrasch lets you set Hash!
-    //    values are 4000-4020 representing Depth=0-20
 
-    // setoption name MultiPV value
-    if( fields.size()>4 && fields[1]=="name" && fields[3]=="value" )
+    // eg "setoption name Depth value 3"
+    if( fields.size()>4 && fields[1]=="name" && fields[2]=="depth" && fields[3]=="value" )
     {
-        if( fields[2]=="depth" )
-        {
-            depth_option = atoi(fields[4].c_str());
-            if( depth_option<0 || depth_option>20 )
-                depth_option = 0;
-        }
-        if( fields[2]=="hash" )
-        {
-            depth_option = atoi(fields[4].c_str()) - 4000;
-            if( depth_option<0 || depth_option>20 )
-                depth_option = 0;
-        }
+        depth_option = atoi(fields[4].c_str());
+        if( depth_option<0 || depth_option>20 )
+            depth_option = 0;
     }
 }
 
-void ProgressReport()
+static std::string cmd_go( const std::vector<std::string> &fields )
+{
+    stop_rsp = "";
+    the_pv.clear();
+    base_nodes = 0;
+    base_time = GetTickCount();
+
+    // Work out our time and increment
+    // eg cmd ="wtime 30000 btime 30000 winc 0 binc 0"
+    std::string stime = "btime";
+    std::string sinc  = "binc";
+    if( the_position.white )
+    {
+        stime = "wtime";
+        sinc  = "winc";
+    }
+    bool expecting_time = false;
+    bool expecting_inc = false;
+    int ms_time   = 0;
+    int ms_inc    = 0;
+    for( std::string parm: fields )
+    {
+        if( expecting_time )
+        {
+            ms_time = atoi(parm.c_str());
+            expecting_time = 0;
+        }
+        else if( expecting_inc )
+        {
+            ms_inc = atoi(parm.c_str());
+            expecting_inc = 0;
+        }
+        else
+        {
+            if( parm == stime )
+                expecting_time = true;
+            if( parm == sinc )
+                expecting_inc = true;
+        }
+    }
+    bool new_game = is_new_game();
+    thc::Move bestmove = CalculateNextMove( new_game, ms_time, ms_inc );
+    return util::sprintf( "bestmove %s\n", bestmove.TerseOut().c_str() );
+}
+
+static void cmd_go_infinite()
+{
+    stop_rsp = "";
+    int plymax=3;
+    bool aborted = false;
+    the_pv.clear();
+    base_nodes = 0;
+    base_time = GetTickCount();
+    while( !aborted )
+    {
+        pokeb(MVEMSG,   0 );
+        pokeb(MVEMSG+1, 0 );
+        pokeb(MVEMSG+2, 0 );
+        pokeb(MVEMSG+3, 0 );
+        pokeb(PLYMAX, plymax++);
+        pokeb(MLPTRJ,0);
+        pokeb(MLPTRJ+1,0);
+        sargon(api_INITBD);
+        sargon_import_position(the_position,true);  // note avoid_book = true
+        log( "Sargon's internal MOVENO set to %d\n", peekb(MOVENO) );
+        sargon(api_ROYALT);
+        pokeb( KOLOR, the_position.white ? 0 : 0x80 );    // Sargon is side to move
+        nodes.clear();
+        aborted = RunSargon();
+        if( !aborted )
+            ProgressReport();   
+    }
+}
+
+// cmd_position(), set a new (or same or same plus one or two half moves) position
+static bool cmd_position_signals_new_game;
+static bool is_new_game()
+{
+    return cmd_position_signals_new_game;
+}
+
+static void cmd_position( const std::string &whole_cmd_line, const std::vector<std::string> &fields )
+{
+    static thc::ChessRules prev_position;
+    bool position_changed = true;
+
+    // Get base starting position
+    thc::ChessEngine tmp;
+    the_position = tmp;    //init
+    bool look_for_moves = false;
+    if( fields.size() > 2 && fields[1]=="fen" )
+    {
+        size_t offset = whole_cmd_line.find("fen");
+        offset = whole_cmd_line.find_first_not_of(" \t",offset+3);
+        if( offset != std::string::npos )
+        {
+            std::string fen = whole_cmd_line.substr(offset);
+            the_position.Forsyth(fen.c_str());
+            look_for_moves = true;
+        }
+    }
+    else if( fields.size() > 1 && fields[1]=="startpos" )
+    {
+        thc::ChessEngine tmp;
+        the_position = tmp;    //init
+        look_for_moves = true;
+    }
+
+    // Add moves
+    if( look_for_moves )
+    {
+        bool expect_move = false;
+        thc::Move last_move, last_move_but_one;
+        last_move_but_one.Invalid();
+        last_move.Invalid();
+        for( std::string parm: fields )
+        {
+            if( expect_move )
+            {
+                thc::Move move;
+                bool okay = move.TerseIn(&the_position,parm.c_str());
+                if( !okay )
+                    break;
+                the_position.PlayMove( move );
+                last_move_but_one = last_move;
+                last_move         = move;
+            }
+            else if( parm == "moves" )
+                expect_move = true;
+        }
+        thc::ChessPosition initial;
+        if( the_position == initial )
+            position_changed = true;
+        else if( the_position == prev_position )
+            position_changed = false;
+
+        // Maybe this latest position is the old one with one new move ?
+        else if( last_move.Valid() )
+        {
+            thc::ChessRules temp = prev_position;
+            temp.PlayMove( last_move );
+            if( the_position == temp )
+            {
+                // Yes it is! so we are still playing the same game
+                position_changed = false;
+            }
+
+            // Maybe this latest position is the old one with two new moves ?
+            else if( last_move_but_one.Valid() )
+            {
+                prev_position.PlayMove( last_move_but_one );
+                prev_position.PlayMove( last_move );
+                if( the_position == prev_position )
+                {
+                    // Yes it is! so we are still playing the same game
+                    position_changed = false;
+                }
+            }
+        }
+    }
+
+    cmd_position_signals_new_game = position_changed;
+    log( "cmd_position(): %s\nSetting cmd_position_signals_new_game=%s\nFEN = %s\n%s",
+        whole_cmd_line.c_str(),
+        cmd_position_signals_new_game?"true":"false",
+        the_position.ForsythPublish().c_str(),
+        the_position.ToDebugStr().c_str() );
+
+    // For next time
+    prev_position = the_position;
+}
+
+static void ProgressReport()
 {
     int     score_cp   = the_pv.value;
     int     depth      = the_pv.depth;
@@ -517,7 +678,7 @@ void ProgressReport()
 
 */
 
-thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long ms_inc )
+static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long ms_inc )
 {
     log( "Input ms_time=%d, ms_inc=%d\n", ms_time, ms_inc );
     static int plymax_target;
@@ -542,7 +703,8 @@ thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long
     {
         TimerSet( ms_hi );
     }
-    int plymax = 3;
+    bool fixed_depth = (depth_option>0);
+    int plymax = fixed_depth ? depth_option : 3;
     int stalemates = 0;
     std::string bestmove_terse;
     unsigned long base = GetTickCount();
@@ -557,7 +719,6 @@ thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long
         pokeb(PLYMAX, plymax );
         sargon(api_INITBD);
         sargon_import_position(the_position);
-        int moveno=the_position.full_move_count;
         sargon(api_ROYALT);
         pokeb( KOLOR, the_position.white ? 0 : 0x80 );    // Sargon is side to move
         nodes.clear();
@@ -611,6 +772,10 @@ thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long
                 }
             }
 
+            // If fixed depth, never iterate
+            if( fixed_depth )
+                break;
+
             // If we timed out, target plymax should be reduced
             if( aborted )
             {
@@ -640,176 +805,6 @@ thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long
     if( !have_move )
         log( "Sargon doesn't find move - %s\n%s", bestmove_terse.c_str(), the_position.ToDebugStr().c_str() );
     return bestmove;
-}
-
-std::string cmd_go( const std::vector<std::string> &fields )
-{
-    stop_rsp = "";
-    the_pv.clear();
-    base_nodes = 0;
-    base_time = GetTickCount();
-
-    // Work out our time and increment
-    // eg cmd ="wtime 30000 btime 30000 winc 0 binc 0"
-    std::string stime = "btime";
-    std::string sinc  = "binc";
-    if( the_position.white )
-    {
-        stime = "wtime";
-        sinc  = "winc";
-    }
-    bool expecting_time = false;
-    bool expecting_inc = false;
-    int ms_time   = 0;
-    int ms_inc    = 0;
-    for( std::string parm: fields )
-    {
-        if( expecting_time )
-        {
-            ms_time = atoi(parm.c_str());
-            expecting_time = 0;
-        }
-        else if( expecting_inc )
-        {
-            ms_inc = atoi(parm.c_str());
-            expecting_inc = 0;
-        }
-        else
-        {
-            if( parm == stime )
-                expecting_time = true;
-            if( parm == sinc )
-                expecting_inc = true;
-        }
-    }
-    bool new_game = is_new_game();
-    thc::Move bestmove = CalculateNextMove( new_game, ms_time, ms_inc );
-    ProgressReport();
-    return util::sprintf( "bestmove %s\n", bestmove.TerseOut().c_str() );
-}
-
-void cmd_go_infinite()
-{
-    stop_rsp = "";
-    int plymax=3;
-    bool aborted = false;
-    the_pv.clear();
-    base_nodes = 0;
-    base_time = GetTickCount();
-    while( !aborted )
-    {
-        pokeb(MVEMSG,   0 );
-        pokeb(MVEMSG+1, 0 );
-        pokeb(MVEMSG+2, 0 );
-        pokeb(MVEMSG+3, 0 );
-        pokeb(PLYMAX, plymax++);
-        pokeb(MLPTRJ,0);
-        pokeb(MLPTRJ+1,0);
-        sargon(api_INITBD);
-        sargon_import_position(the_position,true);  // note avoid_book = true
-        sargon(api_ROYALT);
-        pokeb( KOLOR, the_position.white ? 0 : 0x80 );    // Sargon is side to move
-        nodes.clear();
-        aborted = RunSargon();
-        ProgressReport();   
-    }
-}
-
-// cmd_position(), set a new (or same or same plus one or two half moves) position
-static bool cmd_position_signals_new_game;
-static bool is_new_game()
-{
-    return cmd_position_signals_new_game;
-}
-
-void cmd_position( const std::string &whole_cmd_line, const std::vector<std::string> &fields )
-{
-    static thc::ChessRules prev_position;
-    bool position_changed = true;
-
-    // Get base starting position
-    thc::ChessEngine tmp;
-    the_position = tmp;    //init
-    bool look_for_moves = false;
-    if( fields.size() > 2 && fields[1]=="fen" )
-    {
-        size_t offset = whole_cmd_line.find("fen");
-        offset = whole_cmd_line.find_first_not_of(" \t",offset+3);
-        if( offset != std::string::npos )
-        {
-            std::string fen = whole_cmd_line.substr(offset);
-            the_position.Forsyth(fen.c_str());
-            look_for_moves = true;
-        }
-    }
-    else if( fields.size() > 1 && fields[1]=="startpos" )
-    {
-        thc::ChessEngine tmp;
-        the_position = tmp;    //init
-        look_for_moves = true;
-    }
-
-    // Add moves
-    if( look_for_moves )
-    {
-        bool expect_move = false;
-        thc::Move last_move, last_move_but_one;
-        last_move_but_one.Invalid();
-        last_move.Invalid();
-        for( std::string parm: fields )
-        {
-            if( expect_move )
-            {
-                thc::Move move;
-                bool okay = move.TerseIn(&the_position,parm.c_str());
-                if( !okay )
-                    break;
-                the_position.PlayMove( move );
-                last_move_but_one = last_move;
-                last_move         = move;
-            }
-            else if( parm == "moves" )
-                expect_move = true;
-        }
-        thc::ChessPosition initial;
-        if( the_position == initial )
-            position_changed = true;
-        else if( the_position == prev_position )
-            position_changed = false;
-
-        // Maybe this latest position is the old one with one new move ?
-        else if( last_move.Valid() )
-        {
-            thc::ChessRules temp = prev_position;
-            temp.PlayMove( last_move );
-            if( the_position == temp )
-            {
-                // Yes it is! so we are still playing the same game
-                position_changed = false;
-            }
-
-            // Maybe this latest position is the old one with two new moves ?
-            else if( last_move_but_one.Valid() )
-            {
-                prev_position.PlayMove( last_move_but_one );
-                prev_position.PlayMove( last_move );
-                if( the_position == prev_position )
-                {
-                    // Yes it is! so we are still playing the same game
-                    position_changed = false;
-                }
-            }
-        }
-    }
-
-    cmd_position_signals_new_game = position_changed;
-    log( "cmd_position(): %s\nSetting cmd_position_signals_new_game=%s, %s",
-        whole_cmd_line.c_str(),
-        cmd_position_signals_new_game?"true":"false",
-        the_position.ToDebugStr().c_str() );
-
-    // For next time
-    prev_position = the_position;
 }
 
 // Simple logging facility lets us debug runs under control of a GUI
