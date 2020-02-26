@@ -65,12 +65,14 @@ static PV provisional;
 
 // Measure elapsed time, nodes    
 static unsigned long base_time;
-static int base_nodes;
 
 // Misc
 static int depth_option;    // 0=auto, other values for fixed depth play
 static std::string logfile_name;
 static std::vector< NODE > nodes;
+static unsigned long total_callbacks;
+static unsigned long bestmove_callbacks;
+static unsigned long end_of_points_callbacks;
 
 // The current 'Master' postion
 static thc::ChessRules the_position;
@@ -162,6 +164,23 @@ int main( int argc, char *argv[] )
     return 0;
 }
 
+static unsigned long base_time_sargon_execution, max_gap_so_far, max_len_so_far, max_variance_so_far;
+static std::chrono::time_point<std::chrono::high_resolution_clock> base = std::chrono::high_resolution_clock::now();
+static unsigned long bios_base = GetTickCount();
+static unsigned long elapsed_milliseconds()
+{
+    std::chrono::time_point<std::chrono::high_resolution_clock> now = std::chrono::high_resolution_clock::now();
+    std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - base);
+    unsigned long ret = static_cast<unsigned long>(ms.count());
+    unsigned long bios_now = GetTickCount();
+    unsigned long bios_ret = bios_now-bios_base;
+    if( bios_ret > ret && bios_ret-ret > max_variance_so_far )
+        max_variance_so_far = bios_ret-ret;
+    else if( ret > bios_ret && ret-bios_ret > max_variance_so_far )
+        max_variance_so_far = ret-bios_ret;
+    return ret;
+}
+
 // Very simple timer thread, controlled by TimerSet(), TimerClear(), TimerEnd() 
 static std::mutex timer_mtx;
 static long future_time;
@@ -176,7 +195,7 @@ static void timer_thread()
                 break;
             else if( future_time != 0 )
             {
-                long now_time = GetTickCount();	
+                long now_time = elapsed_milliseconds();	
                 long time_remaining = future_time - now_time;
                 if( time_remaining <= 0 )
                 {
@@ -230,7 +249,7 @@ static void TimerSet( int ms )
     // Schedule a new "TIMEOUT" event (unless 0 = TimerClear())
     else if( ms != 0 )
     {
-        long now_time = GetTickCount();	
+        long now_time = elapsed_milliseconds();	
         long ft = now_time + ms;
         if( ft==0 || ft==-1 )   // avoid special values
             ft = 1;             //  at cost of 1 or 2 millisecs of error!
@@ -300,6 +319,7 @@ static bool RunSargon()
         aborted = true;
     else
     {
+        base_time_sargon_execution = elapsed_milliseconds();
         sargon(api_CPTRMV);
         the_pv = provisional;
     }
@@ -343,6 +363,22 @@ static bool process( const std::string &s )
         fprintf( stdout, "%s", rsp.c_str() );
         fflush( stdout );
     }
+    log( "function process() returns, cmd=%s\n"
+         "total callbacks=%lu\n"
+         "bestmove callbacks=%lu\n"
+         "end of points callbacks=%lu\n"
+         "sargon_move_gen_counter=%lu\n"
+         "max_variance_so_far=%lu\n"
+         "max length of PV vector=%lu\n"
+         "max time between bestmove callbacks=%lu\n",
+            cmd.c_str(),
+            total_callbacks,
+            bestmove_callbacks,
+            end_of_points_callbacks,
+            sargon_move_gen_counter,
+            max_variance_so_far,
+            max_len_so_far,
+            max_gap_so_far );
     return quit;
 }
 
@@ -386,8 +422,11 @@ static std::string cmd_go( const std::vector<std::string> &fields )
 {
     stop_rsp = "";
     the_pv.clear();
-    base_nodes = 0;
-    base_time = GetTickCount();
+    sargon_move_gen_counter = 0;
+    base_time = elapsed_milliseconds();
+    total_callbacks = 0;
+    bestmove_callbacks = 0;
+    end_of_points_callbacks = 0;
 
     // Work out our time and increment
     // eg cmd ="wtime 30000 btime 30000 winc 0 binc 0"
@@ -433,9 +472,12 @@ static void cmd_go_infinite()
     int plymax=3;
     bool aborted = false;
     the_pv.clear();
-    base_nodes = 0;
-    base_time = GetTickCount();
-    while( !aborted )
+    sargon_move_gen_counter = 0;
+    base_time = elapsed_milliseconds();
+    total_callbacks = 0;
+    bestmove_callbacks = 0;
+    end_of_points_callbacks = 0;
+    while( !aborted && plymax<=20 )
     {
         pokeb(MVEMSG,   0 );
         pokeb(MVEMSG+1, 0 );
@@ -563,8 +605,8 @@ static void ProgressReport()
     std::string buf_pv;
     std::string buf_score;
     bool done=false;
-    unsigned long now_time = GetTickCount();	
-    int nodes = sargon_move_gen_counter-base_nodes;
+    unsigned long now_time = elapsed_milliseconds();	
+    int nodes = sargon_move_gen_counter;
     unsigned long elapsed_time = now_time-base_time;
     if( elapsed_time == 0 )
         elapsed_time++;
@@ -666,15 +708,15 @@ static void ProgressReport()
 
     loop
       if first time through
-        set CUT to 1/20 of total time, establishes target
+        set CUT to 1/15 of total time, establishes target
       else
-        set CUT to 1/10 of total time, loop to target
-        if hit target in less that 1/100 total time
+        set CUT to 1/8 of total time, loop to target
+        if hit target in less that 1/50 total time
           increment target and loop again
         if we are cut
           decrement target
 
-    in this call 1/100, 1/20 and 1/10 thresholds LO, MED and HI
+    in this call 1/50, 1/15 and 1/8 thresholds LO, MED and HI
 
 */
 
@@ -682,9 +724,9 @@ static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsign
 {
     log( "Input ms_time=%d, ms_inc=%d\n", ms_time, ms_inc );
     static int plymax_target;
-    const unsigned long LO =100;
-    const unsigned long MED=20;
-    const unsigned long HI =10;
+    const unsigned long LO =50;
+    const unsigned long MED=15;
+    const unsigned long HI =8;
     unsigned long ms_lo  = ms_time / LO;
     unsigned long ms_med = ms_time / MED;
     unsigned long ms_hi  = ms_time / HI;
@@ -707,7 +749,7 @@ static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsign
     int plymax = fixed_depth ? depth_option : 3;
     int stalemates = 0;
     std::string bestmove_terse;
-    unsigned long base = GetTickCount();
+    unsigned long base = elapsed_milliseconds();
     for(;;)
     {
         pokeb(MVEMSG,   0 );
@@ -723,7 +765,7 @@ static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsign
         pokeb( KOLOR, the_position.white ? 0 : 0x80 );    // Sargon is side to move
         nodes.clear();
         bool aborted = RunSargon();
-        unsigned long now = GetTickCount();
+        unsigned long now = elapsed_milliseconds();
         unsigned long elapsed = (now-base);
         if( aborted  || the_pv.variation.size()==0 )
         {
@@ -807,7 +849,7 @@ static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsign
     return bestmove;
 }
 
-// Simple logging facility lets us debug runs under control of a GUI
+// Simple logging facility gives us some debug capability when running under control of a GUI
 static void log( const char *fmt, ... )
 {
     static std::mutex mtx;
@@ -854,8 +896,9 @@ static void BuildPV( PV &pv )
             nodes_pv.push_back( *p );
             double fvalue = sargon_export_value(p->value);
             // log( "level=%d, from=%s, to=%s value=%d/%.1f\n", p->level, algebraic(p->from).c_str(), algebraic(p->to).c_str(), p->value, fvalue );
-            if( target == plymax )
-                break;
+
+            //if( target == plymax ) // commented out to allow extra depth nodes in case of checks - see below *
+            //    break;
             target++;
         }
     }
@@ -864,6 +907,23 @@ static void BuildPV( PV &pv )
     bool ok = true;
     for( int i=0; ok && i<nbr; i++ )
     {
+        // See above *
+        // Normally we expect plymax nodes. So plymax=3; 3 nodes at level 1,2,3; i=0,1,2.
+        // But Sargon does an extra ply if the king is in check, so allow (but don't insist on)
+        // extra node(s) if terminal node is check.
+        // Example Fen: r1bqk2r/pppp1ppp/2n5/2b4n/4Pp2/2NP1N2/PPPBB1PP/R2QK2R b KQkq - 6 7
+        // PV at plymax=5 is: Sargon 1978 -0.97 (depth 5) 7...Qf6 8.Ng1 Bxg1 9.Rxg1 Qh4+ 10.Kf1
+        // Before the next paragraph of code was added 10.Kf1 didn't show in the line and the
+        // score was -12.80 pawns, the leaf score of Qh4+, which presumably is allowed to be
+        // exaggerated because of the check and alpha-beta optimisation (make sure checks are
+        // evaluated first).
+        if( i >= plymax )
+        {
+            thc::Square sq = (cr.WhiteToPlay() ? cr.wking_square : cr.bking_square);
+            bool in_check = cr.AttackedPiece(sq);
+            if( !in_check )
+                break;
+        }
         NODE *p = &nodes_pv[i];
         thc::Square src;
         ok = sargon_export_square( p->from, src );
@@ -880,9 +940,17 @@ static void BuildPV( PV &pv )
                 buf[3] = thc::get_rank(dst);
                 buf[4] = '\0';
                 thc::Move mv;
-                mv.TerseIn( &cr, buf );
-                cr.PlayMove(mv);
-                pv.variation.push_back(mv);
+                bool legal = mv.TerseIn( &cr, buf );
+                if( !legal )
+                {
+                    log( "Unexpected illegal move=%s, Position=%s\n", buf, cr.ToDebugStr().c_str() );
+                    break;
+                }
+                else
+                {
+                    cr.PlayMove(mv);
+                    pv.variation.push_back(mv);
+                }
             }
         }
     }
@@ -940,6 +1008,7 @@ extern "C" {
         uint32_t ret_addr = *sp;
         const unsigned char *code = (const unsigned char *)ret_addr;
         const char *msg = (const char *)(code+2);   // ASCIIZ text should come after that
+        total_callbacks++;
 #if 0
         thc::ChessPosition cp;
         unsigned char al = reg_eax & 0xff;
@@ -981,8 +1050,23 @@ extern "C" {
         }
         else
 #endif
-        if( 0 == strcmp(msg,"Yes! Best move") )
+        if( 0 == strcmp(msg,"end of POINTS()") )
         {
+            end_of_points_callbacks++;
+            unsigned long now = elapsed_milliseconds();
+            unsigned long elapsed = now - base_time_sargon_execution;
+            base_time_sargon_execution = now;
+            if( elapsed > max_gap_so_far )
+                max_gap_so_far = elapsed;
+        }
+        else if( 0 == strcmp(msg,"Yes! Best move") )
+        {
+            bestmove_callbacks++;
+         /* unsigned long now = elapsed_milliseconds();
+            unsigned long elapsed = now - base_time_sargon_execution;
+            base_time_sargon_execution = now;
+            if( elapsed > max_gap_so_far )
+                max_gap_so_far = elapsed; */
             unsigned int p      = peekw(MLPTRJ);
             unsigned int level  = peekb(NPLY);
             unsigned char from  = peekb(p+2);
@@ -991,6 +1075,8 @@ extern "C" {
             unsigned char value = peekb(p+5);
             NODE n(level,from,to,flags,value);
             nodes.push_back(n);
+            if( nodes.size() > max_len_so_far )
+                max_len_so_far = nodes.size();
             if( level == 1 )
             {
                 BuildPV( provisional );
