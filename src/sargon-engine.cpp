@@ -165,11 +165,11 @@ int main( int argc, char *argv[] )
 }
 
 static unsigned long base_time_sargon_execution, max_gap_so_far, max_len_so_far, max_variance_so_far;
-static std::chrono::time_point<std::chrono::high_resolution_clock> base = std::chrono::high_resolution_clock::now();
+static std::chrono::time_point<std::chrono::steady_clock> base = std::chrono::steady_clock::now();
 static unsigned long bios_base = GetTickCount();
 static unsigned long elapsed_milliseconds()
 {
-    std::chrono::time_point<std::chrono::high_resolution_clock> now = std::chrono::high_resolution_clock::now();
+    std::chrono::time_point<std::chrono::steady_clock> now = std::chrono::steady_clock::now();
     std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - base);
     unsigned long ret = static_cast<unsigned long>(ms.count());
     unsigned long bios_now = GetTickCount();
