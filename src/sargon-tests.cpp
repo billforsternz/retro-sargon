@@ -32,6 +32,9 @@ bool sargon_tests_quiet_comprehensive();
 bool sargon_tests_verbose();
 bool sargon_tests_verbose_comprehensive();
 
+// Misc
+static std::string convert_to_key( unsigned char from, unsigned char to, const thc::ChessPosition &cp );
+
 // Misc diagnostics
 void dbg_ptrs();
 void dbg_position();
@@ -59,9 +62,9 @@ static std::vector<unsigned int> cardinal_list;
 
 // Prime the callback routine to modify node values for simple 15 node minimax
 //  algorithm example
-void probe_test_prime( const char *pos_probe, bool quiet, bool alpha_beta );
+void probe_test_prime( bool alpha_beta );
 
-
+// main()
 int main( int argc, const char *argv[] )
 {
     util::tests();
@@ -146,6 +149,86 @@ bool sargon_tests_verbose_comprehensive()
     return ok;
 }
 
+// Calculate a short string key to represent the moves played
+//  eg 1. a4-a5 h6-h5 2. a5-a6 => "AHA"
+static std::string convert_to_key( unsigned char from, unsigned char to, const thc::ChessPosition &cp )
+{
+    std::string key = "??";
+    thc::Square sq_from, sq_to;
+    int nmoves = 0;
+    bool ok_from = sargon_export_square(from,sq_from);
+    bool ok_to = sargon_export_square(to,sq_to);
+    if( !ok_from || !ok_to )
+        key = "(root)";
+    else
+    {
+        bool a0 = (cp.squares[thc::a3] == 'P');
+        bool a1 = (cp.squares[thc::a4] == 'P');
+        bool a2 = (cp.squares[thc::a5] == 'P');
+        if( a1 )
+            nmoves += 1;
+        else if( a2 )
+            nmoves += 2;
+        bool b0 = (cp.squares[thc::b3] == 'P');
+        bool b1 = (cp.squares[thc::b4] == 'P');
+        bool b2 = (cp.squares[thc::b5] == 'P');
+        if( b1 )
+            nmoves += 1;
+        else if( b2 )
+            nmoves += 2;
+        bool g0 = (cp.squares[thc::g6] == 'p');
+        bool g1 = (cp.squares[thc::g5] == 'p');
+        if( g1 )
+            nmoves += 1;
+        bool h0 = (cp.squares[thc::h6] == 'p');
+        bool h1 = (cp.squares[thc::h5] == 'p');
+        if( h1 )
+            nmoves += 1;
+        bool a_last = (thc::get_file(sq_to) == 'a');
+        bool b_last = (thc::get_file(sq_to) == 'b');
+        bool g_last = (thc::get_file(sq_to) == 'g');
+        bool h_last = (thc::get_file(sq_to) == 'h');
+        if( nmoves == 3 )
+        {
+            if( a_last && a2 && g1)
+                key = "AGA";
+            else if( a_last && a1 && g1 )
+                key = "BGA";
+            else if( a_last && a2 && h1 )
+                key = "AHA";
+            else if( a_last && a1 && h1 )
+                key = "BHA";
+            else if( b_last && b2 && g1 )
+                key = "BGB";
+            else if( b_last && b1 && g1 )
+                key = "AGB";
+            else if( b_last && b2 && h1 )
+                key = "BHB";
+            else if( b_last && b1 && h1 )
+                key = "AHB";
+        }
+        else if( nmoves == 2 )
+        {
+            if( g_last && a1 )
+                key = "AG";
+            else if( g_last && b1 )
+                key = "BG";
+            else if( h_last && a1 )
+                key = "AH";
+            else if( h_last && b1 )
+                key = "BH";
+        }
+        else if( nmoves == 1 )
+        {
+            if( a1 )
+                key = "A";
+            else if( b1 )
+                key = "B";
+        }
+    }
+    return key;
+}
+
 // Use a simple example to explore/probe the minimax algorithm and verify it
 bool sargon_algorithm_explore( bool quiet, bool alpha_beta  )
 {
@@ -167,7 +250,7 @@ bool sargon_algorithm_explore( bool quiet, bool alpha_beta  )
     //  effects node traversal and generates a best move.
     // Note that if alpha_beta=true the resulting node values will result
     // in alpha-beta pruning and all 15 nodes won't be traversed
-    probe_test_prime(pos_probe,quiet,alpha_beta);
+    probe_test_prime(alpha_beta);
     callback_enabled = true;
     callback_kingmove_suppressed = true;
     callback_quiet = quiet;
@@ -708,31 +791,28 @@ void diagnostics()
 }
 
 // Data structures to track the 15 positions in minimax example
-static std::map<std::string,std::string> positions;
 static std::map<std::string,unsigned int> values;
 static std::map<std::string,unsigned int> cardinal_nbr;
 
 // Prime the callback routine to modify node values for simple 15 node minimax
 //  algorithm example
-void probe_test_prime( const char *pos_probe, bool quiet, bool alpha_beta )
+void probe_test_prime( bool alpha_beta )
 {
-    thc::ChessPosition cp;
-    cp.Forsyth(pos_probe);
-    cardinal_nbr["root"]   = 0;
-    cardinal_nbr["a4"]     = 1;
-    cardinal_nbr["b4"]     = 2;
-    cardinal_nbr["a4g5"]   = 3;
-    cardinal_nbr["a4h5"]   = 4;
-    cardinal_nbr["a4g5b4"] = 5;
-    cardinal_nbr["a4g5a5"] = 6;
-    cardinal_nbr["a4h5b4"] = 7;
-    cardinal_nbr["a4h5a5"] = 8;
-    cardinal_nbr["b4g5"]   = 9;
-    cardinal_nbr["b4h5"]   = 10;
-    cardinal_nbr["b4g5a4"] = 11;
-    cardinal_nbr["b4g5b5"] = 12;
-    cardinal_nbr["b4h5a4"] = 13;
-    cardinal_nbr["b4h5b5"] = 14;
+    cardinal_nbr["(root)"]  = 0;
+    cardinal_nbr["A"]       = 1;
+    cardinal_nbr["B"]       = 2;
+    cardinal_nbr["AG"]      = 3;
+    cardinal_nbr["AH"]      = 4;
+    cardinal_nbr["AGB"]     = 5;
+    cardinal_nbr["AGA"]     = 6;
+    cardinal_nbr["AHB"]     = 7;
+    cardinal_nbr["AHA"]     = 8;
+    cardinal_nbr["BG"]      = 9;
+    cardinal_nbr["BH"]      = 10;
+    cardinal_nbr["BGA"]     = 11;
+    cardinal_nbr["BGB"]     = 12;
+    cardinal_nbr["BHA"]     = 13;
+    cardinal_nbr["BHB"]     = 14;
 
 /*
 
@@ -786,21 +866,21 @@ Example 1, no Alpha Beta pruning (move played is 1.b4, value 3.0)
 */
     if( !alpha_beta )
     {
-        values["root"]   = sargon_import_value(0.0);
-        values["a4"]     = sargon_import_value(8.0);
-        values["a4g5"]   = sargon_import_value(7.0);
-        values["a4g5b4"] = sargon_import_value(5.0);
-        values["a4g5a5"] = sargon_import_value(4.0);
-        values["a4h5"]   = sargon_import_value(3.0);
-        values["a4h5b4"] = sargon_import_value(1.0);
-        values["a4h5a5"] = sargon_import_value(2.0);
-        values["b4"]     = sargon_import_value(6.0);
-        values["b4g5"]   = sargon_import_value(5.5);
-        values["b4g5a4"] = sargon_import_value(4.0);
-        values["b4g5b5"] = sargon_import_value(3.0);
-        values["b4h5"]   = sargon_import_value(4.0);
-        values["b4h5a4"] = sargon_import_value(3.0);
-        values["b4h5b5"] = sargon_import_value(1.0);
+        values["(root)"] = sargon_import_value(0.0);
+        values["A"]      = sargon_import_value(8.0);
+        values["AG"]     = sargon_import_value(7.0);
+        values["AGB"]    = sargon_import_value(5.0);
+        values["AGA"]    = sargon_import_value(4.0);
+        values["AH"]     = sargon_import_value(3.0);
+        values["AHB"]    = sargon_import_value(1.0);
+        values["AHA"]    = sargon_import_value(2.0);
+        values["B"]      = sargon_import_value(6.0);
+        values["BG"]     = sargon_import_value(5.5);
+        values["BGA"]    = sargon_import_value(4.0);
+        values["BGB"]    = sargon_import_value(3.0);
+        values["BH"]     = sargon_import_value(4.0);
+        values["BHA"]    = sargon_import_value(3.0);
+        values["BHB"]    = sargon_import_value(1.0);
     }
 /*
 
@@ -854,179 +934,21 @@ Example 2, Alpha Beta pruning (move played is 1.a4, value 5.0)
 
     if( alpha_beta )
     {
-        values["root"]   = sargon_import_value(0.0);
-        values["a4"]     = sargon_import_value(6.0);
-        values["a4g5"]   = sargon_import_value(6.0);
-        values["a4g5b4"] = sargon_import_value(5.0);
-        values["a4g5a5"] = sargon_import_value(4.0);
-        values["a4h5"]   = sargon_import_value(4.0);
-        values["a4h5b4"] = sargon_import_value(11.0);
-        values["a4h5a5"] = sargon_import_value(2.0);
-        values["b4"]     = sargon_import_value(6.0);
-        values["b4g5"]   = sargon_import_value(6.0);
-        values["b4g5a4"] = sargon_import_value(4.0);
-        values["b4g5b5"] = sargon_import_value(3.0);
-        values["b4h5"]   = sargon_import_value(4.0);
-        values["b4h5a4"] = sargon_import_value(1.0);
-        values["b4h5b5"] = sargon_import_value(3.0);
-    }
-    thc::Move mv;
-    thc::ChessPosition base = cp;
-    thc::ChessRules work = base;
-    std::string pos = std::string(work.squares);
-    const char *txt="0 ??0 ??";
-    std::string key = txt;
-    key += " -> ";
-    key += pos;
-    positions[key] = "root";
-
-    //  1.a4 g5 2.a5
-    work = base;
-    mv.TerseIn( &work, txt="a3a4" );
-    work.PlayMove( mv );
-    pos = std::string(work.squares);
-    key = txt;
-    key += " -> ";
-    key += pos;
-    positions[key] = "a4";
-    mv.TerseIn( &work, txt="g6g5" );
-    work.PlayMove( mv );
-    pos = std::string(work.squares);
-    key = txt;
-    key += " -> ";
-    key += pos;
-    positions[key] = "a4g5";
-    mv.TerseIn( &work, txt="a4a5" );
-    work.PlayMove( mv );
-    pos = std::string(work.squares);
-    key = txt;
-    key += " -> ";
-    key += pos;
-    positions[key] = "a4g5a5";
-
-    //  1.a4 g5 2.b4
-    work = base;
-    mv.TerseIn( &work, txt="a3a4" );
-    work.PlayMove( mv );
-    mv.TerseIn( &work, txt="g6g5" );
-    work.PlayMove( mv );
-    mv.TerseIn( &work, txt="b3b4" );
-    work.PlayMove( mv );
-    pos = std::string(work.squares);
-    key = txt;
-    key += " -> ";
-    key += pos;
-    positions[key] = "a4g5b4";
-
-    //  1.a4 h5 2.a5 
-    work = base;
-    mv.TerseIn( &work, txt="a3a4" );
-    work.PlayMove( mv );
-    mv.TerseIn( &work, txt="h6h5" );
-    work.PlayMove( mv );
-    pos = std::string(work.squares);
-    key = txt;
-    key += " -> ";
-    key += pos;
-    positions[key] = "a4h5";
-    mv.TerseIn( &work, txt="a4a5" );
-    work.PlayMove( mv );
-    pos = std::string(work.squares);
-    key = txt;
-    key += " -> ";
-    key += pos;
-    positions[key] = "a4h5a5";
-
-    //  1.a4 h5 2.b4
-    work = base;
-    mv.TerseIn( &work, txt="a3a4" );
-    work.PlayMove( mv );
-    mv.TerseIn( &work, txt="h6h5" );
-    work.PlayMove( mv );
-    mv.TerseIn( &work, txt="b3b4" );
-    work.PlayMove( mv );
-    pos = std::string(work.squares);
-    key = txt;
-    key += " -> ";
-    key += pos;
-    positions[key] = "a4h5b4";
-
-    //  1.b4 h5 2.b5 
-    work = base;
-    mv.TerseIn( &work, txt="b3b4" );
-    work.PlayMove( mv );
-    pos = std::string(work.squares);
-    key = txt;
-    key += " -> ";
-    key += pos;
-    positions[key] = "b4";
-    mv.TerseIn( &work, txt="h6h5" );
-    work.PlayMove( mv );
-    pos = std::string(work.squares);
-    key = txt;
-    key += " -> ";
-    key += pos;
-    positions[key] = "b4h5";
-    mv.TerseIn( &work, txt="b4b5" );
-    work.PlayMove( mv );
-    pos = std::string(work.squares);
-    key = txt;
-    key += " -> ";
-    key += pos;
-    positions[key] = "b4h5b5";
-
-    //  1.b4 h5 2.a4
-    work = base;
-    mv.TerseIn( &work, txt="b3b4" );
-    work.PlayMove( mv );
-    mv.TerseIn( &work, txt="h6h5" );
-    work.PlayMove( mv );
-    mv.TerseIn( &work, txt="a3a4" );
-    work.PlayMove( mv );
-    pos = std::string(work.squares);
-    key = txt;
-    key += " -> ";
-    key += pos;
-    positions[key] = "b4h5a4";
-
-    //  1.b4 g5 2.b5
-    work = base;
-    mv.TerseIn( &work, txt="b3b4" );
-    work.PlayMove( mv );
-    mv.TerseIn( &work, txt="g6g5" );
-    work.PlayMove( mv );
-    pos = std::string(work.squares);
-    key = txt;
-    key += " -> ";
-    key += pos;
-    positions[key] = "b4g5";
-    mv.TerseIn( &work, txt="b4b5" );
-    work.PlayMove( mv );
-    pos = std::string(work.squares);
-    key = txt;
-    key += " -> ";
-    key += pos;
-    positions[key] = "b4g5b5";
-
-    //  1.b4 g5 2.a4
-    work = base;
-    mv.TerseIn( &work, txt="b3b4" );
-    work.PlayMove( mv );
-    mv.TerseIn( &work, txt="g6g5" );
-    work.PlayMove( mv );
-    mv.TerseIn( &work, txt="a3a4" );
-    work.PlayMove( mv );
-    pos = std::string(work.squares);
-    key = txt;
-    key += " -> ";
-    key += pos;
-    positions[key] = "b4g5a4";
-    if( !quiet )
-    {
-        for( auto it = positions.begin(); it != positions.end(); ++it )
-        {
-            printf( "%s: %s\n", it->second.c_str(), it->first.c_str() );
-        }
+        values["(root)"] = sargon_import_value(0.0);
+        values["A"]      = sargon_import_value(6.0);
+        values["AG"]     = sargon_import_value(6.0);
+        values["AGB"]    = sargon_import_value(5.0);
+        values["AGA"]    = sargon_import_value(4.0);
+        values["AH"]     = sargon_import_value(4.0);
+        values["AHB"]    = sargon_import_value(11.0);
+        values["AHA"]    = sargon_import_value(2.0);
+        values["B"]      = sargon_import_value(6.0);
+        values["BG"]     = sargon_import_value(6.0);
+        values["BGA"]    = sargon_import_value(4.0);
+        values["BGB"]    = sargon_import_value(3.0);
+        values["BH"]     = sargon_import_value(4.0);
+        values["BHA"]    = sargon_import_value(1.0);
+        values["BHB"]    = sargon_import_value(3.0);
     }
 }
 
@@ -1103,40 +1025,44 @@ extern "C" {
             unsigned int value = reg_eax&0xff;
             thc::ChessPosition cp;
             sargon_export_position( cp );
-            std::string sfrom = algebraic(from).c_str();
-            std::string sto   = algebraic(to).c_str();
-            std::string key = util::sprintf("%s%s -> %s", sfrom.c_str(), sto.c_str(), cp.squares );
-            auto it = positions.find(key);
-            if( it == positions.end() )
-                printf( "key not found (?): %s\n", key.c_str() );
+            std::string key = convert_to_key( from, to, cp );
+            std::string cardinal("??");
+            auto it = cardinal_nbr.find(key);
+            if( it != cardinal_nbr.end() )
+            {                                  
+                cardinal_list.push_back(it->second);
+                cardinal = util::sprintf( "%d", it->second );
+            }
+            printf( "Position %s, \"%s\" found\n", cardinal.c_str(), key.c_str() );
+            auto it2 = values.find(key);
+            if( it2 == values.end() )
+                printf( "value not found (?): %s\n", key.c_str() );
             else
             {
-                std::string cardinal("??");
-                auto it3 = cardinal_nbr.find(it->second);
-                if( it3 != cardinal_nbr.end() )
-                {                                  
-                    cardinal_list.push_back(it3->second);
-                    cardinal = util::sprintf( "%d", it3->second );
-                }
-                printf( "Position %s, %s found\n", cardinal.c_str(), it->second.c_str() );
-                auto it2 = values.find(it->second);
-                if( it2 == values.end() )
-                    printf( "value not found (?): %s\n", it->second.c_str() );
-                else
-                {
 
-                    // MODIFY VALUE !
-                    value = it2->second;
-                    volatile uint32_t *peax = &reg_eax;
-                    *peax = value;
-                }
+                // MODIFY VALUE !
+                value = it2->second;
+                volatile uint32_t *peax = &reg_eax;
+                *peax = value;
             }
-            bool was_white = (sfrom[0]=='a' || sfrom[0]=='b');
-            cp.white = !was_white;
             if( !callback_quiet )
             {
+                thc::Square sq_from, sq_to;
+                bool ok = sargon_export_square(from,sq_from);
+                bool root = !ok;
+                sargon_export_square(to,sq_to);
+                char f1 = thc::get_file(sq_from);
+                char f2 = thc::get_rank(sq_from);
+                char t1 = thc::get_file(sq_to);
+                char t2 = thc::get_rank(sq_to);
+                bool was_black = (root || f1=='g' || f1=='h');
+                cp.white = was_black;
                 static int count;
-                std::string s = util::sprintf( "Position %d. Last move: from=%s, to=%s value=%d/%.1f", count++, algebraic(from).c_str(), algebraic(to).c_str(), value, sargon_export_value(value) );
+                std::string s;
+                if( root )
+                    s = util::sprintf( "%d> value=%d/%.1f", count++, value, sargon_export_value(value) );
+                else
+                    s = util::sprintf( "%d>. Last move: %c%c%c%c value=%d/%.1f", count++, f1,f2,t1,t2, value, sargon_export_value(value) );
                 printf( "%s\n", cp.ToDebugStr(s.c_str()).c_str() );
             }
         }
@@ -1148,40 +1074,33 @@ extern "C" {
             unsigned int al  = reg_eax&0xff;
             unsigned int bx  = reg_ebx&0xffff;
             unsigned int val = peekb(bx);
-            bool jmp = (al < val);
-            if( jmp )
-            {
-                printf( "Ply level %d\n", peekb(NPLY));
-                printf( "Alpha beta cutoff? Yes if move value=%d/%.1f < 2 lower ply value=%d/%.1f, ",
-                    al,  sargon_export_value(al),
-                    val, sargon_export_value(val) );
-                printf( "So %s\n", jmp?"yes":"no" );
-            }
+            bool jmp = (al <= val);
+            printf( "Ply level %d\n", peekb(NPLY));
+            printf( "Alpha beta cutoff? Yes if move value=%d/%.1f <= two lower ply value=%d/%.1f, ",
+                al,  sargon_export_value(al),
+                val, sargon_export_value(val) );
+            printf( "So %s\n", jmp?"yes":"no" );
         }
         else if( !callback_quiet && std::string(msg) == "No. Best move?" )
         {
             unsigned int al  = reg_eax&0xff;
             unsigned int bx  = reg_ebx&0xffff;
             unsigned int val = peekb(bx);
-            bool jmp = (al < val);
-            if( !jmp )
-            {
-                printf( "Ply level %d\n", peekb(NPLY));
-                printf( "Best move? No if move value=%d/%.1f < 1 lower ply value=%d/%.1f, ",
-                    al,  sargon_export_value(al),
-                    val, sargon_export_value(val) );
-                printf( "So %s\n", jmp?"no":"yes" );
-            }
+            bool jmp = (al <= val);
+            printf( "Ply level %d\n", peekb(NPLY));
+            printf( "Best move? No if move value=%d/%.1f <= one lower ply value=%d/%.1f, ",
+                al,  sargon_export_value(al),
+                val, sargon_export_value(val) );
+            printf( "So %s\n", jmp?"no":"yes" );
         }
-        else if( std::string(msg) == "Yes! Best move" )
+        else if( !callback_quiet && std::string(msg) == "Yes! Best move" )
         {
-            static int best_move_count;
             unsigned int p      = peekw(MLPTRJ);
             unsigned char from  = peekb(p+2);
             unsigned char to    = peekb(p+3);
-            if( !callback_quiet )
-                printf( "Best move found: %s%s (%d)\n", algebraic(from).c_str(), algebraic(to).c_str(), ++best_move_count );
+            printf( "Best move found: %s%s\n", algebraic(from).c_str(), algebraic(to).c_str() );
         }
     }
 };
+
 
