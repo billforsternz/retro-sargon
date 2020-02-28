@@ -44,5 +44,7 @@ really bring it over to Github.
 Some notes to myself:
 
 To turn on assembly programming in Visual C++ 2017
-<br>Menu > Project > build customizations, turn on MASM
-<br>Also need linker option LSAFESEH:NO
+<br>Menu > Project > build customizations, turn on MASM (Only add .asm files after doing this)
+<br>Also need linker option SAFESEH:NO (Properties / Linker / All Options / Image has safe exception handlers)
+or just use option search facility on "SAFESEH". It's needed because we do long jumps to
+exit Sargon if we time out.
