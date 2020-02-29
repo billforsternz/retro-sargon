@@ -64,6 +64,8 @@ int main( int argc, const char *argv[] )
 // Data structures to track the 15 positions in minimax example
 static std::map<std::string,unsigned int> values;
 static std::map<std::string,unsigned int> cardinal_nbr;
+static std::map<std::string,std::string> lines;
+static std::map<std::string,double> scores;
 
 // Prime the callback routine to modify node values for simple 15 node minimax
 //  algorithm example
@@ -308,7 +310,167 @@ Example 1, no Alpha Beta pruning (move played is 1.b4, value 3.0)
     values["BH"]     = sargon_import_value(0.0); //(4.0);
     values["BHA"]    = sargon_import_value(0.0);
     values["BHB"]    = sargon_import_value(0.0);
+    for( auto it=cardinal_nbr.begin(); it!=cardinal_nbr.end(); ++it )
+        lines[it->first] = it->first;   // "AGA" -> "AGA" etc 
 }
+
+
+void model()
+{
+    cardinal_nbr["(root)"]  = 0;
+    cardinal_nbr["A"]       = 1;
+    cardinal_nbr["B"]       = 2;
+    cardinal_nbr["AG"]      = 3;
+    cardinal_nbr["AH"]      = 4;
+    cardinal_nbr["AGA"]     = 5;
+    cardinal_nbr["AGB"]     = 6;
+    cardinal_nbr["AHA"]     = 7;
+    cardinal_nbr["AHB"]     = 8;
+    cardinal_nbr["BG"]      = 9;
+    cardinal_nbr["BH"]      = 10;
+    cardinal_nbr["BGA"]     = 11;
+    cardinal_nbr["BGB"]     = 12;
+    cardinal_nbr["BHA"]     = 13;
+    cardinal_nbr["BHB"]     = 14;
+
+    // 1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1
+    thc::ChessPosition cp;
+    cp.Forsyth( "1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1" );
+    printf( "Initial position is %s\n", cp.ToDebugStr().c_str() );
+
+    for( auto it=cardinal_nbr.begin(); it!=cardinal_nbr.end(); ++it )
+        scores[it->first] = 0.0; 
+    lines["(root)"] = "";
+    lines["A"]      = "1.Qg8+";
+    lines["AG"]     = "1.Qg8+ Nxg8";
+    lines["AGA"]    = "1.Qg8+ Nxg8 2.Nf7#";     // mate
+    scores["AGA"]   = 12.0;
+    lines["AGB"]    = "1.Qg8+ Nxg8 2.Nxg8";     // black has huge material plus
+    scores["AGB"]   = -10.0;
+    lines["AH"]     = "1.Qg8+ Rxg8";
+    lines["AHA"]    = "1.Qg8+ Rxg8 2.Nf7#";     // mate
+    scores["AHA"]   = 12.0;
+    lines["AHB"]    = "1.Qg8+ Rxg8 2.Nxg8";     // black has large material plus
+    scores["AHB"]   = -8.0;
+    lines["B"]      = "1.Qa1";
+    lines["BG"]     = "1.Qa1 Rc6";
+    lines["BGA"]    = "1.Qa1 Rc6 2.Nf7+";       // equal(ish)
+    scores["BGA"]   = 0.0;
+    lines["BGB"]    = "1.Qa1 Rc6 2.Ng4";        // equal(ish)
+    scores["BGB"]   = 0.0;
+    lines["BH"]     = "1.Qa1 Ng8";
+    lines["BHA"]    = "1.Qa1 Ng8 2.Nf7#";       // mate
+    scores["BHA"]   = 12.0;
+    lines["BHB"]    = "1.Qa1 Ng8 2.Ng4";        // equal(ish)
+    scores["BHB"]   = 0.0;
+    for( auto it=scores.begin(); it!=scores.end(); ++it )
+        values[it->first] = sargon_import_value(it->second); 
+}
+
+void model2()
+{
+    cardinal_nbr["(root)"]  = 0;
+    cardinal_nbr["A"]       = 1;
+    cardinal_nbr["B"]       = 2;
+    cardinal_nbr["AG"]      = 3;
+    cardinal_nbr["AH"]      = 4;
+    cardinal_nbr["AGA"]     = 5;
+    cardinal_nbr["AGB"]     = 6;
+    cardinal_nbr["AHA"]     = 7;
+    cardinal_nbr["AHB"]     = 8;
+    cardinal_nbr["BG"]      = 9;
+    cardinal_nbr["BH"]      = 10;
+    cardinal_nbr["BGA"]     = 11;
+    cardinal_nbr["BGB"]     = 12;
+    cardinal_nbr["BHA"]     = 13;
+    cardinal_nbr["BHB"]     = 14;
+
+    // 1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1
+    thc::ChessPosition cp;
+    cp.Forsyth( "1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1" );
+    printf( "Initial position is %s\n", cp.ToDebugStr().c_str() );
+
+    for( auto it=cardinal_nbr.begin(); it!=cardinal_nbr.end(); ++it )
+        scores[it->first] = 0.0; 
+    lines["(root)"] = "";
+    lines["A"]      = "1.Qa1";
+    lines["AG"]     = "1.Qa1 Rc6";
+    lines["AGA"]    = "1.Qa1 Rc6 2.Nf7+";       // equal(ish)
+   scores["AGA"]    = 0.0;
+    lines["AGB"]    = "1.Qa1 Rc6 2.Ng4";        // equal(ish)
+   scores["AGB"]    = 0.0;
+    lines["AH"]     = "1.Qa1 Ng8";
+    lines["AHA"]    = "1.Qa1 Ng8 2.Nf7#";       // mate
+   scores["AHA"]    = 12.0;
+    lines["AHB"]    = "1.Qa1 Ng8 2.Ng4";        // equal(ish)
+   scores["AHB"]    = 0.0;
+    lines["B"]      = "1.Qg8+";
+    lines["BG"]     = "1.Qg8+ Nxg8";
+    lines["BGA"]    = "1.Qg8+ Nxg8 2.Nf7#";     // mate
+   scores["BGA"]    = 12.0;
+    lines["BGB"]    = "1.Qg8+ Nxg8 2.Nxg8";     // black has huge material plus
+   scores["BGB"]    = -10.0;
+    lines["BH"]     = "1.Qg8+ Rxg8";
+    lines["BHA"]    = "1.Qg8+ Rxg8 2.Nf7#";     // mate
+   scores["BHA"]    = 12.0;
+    lines["BHB"]    = "1.Qg8+ Rxg8 2.Nxg8";     // black has large material plus
+   scores["BHB"]    = -8.0;
+    for( auto it=scores.begin(); it!=scores.end(); ++it )
+        values[it->first] = sargon_import_value(it->second); 
+}
+
+void model3()
+{
+    cardinal_nbr["(root)"]  = 0;
+    cardinal_nbr["A"]       = 1;
+    cardinal_nbr["B"]       = 2;
+    cardinal_nbr["AG"]      = 3;
+    cardinal_nbr["AH"]      = 4;
+    cardinal_nbr["AGA"]     = 5;
+    cardinal_nbr["AGB"]     = 6;
+    cardinal_nbr["AHA"]     = 7;
+    cardinal_nbr["AHB"]     = 8;
+    cardinal_nbr["BG"]      = 9;
+    cardinal_nbr["BH"]      = 10;
+    cardinal_nbr["BGA"]     = 11;
+    cardinal_nbr["BGB"]     = 12;
+    cardinal_nbr["BHA"]     = 13;
+    cardinal_nbr["BHB"]     = 14;
+
+    // 8/r5kp/6pr/8/1n1N4/6R1/6PP/3R3K w - - 0 1
+    thc::ChessPosition cp;
+    cp.Forsyth( "8/r5kp/6pr/8/1n1N4/6R1/6PP/3R3K w - - 0 1" );
+    printf( "Initial position is %s\n", cp.ToDebugStr().c_str() );
+
+    for( auto it=cardinal_nbr.begin(); it!=cardinal_nbr.end(); ++it )
+        scores[it->first] = 0.0; 
+    lines["(root)"] = "";
+    lines["A"]      = "1.Nf5+";
+    lines["AG"]     = "1.Nf5+ Kh8";
+    lines["AGA"]    = "1.Nf5+ Kh8 2.Nxh6";      // White wins a rook
+   scores["AGA"]    = 5.0;
+    lines["AGB"]    = "1.Nf5+ Kh8 2.Rd8#";      // mate
+   scores["AGB"]    = 12.0;
+    lines["AH"]     = "1.Nf5+ Kg8";
+    lines["AHA"]    = "1.Nf5+ Kg8 2.Nxh6+";     // White wins a rook
+   scores["AHA"]    = 5.1;
+    lines["AHB"]    = "1.Nf5+ Kg8 2.h3";        // equal(ish)
+   scores["AHB"]    = 0.1;
+    lines["B"]      = "1.Ne6+";
+    lines["BG"]     = "1.Ne6+ Kh8";
+    lines["BGA"]    = "1.Ne6+ Kh8 2.h3";        // equal(ish)
+   scores["BGA"]    = 0.2;
+    lines["BGB"]    = "1.Ne6+ Kh8 2.Rd8#";      // mate
+   scores["BGB"]    = 12.0;
+    lines["BH"]     = "1.Ne6+ Kg8";
+    lines["BHA"]    = "1.Ne6+ Kg8 2.h3";        // equal(ish)
+   scores["BHA"]    = 0.3;
+    lines["BHB"]    = "1.Ne6+ Kg8 2.Rd8+";      // equal(ish)
+   scores["BHB"]    = 0.5;
+    for( auto it=scores.begin(); it!=scores.end(); ++it )
+        values[it->first] = sargon_import_value(it->second); 
+}
+
 
 // Calculate a short string key to represent the moves played
 //  eg 1. a4-a5 h6-h5 2. a5-a6 => "AHA"
@@ -414,6 +576,40 @@ static std::string get_position_identifier()
     return key;
 }
 
+
+static std::string get_move_in_line()
+{
+    std::string ret="??";
+    unsigned int  p     = peekw(MLPTRJ);
+    unsigned char from  = peekb(p+2);
+    std::string base = get_position_identifier();   // eg "AG"
+    if( base == "(root)" )
+        base = "";
+    thc::Square sq;
+    bool ok = sargon_export_square(from,sq);
+    if( ok )
+    {
+        std::string temp = base;
+        char c = thc::get_file(sq);
+        temp += c;                              // eg "AGa"
+        std::string key = util::toupper(temp);  // eg "AGA"
+        if( lines.find(key) != lines.end() )
+        {
+            std::string line = lines[key];      // eg "1.e4 e5 2.Nf3"
+            ret = line;                         // eg "1.e4"
+            size_t offset = line.find_last_of(" ");
+            if( offset != std::string::npos )
+            {
+                ret = line.substr(offset+1);    // eg "2.Nf3"
+                if( ret.length() > 0 && !isdigit(ret[0]) )
+                    ret = "1..." + ret;  // eg "e5 -> "1...e5"
+            }
+        }
+    }
+    return ret;
+}
+
+
 // Use a simple example to explore/probe the minimax algorithm and verify it
 static void new_test()
 {
@@ -435,10 +631,12 @@ static void new_test()
     // Note that if alpha_beta=true the resulting node values will result
     // in alpha-beta pruning and all 15 nodes won't be traversed
     //probe_test_prime(false);
-    probe_test_prime_simplified();
+    //probe_test_prime_simplified();
+    //model();
+    model3();
     callback_enabled = true;
     callback_kingmove_suppressed = true;
-    callback_verbosity = 0;
+    callback_verbosity = 2;
     cardinal_list.clear();
     thc::ChessPosition cp;
     cp.Forsyth(pos_probe);
@@ -520,7 +718,7 @@ extern "C" {
                 cardinal_list.push_back(it->second);
                 cardinal = util::sprintf( "%d", it->second );
             }
-            printf( "Position %s, \"%s\" found\n", cardinal.c_str(), key.c_str() );
+            printf( "Position %s, \"%s\" found\n", cardinal.c_str(), lines[key].c_str() );
             auto it2 = values.find(key);
             if( it2 == values.end() )
                 printf( "value not found (?): %s\n", key.c_str() );
@@ -563,15 +761,19 @@ extern "C" {
         //  best move calculation
         else if( callback_verbosity>0 && std::string(msg) == "Alpha beta cutoff?" )
         {
-            printf( "Eval %d, %s\n", peekb(NPLY), get_position_identifier().c_str() );
-            if( callback_verbosity > 1 )
+            std::string line = lines[get_position_identifier()];
+            if( line == "" )
+                line = "(root)";
+            printf( "Eval (ply %d), %s => %s", peekb(NPLY), line.c_str(), get_move_in_line().c_str() );
+            if( callback_verbosity <= 1 )
+                printf( "\n" );
+            else
             {
                 unsigned int al  = reg_eax&0xff;
                 unsigned int bx  = reg_ebx&0xffff;
                 unsigned int val = peekb(bx);
                 bool jmp = (al <= val);
-                printf( "Ply level %d\n", peekb(NPLY));
-                printf( "Alpha beta cutoff? Yes if move value=%d/%.1f <= two lower ply value=%d/%.1f, ",
+                printf( "; Alpha beta cutoff? Yes if move value=%d/%.1f <= two lower ply value=%d/%.1f, ",
                     al,  sargon_export_value(al),
                     val, sargon_export_value(val) );
                 printf( "So %s\n", jmp?"yes":"no" );
@@ -583,7 +785,6 @@ extern "C" {
             unsigned int bx  = reg_ebx&0xffff;
             unsigned int val = peekb(bx);
             bool jmp = (al <= val);
-            printf( "Ply level %d\n", peekb(NPLY));
             printf( "Best move? No if move value=%d/%.1f <= one lower ply value=%d/%.1f, ",
                 al,  sargon_export_value(al),
                 val, sargon_export_value(val) );
@@ -591,14 +792,10 @@ extern "C" {
         }
         else if( callback_verbosity>0 && std::string(msg) == "Yes! Best move" )
         {
-            printf( "Best move, ply level %d, %s\n", peekb(NPLY), get_position_identifier().c_str() );
-            if( callback_verbosity > 1 )
-            {
-                unsigned int p      = peekw(MLPTRJ);
-                unsigned char from  = peekb(p+2);
-                unsigned char to    = peekb(p+3);
-                printf( "Best move found: %s%s\n", algebraic(from).c_str(), algebraic(to).c_str() );
-            }
+            std::string line = lines[get_position_identifier()];
+            if( line == "" )
+                line = "(root)";
+            printf( "Best move, %s => %s\n", line.c_str(), get_move_in_line().c_str() );
         }
     }
 };
