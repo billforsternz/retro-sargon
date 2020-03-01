@@ -43,7 +43,6 @@ static std::vector< NODE > nodes;
 // Control callback() behaviour
 static bool callback_enabled;
 static bool callback_kingmove_suppressed;
-static int callback_verbosity;
 
 int main( int argc, const char *argv[] )
 {
@@ -273,6 +272,76 @@ static std::string get_key()
     return key;
 }
 
+static std::vector<std::string> ascii_art =
+ {
+     "                  AGA" ,   
+     "                 / |"  , 
+     "               AG  |"  , 
+     "              /| \\ |"  , 
+     "             / |  AGB" ,  
+     "            /  |"      ,  
+     "           A   |"      ,  
+     "          /|\\  |"      ,  
+     "         / | \\ |  AHA" ,  
+     "        /  |  \\| / |"  ,  
+     "       /   |   AH  |"  ,  
+     "      /    |     \\ |"  ,  
+     "     /     |      AHB" ,  
+     "    /      |"          ,  
+     " (root)    |"          ,  
+    "    \\      |"          ,  
+    "     \\     |      BGA" ,  
+    "      \\    |     / |"  ,  
+    "       \\   |   BG  |"  ,  
+    "        \\  |  /| \\ |"  ,  
+    "         \\ | / |  BGB" ,  
+    "          \\|/  |"      ,  
+     "           B   |"      ,  
+    "            \\  |"      ,  
+    "             \\ |  BHA" ,  
+    "              \\| / |"  ,  
+     "               BH  |"  ,  
+    "                 \\ |"  ,  
+     "                  BHB"
+ };
+
+enum ProgressType {create,eval,alpha_beta_yes,alpha_beta_no,bestmove_yes,bestmove_no,bestmove_confirmed};
+struct Progress
+{
+    ProgressType pt;
+    std::string key;
+    std::string msg;
+};
+static std::vector<Progress> progress;
+
+
+std::string insert_before_offset( const std::string &s, size_t offset, const std::string &insert )
+{
+    std::string ret;
+    if( insert.length() <= offset )
+    {
+        ret =  s.substr( 0, offset - insert.length() );
+        ret += insert;
+        ret += s.substr( offset );
+    }
+    else
+    {
+        ret =  insert.substr( insert.length() - offset );
+        ret += s.substr( offset );
+    }
+    return ret;    
+}
+
+std::string insert_at_offset( const std::string &s, size_t offset, const std::string &insert )
+{
+    std::string ret;
+    ret =  s.substr( 0, offset );
+    ret += insert;
+    if( offset + insert.length() <= s.length() )
+        ret += s.substr( offset + insert.length() );
+    return ret;    
+}
+
 // Use a simple example to explore/probe the minimax algorithm and verify it
 static void new_test()
 {
@@ -294,7 +363,6 @@ static void new_test()
     build_model(model3);
     callback_enabled = true;
     callback_kingmove_suppressed = true;
-    callback_verbosity = 2;
     thc::ChessPosition cp;
     cp.Forsyth(pos_probe);
     pokeb(MLPTRJ,0); //need to set this ptr to 0 to get Root position recognised in callback()
@@ -307,6 +375,78 @@ static void new_test()
     pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
     nodes.clear();
     sargon(api_CPTRMV);
+
+    // Print textual summary
+    for( Progress prog: progress )
+        printf( "%s\n", prog.msg.c_str() );
+
+    // Annotate ascii-art
+    static std::vector<std::string> ascii_copy = ascii_art;
+    std::string key;
+    for( Progress prog: progress )
+    {
+        // Fill in missing keys
+        if( prog.pt == eval )
+            key = prog.key;
+        if( prog.key == "" )
+            prog.key = key;  // Use key from most recent eval
+
+        // Find the right line to modify
+        if( prog.pt == create )
+        {
+            int idx = -1;
+            size_t offset ;
+            for( unsigned int i=0; i<ascii_art.size(); i++ )
+            {
+                std::string s = ascii_art[i];
+                offset = s.find(prog.key);
+                if( offset != std::string::npos )
+                {
+                    size_t next = offset + prog.key.length();
+                    if( next < s.length() && 'A'<= s[next] && s[next]<='H' ) 
+                        continue;   // eg key = "AG" found "AGH", keep looking
+                    size_t prev = offset - 1;
+                    if( prev >= 0 && 'A'<= s[prev] && s[prev]<='H' ) 
+                        continue;   // eg key = "B" found "AGB", keep looking
+                    idx = i;
+                    break;
+                }
+            }
+
+            // Should always find the key
+            if( idx < 0 )
+            {
+                printf( "Unexpected event, key = %s\n", prog.key.c_str() );
+                continue;
+            }
+
+            std::string s = ascii_art[idx];
+            std::string insert = lines[prog.key];
+            std::string t = insert_at_offset( s, offset, insert );
+            ascii_copy[idx] = t;
+        }
+    }
+
+    // Find cut nodes
+    for( unsigned int i=0; i<ascii_art.size(); i++ )
+    {
+        std::string s = ascii_art[i];
+        std::string t = ascii_copy[i];
+        if( s == t && t.find_first_of("AB") != std::string::npos )
+        {
+            util::replace_all(t,"A","*");
+            util::replace_all(t,"B","*");
+            util::replace_all(t,"G","*");
+            util::replace_all(t,"H","*");
+            ascii_copy[i] = t;
+        }
+    }
+
+    // Print ascii-art
+    for( std::string s: ascii_copy )
+    {
+        printf( "%s\n", s.c_str() );
+    }
 }
 
 extern "C" {
@@ -368,7 +508,11 @@ extern "C" {
         else if( callback_kingmove_suppressed && std::string(msg) == "end of POINTS()" )
         {
             std::string key = get_key();
-            printf( "Position %d, \"%s\" created in tree\n", cardinal_nbr[key], lines[key].c_str() );
+            Progress prog;
+            prog.pt  = create;
+            prog.key = key;
+            prog.msg = util::sprintf( "Position %d, \"%s\" created in tree", cardinal_nbr[key], lines[key].c_str() );
+            progress.push_back(prog);
             unsigned int value = values[key];
             volatile uint32_t *peax = &reg_eax;     // note use of volatile keyword
             *peax = value;                          // MODIFY VALUE !
@@ -376,8 +520,9 @@ extern "C" {
 
         // For purposes of minimax tracing experiment, try to figure out
         //  best move calculation
-        else if( callback_verbosity>0 && std::string(msg) == "Alpha beta cutoff?" )
+        else if( std::string(msg) == "Alpha beta cutoff?" )
         {
+            Progress prog;
             std::string key = get_key();
 
             // Eval takes place after undoing last move, so need to add it back to
@@ -390,33 +535,10 @@ extern "C" {
             if( key == "(root)" )
                 key = "";
             key += toupper(c); 
-            printf( "Eval (ply %d), %s\n", peekb(NPLY), lines[key].c_str() );
-            if( callback_verbosity > 1 )
-            {
-                unsigned int al  = reg_eax&0xff;
-                unsigned int bx  = reg_ebx&0xffff;
-                unsigned int val = peekb(bx);
-                bool jmp = (al <= val);   // Note that Sargon integer values have reverse sense to
-                                          //  float centipawns.
-                                          //  So jmp if al <= val means
-                                          //     jmp if float(al) >= float(val)
-                std::string float_value = (val==0 ? "MAX" : util::sprintf("%.1f",sargon_export_value(val)) ); // Show "MAX" instead of "12.8"
-                if( jmp )
-                {
-                    printf( "Alpha beta cutoff because move value=%.1f >= two lower ply value=%s\n",
-                    sargon_export_value(al),
-                    float_value.c_str() );
-                }
-                else
-                {
-                    printf( "No alpha beta cutoff because move value=%.1f < two lower ply value=%s\n",
-                    sargon_export_value(al),
-                    float_value.c_str() );
-                }
-            }
-        }
-        else if( callback_verbosity>1 && std::string(msg) == "No. Best move?" )
-        {
+            prog.key = key;
+            prog.pt  = eval;
+            prog.msg = util::sprintf( "Eval (ply %d), %s", peekb(NPLY), lines[key].c_str() );
+            progress.push_back(prog);
             unsigned int al  = reg_eax&0xff;
             unsigned int bx  = reg_ebx&0xffff;
             unsigned int val = peekb(bx);
@@ -427,20 +549,53 @@ extern "C" {
             std::string float_value = (val==0 ? "MAX" : util::sprintf("%.1f",sargon_export_value(val)) ); // Show "MAX" instead of "12.8"
             if( jmp )
             {
-                printf( "Not best move because negated move value=%.1f >= one lower ply value=%s\n",
+                prog.pt  = alpha_beta_yes;
+                prog.msg = util::sprintf( "Alpha beta cutoff because move value=%.1f >= two lower ply value=%s",
                 sargon_export_value(al),
                 float_value.c_str() );
             }
             else
             {
-                printf( "Best move because negated move value=%.1f < one lower ply value=%s\n",
+                prog.pt  = alpha_beta_no;
+                prog.msg = util::sprintf( "No alpha beta cutoff because move value=%.1f < two lower ply value=%s",
                 sargon_export_value(al),
                 float_value.c_str() );
             }
+            progress.push_back(prog);
         }
-        else if( callback_verbosity>0 && std::string(msg) == "Yes! Best move" )
+        else if( std::string(msg) == "No. Best move?" )
         {
-            printf( "(Confirming best move)\n" );
+            Progress prog;
+            unsigned int al  = reg_eax&0xff;
+            unsigned int bx  = reg_ebx&0xffff;
+            unsigned int val = peekb(bx);
+            bool jmp = (al <= val);   // Note that Sargon integer values have reverse sense to
+                                      //  float centipawns.
+                                      //  So jmp if al <= val means
+                                      //     jmp if float(al) >= float(val)
+            std::string float_value = (val==0 ? "MAX" : util::sprintf("%.1f",sargon_export_value(val)) ); // Show "MAX" instead of "12.8"
+            if( jmp )
+            {
+                prog.pt  = bestmove_no;
+                prog.msg = util::sprintf( "Not best move because negated move value=%.1f >= one lower ply value=%s",
+                sargon_export_value(al),
+                float_value.c_str() );
+            }
+            else
+            {
+                prog.pt  = bestmove_yes;
+                prog.msg = util::sprintf( "Best move because negated move value=%.1f < one lower ply value=%s",
+                sargon_export_value(al),
+                float_value.c_str() );
+            }
+            progress.push_back(prog);
+        }
+        else if( std::string(msg) == "Yes! Best move" )
+        {
+            Progress prog;
+            prog.pt  = bestmove_confirmed;
+            prog.msg = "(Confirming best move)";
+            progress.push_back(prog);
         }
     }
 };
