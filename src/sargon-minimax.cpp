@@ -21,14 +21,11 @@
 #include "sargon-asm-interface.h"
 #include "sargon-interface.h"
 
-// Individual tests
-bool sargon_algorithm_explore( bool quiet, bool alpha_beta );
-
-// Suites of tests
-bool sargon_tests_quiet();
-
-static std::string get_position_identifier();
+// Misc
+struct Position;
+static void build_model( const std::vector<Position> &model );
 static void new_test();
+static std::string get_key();
 
 // Nodes to track the PV (principal [primary?] variation)
 struct NODE
@@ -47,12 +44,6 @@ static std::vector< NODE > nodes;
 static bool callback_enabled;
 static bool callback_kingmove_suppressed;
 static int callback_verbosity;
-static std::vector<unsigned int> cardinal_list;
-
-// Prime the callback routine to modify node values for simple 15 node minimax
-//  algorithm example
-void probe_test_prime( bool alpha_beta );
-
 
 int main( int argc, const char *argv[] )
 {
@@ -60,421 +51,135 @@ int main( int argc, const char *argv[] )
     return 0;
 }
 
-
 // Data structures to track the 15 positions in minimax example
 static std::map<std::string,unsigned int> values;
 static std::map<std::string,unsigned int> cardinal_nbr;
 static std::map<std::string,std::string> lines;
 static std::map<std::string,double> scores;
 
-// Prime the callback routine to modify node values for simple 15 node minimax
-//  algorithm example
-void probe_test_prime( bool alpha_beta )
+struct Position
+{
+    std::string key;
+    std::string moves;
+    double score;
+};
+
+// White can take a bishop or fork king queen and rook
+static std::vector<Position> model1 =
+{
+   { "(root)", "7k/R1ppp1p1/1p6/4q3/5N1r/3b3P/PP3PP1/Q5K1 w - - 0 1",  0.0},
+   { "A"     , "1.Nxd3",                0.0  },
+   { "AG"    , "1.Nxd3 Qd6",            0.0  },
+   { "AGA"   , "1.Nxd3 Qd6 2.Ne1",      3.3  },    // White wins a bishop
+   { "AGB"   , "1.Nxd3 Qd6 2.Qb1",      3.0  },    // White wins a bishop
+   { "AH"    , "1.Nxd3 Qg5",            0.0  },
+   { "AHA"   , "1.Nxd3 Qg5 2.Rxc7",     3.1  },    // White wins a bishop
+   { "AHB"   , "1.Nxd3 Qg5 2.Kh2",      3.2  },    // White wins a bishop
+   { "B"     , "1.Ng6+",                0.0  },
+   { "BG"    , "1.Ng6+ Kh7",            0.0  },
+   { "BGA"   , "1.Ng6+ Kh7 2.Nxe5",     9.2  },    // White wins a queen
+   { "BGB"   , "1.Ng6+ Kh7 2.Nxh4",     5.0  },    // White wins a rook
+   { "BH"    , "1.Ng6+ Kg8",            0.0  },
+   { "BHA"   , "1.Ng6+ Kg8 2.Nxe5",     9.0  },    // White wins a queen
+   { "BHB"   , "1.Ng6+ Kg8 2.Nxh4",     5.2  }     // White wins a rook
+};
+
+// White can give Philidor's mate, or defend
+static std::vector<Position> model2 =
+{
+    { "(root)", "1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1", 0.0 },
+    { "A"     , "1.Qg8+",               0.0   },
+    { "AG"    , "1.Qg8+ Nxg8",          0.0   },
+    { "AGA"   , "1.Qg8+ Nxg8 2.Nf7#",   12.0  },   // White gives mate
+    { "AGB"   , "1.Qg8+ Nxg8 2.Nxg8",   -10.0 },   // Black has huge material plus
+    { "AH"    , "1.Qg8+ Rxg8",          0.0   },
+    { "AHA"   , "1.Qg8+ Rxg8 2.Nf7#",   12.0  },   // White gives mate
+    { "AHB"   , "1.Qg8+ Rxg8 2.Nxg8",   -8.0  },   // Black has large material plus
+    { "B"     , "1.Qa1",                0.0   },
+    { "BG"    , "1.Qa1 Rc6",            0.0   },
+    { "BGA"   , "1.Qa1 Rc6 2.Nf7+",     0.0   },   // equal(ish)
+    { "BGB"   , "1.Qa1 Rc6 2.Ng4",      0.0   },   // equal(ish)
+    { "BH"    , "1.Qa1 Ng8",            0.0   },
+    { "BHA"   , "1.Qa1 Ng8 2.Nf7#",     12.0  },   // White gives mate
+    { "BHB"   , "1.Qa1 Ng8 2.Ng4",      0.0   }    // equal(ish)
+};
+
+// White can give defend or give Philidor's mate (same as above, with
+//  first move reversed)
+static std::vector<Position> model3 =
+{
+    { "(root)", "1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1", 0.0 },
+    { "A"     , "1.Qa1",                0.0   },
+    { "AG"    , "1.Qa1 Rc6",            0.0   },
+    { "AGA"   , "1.Qa1 Rc6 2.Nf7+",     0.0   },   // equal(ish)
+    { "AGB"   , "1.Qa1 Rc6 2.Ng4",      0.0   },   // equal(ish)
+    { "AH"    , "1.Qa1 Ng8",            0.0   },
+    { "AHA"   , "1.Qa1 Ng8 2.Nf7#",     12.0  },   // White gives mate
+    { "AHB"   , "1.Qa1 Ng8 2.Ng4",      0.0   },   // equal(ish)
+    { "B"     , "1.Qg8+",               0.0   },
+    { "BG"    , "1.Qg8+ Nxg8",          0.0   },
+    { "BGA"   , "1.Qg8+ Nxg8 2.Nf7#",   12.0  },   // White gives mate
+    { "BGB"   , "1.Qg8+ Nxg8 2.Nxg8",   -10.0 },   // Black has huge material plus
+    { "BH"    , "1.Qg8+ Rxg8",          0.0   },
+    { "BHA"   , "1.Qg8+ Rxg8 2.Nf7#",   12.0  },   // White gives mate
+    { "BHB"   , "1.Qg8+ Rxg8 2.Nxg8",   -8.0  }    // Black has large material plus
+};
+
+// White can win a rook, or give mate in some lines
+static std::vector<Position> model4 =
+{
+    { "(root)", "8/r5kp/6pr/8/1n1N4/6R1/6PP/3R3K w - - 0 1", 0.0 },
+    { "A"     , "1.Nf5+",               0.0  },
+    { "AG"    , "1.Nf5+ Kh8",           0.0  },
+    { "AGA"   , "1.Nf5+ Kh8 2.Nxh6",    5.0  },    // White wins a rook
+    { "AGB"   , "1.Nf5+ Kh8 2.Rd8#",    12.0 },    // White gives mate
+    { "AH"    , "1.Nf5+ Kg8",           0.0  },
+    { "AHA"   , "1.Nf5+ Kg8 2.Nxh6+",   5.1  },    // White wins a rook
+    { "AHB"   , "1.Nf5+ Kg8 2.h3",      0.1  },    // equal(ish)
+    { "B"     , "1.Ne6+",               0.0  },
+    { "BG"    , "1.Ne6+ Kh8",           0.0  },
+    { "BGA"   , "1.Ne6+ Kh8 2.h3",      0.2  },    // equal(ish)
+    { "BGB"   , "1.Ne6+ Kh8 2.Rd8#",    12.0 },    // White gives mate
+    { "BH"    , "1.Ne6+ Kg8",           0.0  },
+    { "BHA"   , "1.Ne6+ Kg8 2.h3",      0.3  },    // equal(ish)
+    { "BHB"   , "1.Ne6+ Kg8 2.Rd8+",    0.5  }     // equal(ish)
+};
+
+static void build_model( const std::vector<Position> &model )
 {
     cardinal_nbr["(root)"]  = 0;
     cardinal_nbr["A"]       = 1;
     cardinal_nbr["B"]       = 2;
     cardinal_nbr["AG"]      = 3;
     cardinal_nbr["AH"]      = 4;
-    cardinal_nbr["AGB"]     = 5;
-    cardinal_nbr["AGA"]     = 6;
-    cardinal_nbr["AHB"]     = 7;
-    cardinal_nbr["AHA"]     = 8;
+    cardinal_nbr["AGA"]     = 5;
+    cardinal_nbr["AGB"]     = 6;
+    cardinal_nbr["AHA"]     = 7;
+    cardinal_nbr["AHB"]     = 8;
     cardinal_nbr["BG"]      = 9;
     cardinal_nbr["BH"]      = 10;
     cardinal_nbr["BGA"]     = 11;
     cardinal_nbr["BGB"]     = 12;
     cardinal_nbr["BHA"]     = 13;
     cardinal_nbr["BHB"]     = 14;
-
-/*
-
-Example 1, no Alpha Beta pruning (move played is 1.b4, value 3.0)
-
-     <-MAX       <-MIN       <-MAX
-
-0-------+-----1-----+-----3-----+------5 
-0.0->3.0|   1.a4    |   1...g5  |    2.b4
-        | 8.0->2.0  |  7.0->5.0 |       5.0
-        |           |           |     <-5.0
-        |           |           |     
-        |           |           +------6 
-        |           |                2.a5
-        |           |                   4.0
-        |           |               
-        |           |               
-        |           +-----4-----+------7 
-        |              1...h5   |    2.b4
-        |              3.0->2.0 |       1.0
-        |                 <-2.0 |        
-        |                       |     
-        |                       +------8 
-        |                            2.a5
-        |                               2.0
-        |                             <-2.0
-        |                           
-        +------2----+-----9-----+------11
-            1.b4    |  1...g5   |    2.a4
-          6.0->3.0  |  5.5->4.0 |       4.0
-             <-3.0  |           |     <-4.0
-                    |           |    
-                    |           |    
-                    |           +------12
-                    |                2.b5
-                    |                   3.0
-                    |             
-                    |             
-                    |             
-                    +-----10----+------13
-                       1...h5   |    2.a4
-                       4.0->3.0 |       3.0
-                          <-3.0 |     <-3.0
-                                |    
-                                |    
-                                +------14
-                                     2.b5
-                                        1.0
-                                        1.0
-
-*/
-    if( !alpha_beta )
+    thc::ChessPosition cp;
+    const char *fen = model[0].moves.c_str();
+    cp.Forsyth( fen );
+    printf( "Initial position is %s\n", cp.ToDebugStr().c_str() );
+    bool skip=true; // skip the first
+    for( Position pos: model )
     {
-        values["(root)"] = sargon_import_value(0.0);
-        values["A"]      = sargon_import_value(8.0);
-        values["AG"]     = sargon_import_value(7.0);
-        values["AGB"]    = sargon_import_value(5.0);
-        values["AGA"]    = sargon_import_value(4.0);
-        values["AH"]     = sargon_import_value(3.0);
-        values["AHB"]    = sargon_import_value(1.0);
-        values["AHA"]    = sargon_import_value(2.0);
-        values["B"]      = sargon_import_value(6.0);
-        values["BG"]     = sargon_import_value(5.5);
-        values["BGA"]    = sargon_import_value(4.0);
-        values["BGB"]    = sargon_import_value(3.0);
-        values["BH"]     = sargon_import_value(4.0);
-        values["BHA"]    = sargon_import_value(3.0);
-        values["BHB"]    = sargon_import_value(1.0);
+        lines[pos.key]  = pos.moves;
+        scores[pos.key] = pos.score;
+        values[pos.key] = sargon_import_value(pos.score); 
     }
-/*
-
-Example 2, Alpha Beta pruning (move played is 1.a4, value 5.0)
-
-     <-MAX       <-MIN       <-MAX
-
-0-------+-----1-----+-----3-----+------5 
-0.0->5.0|   1.a4    |   1...g5  |    2.b4
-        | 6.0->5.0  |  6.0->5.0 |       5.0
-        |    <-5.0  |     <-5.0 |     <-5.0
-        |           |           |     
-        |           |           +------6 
-        |           |                2.a5
-        |           |                   4.0
-        |           |               
-        |           |               
-        |           +-----4-----+------7 
-        |              1...h5   |    2.b4
-        |              4.0      |      11.0  Cutoff 11.0>5.0, guarantees 4,7,8 won't affect score of
-        |                       |            node 1 (nodes marked with * not evaluated)
-        |                       |     
-        |                       +------8*
-        |                                  
-        |                                  
-        |                                  
-        |                           
-        +------2----+-----9-----+------11
-            1.b4    |  1...g5   |    2.a4
-          6.0->4.0  |  6.0->4.0 |       4.0
-                    |     <-4.0 |     <-4.0
-                    |           |    
-                    |           |    
-                    |           +------12
-                    |                2.b5
-                    |                   3.0  Cutoff, at this point we can be sure node 2 is going to be
-                    |                        4.0 or lower, irrespective of nodes 10,13,14, therefore
-                    |                        node 2 cannot beat node 1
-                    |             
-                    +-----10----+------13*
-                       1...h5   |    2.a4
-                       4.0      |          
-                                |    
-                                |    
-                                |    
-                                +------14*
-                                     2.b5
-                                           
-
-*/
-
-    if( alpha_beta )
-    {
-        values["(root)"] = sargon_import_value(0.0);
-        values["A"]      = sargon_import_value(6.0);
-        values["AG"]     = sargon_import_value(6.0);
-        values["AGB"]    = sargon_import_value(5.0);
-        values["AGA"]    = sargon_import_value(4.0);
-        values["AH"]     = sargon_import_value(4.0);
-        values["AHB"]    = sargon_import_value(11.0);
-        values["AHA"]    = sargon_import_value(2.0);
-        values["B"]      = sargon_import_value(6.0);
-        values["BG"]     = sargon_import_value(6.0);
-        values["BGA"]    = sargon_import_value(4.0);
-        values["BGB"]    = sargon_import_value(3.0);
-        values["BH"]     = sargon_import_value(4.0);
-        values["BHA"]    = sargon_import_value(1.0);
-        values["BHB"]    = sargon_import_value(3.0);
-    }
-}
-
-
-// Simplified version
-void probe_test_prime_simplified()
-{
-    cardinal_nbr["(root)"]  = 0;
-    cardinal_nbr["A"]       = 1;
-    cardinal_nbr["B"]       = 2;
-    cardinal_nbr["AG"]      = 3;
-    cardinal_nbr["AH"]      = 4;
-    cardinal_nbr["AGA"]     = 5;
-    cardinal_nbr["AGB"]     = 6;
-    cardinal_nbr["AHA"]     = 7;
-    cardinal_nbr["AHB"]     = 8;
-    cardinal_nbr["BG"]      = 9;
-    cardinal_nbr["BH"]      = 10;
-    cardinal_nbr["BGA"]     = 11;
-    cardinal_nbr["BGB"]     = 12;
-    cardinal_nbr["BHA"]     = 13;
-    cardinal_nbr["BHB"]     = 14;
-
-/*
-
-Example 1, no Alpha Beta pruning (move played is 1.b4, value 3.0)
-
-     <-MAX       <-MIN       <-MAX
-
-0-------+-----1-----+-----3-----+------5 
-0.0->3.0|   1.a4    |   1...g5  |    2.b4
-        | 8.0->2.0  |  7.0->5.0 |       5.0
-        |           |           |     <-5.0
-        |           |           |     
-        |           |           +------6 
-        |           |                2.a5
-        |           |                   4.0
-        |           |               
-        |           |               
-        |           +-----4-----+------7 
-        |              1...h5   |    2.b4
-        |              3.0->2.0 |       1.0
-        |                 <-2.0 |        
-        |                       |     
-        |                       +------8 
-        |                            2.a5
-        |                               2.0
-        |                             <-2.0
-        |                           
-        +------2----+-----9-----+------11
-            1.b4    |  1...g5   |    2.a4
-          6.0->3.0  |  5.5->4.0 |       4.0
-             <-3.0  |           |     <-4.0
-                    |           |    
-                    |           |    
-                    |           +------12
-                    |                2.b5
-                    |                   3.0
-                    |             
-                    |             
-                    |             
-                    +-----10----+------13
-                       1...h5   |    2.a4
-                       4.0->3.0 |       3.0
-                          <-3.0 |     <-3.0
-                                |    
-                                |    
-                                +------14
-                                     2.b5
-                                        1.0
-                                        1.0
-
-*/
-    values["(root)"] = sargon_import_value(0.0); //(0.0);
-    values["A"]      = sargon_import_value(0.0); //(8.0);
-    values["AG"]     = sargon_import_value(0.0); //(7.0);
-    values["AGB"]    = sargon_import_value(5.0);
-    values["AGA"]    = sargon_import_value(4.0);
-    values["AH"]     = sargon_import_value(0.0); //(3.0);
-    values["AHB"]    = sargon_import_value(1.0);
-    values["AHA"]    = sargon_import_value(2.0);
-    values["B"]      = sargon_import_value(0.0); //(6.0);
-    values["BG"]     = sargon_import_value(0.0); //(5.5);
-    values["BGA"]    = sargon_import_value(2.1);  // <-- 2.1, 2.5, 3.0, 4.0 ok 0.0, 1.0, 1.9, 2.0 not ok MUST BE > "AHA"
-    values["BGB"]    = sargon_import_value(0.0);
-    values["BH"]     = sargon_import_value(0.0); //(4.0);
-    values["BHA"]    = sargon_import_value(0.0);
-    values["BHB"]    = sargon_import_value(0.0);
-    for( auto it=cardinal_nbr.begin(); it!=cardinal_nbr.end(); ++it )
-        lines[it->first] = it->first;   // "AGA" -> "AGA" etc 
-}
-
-
-void model()
-{
-    cardinal_nbr["(root)"]  = 0;
-    cardinal_nbr["A"]       = 1;
-    cardinal_nbr["B"]       = 2;
-    cardinal_nbr["AG"]      = 3;
-    cardinal_nbr["AH"]      = 4;
-    cardinal_nbr["AGA"]     = 5;
-    cardinal_nbr["AGB"]     = 6;
-    cardinal_nbr["AHA"]     = 7;
-    cardinal_nbr["AHB"]     = 8;
-    cardinal_nbr["BG"]      = 9;
-    cardinal_nbr["BH"]      = 10;
-    cardinal_nbr["BGA"]     = 11;
-    cardinal_nbr["BGB"]     = 12;
-    cardinal_nbr["BHA"]     = 13;
-    cardinal_nbr["BHB"]     = 14;
-
-    // 1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1
-    thc::ChessPosition cp;
-    cp.Forsyth( "1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1" );
-    printf( "Initial position is %s\n", cp.ToDebugStr().c_str() );
-
-    for( auto it=cardinal_nbr.begin(); it!=cardinal_nbr.end(); ++it )
-        scores[it->first] = 0.0; 
-    lines["(root)"] = "";
-    lines["A"]      = "1.Qg8+";
-    lines["AG"]     = "1.Qg8+ Nxg8";
-    lines["AGA"]    = "1.Qg8+ Nxg8 2.Nf7#";     // mate
-    scores["AGA"]   = 12.0;
-    lines["AGB"]    = "1.Qg8+ Nxg8 2.Nxg8";     // black has huge material plus
-    scores["AGB"]   = -10.0;
-    lines["AH"]     = "1.Qg8+ Rxg8";
-    lines["AHA"]    = "1.Qg8+ Rxg8 2.Nf7#";     // mate
-    scores["AHA"]   = 12.0;
-    lines["AHB"]    = "1.Qg8+ Rxg8 2.Nxg8";     // black has large material plus
-    scores["AHB"]   = -8.0;
-    lines["B"]      = "1.Qa1";
-    lines["BG"]     = "1.Qa1 Rc6";
-    lines["BGA"]    = "1.Qa1 Rc6 2.Nf7+";       // equal(ish)
-    scores["BGA"]   = 0.0;
-    lines["BGB"]    = "1.Qa1 Rc6 2.Ng4";        // equal(ish)
-    scores["BGB"]   = 0.0;
-    lines["BH"]     = "1.Qa1 Ng8";
-    lines["BHA"]    = "1.Qa1 Ng8 2.Nf7#";       // mate
-    scores["BHA"]   = 12.0;
-    lines["BHB"]    = "1.Qa1 Ng8 2.Ng4";        // equal(ish)
-    scores["BHB"]   = 0.0;
-    for( auto it=scores.begin(); it!=scores.end(); ++it )
-        values[it->first] = sargon_import_value(it->second); 
-}
-
-void model2()
-{
-    cardinal_nbr["(root)"]  = 0;
-    cardinal_nbr["A"]       = 1;
-    cardinal_nbr["B"]       = 2;
-    cardinal_nbr["AG"]      = 3;
-    cardinal_nbr["AH"]      = 4;
-    cardinal_nbr["AGA"]     = 5;
-    cardinal_nbr["AGB"]     = 6;
-    cardinal_nbr["AHA"]     = 7;
-    cardinal_nbr["AHB"]     = 8;
-    cardinal_nbr["BG"]      = 9;
-    cardinal_nbr["BH"]      = 10;
-    cardinal_nbr["BGA"]     = 11;
-    cardinal_nbr["BGB"]     = 12;
-    cardinal_nbr["BHA"]     = 13;
-    cardinal_nbr["BHB"]     = 14;
-
-    // 1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1
-    thc::ChessPosition cp;
-    cp.Forsyth( "1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1" );
-    printf( "Initial position is %s\n", cp.ToDebugStr().c_str() );
-
-    for( auto it=cardinal_nbr.begin(); it!=cardinal_nbr.end(); ++it )
-        scores[it->first] = 0.0; 
-    lines["(root)"] = "";
-    lines["A"]      = "1.Qa1";
-    lines["AG"]     = "1.Qa1 Rc6";
-    lines["AGA"]    = "1.Qa1 Rc6 2.Nf7+";       // equal(ish)
-   scores["AGA"]    = 0.0;
-    lines["AGB"]    = "1.Qa1 Rc6 2.Ng4";        // equal(ish)
-   scores["AGB"]    = 0.0;
-    lines["AH"]     = "1.Qa1 Ng8";
-    lines["AHA"]    = "1.Qa1 Ng8 2.Nf7#";       // mate
-   scores["AHA"]    = 12.0;
-    lines["AHB"]    = "1.Qa1 Ng8 2.Ng4";        // equal(ish)
-   scores["AHB"]    = 0.0;
-    lines["B"]      = "1.Qg8+";
-    lines["BG"]     = "1.Qg8+ Nxg8";
-    lines["BGA"]    = "1.Qg8+ Nxg8 2.Nf7#";     // mate
-   scores["BGA"]    = 12.0;
-    lines["BGB"]    = "1.Qg8+ Nxg8 2.Nxg8";     // black has huge material plus
-   scores["BGB"]    = -10.0;
-    lines["BH"]     = "1.Qg8+ Rxg8";
-    lines["BHA"]    = "1.Qg8+ Rxg8 2.Nf7#";     // mate
-   scores["BHA"]    = 12.0;
-    lines["BHB"]    = "1.Qg8+ Rxg8 2.Nxg8";     // black has large material plus
-   scores["BHB"]    = -8.0;
-    for( auto it=scores.begin(); it!=scores.end(); ++it )
-        values[it->first] = sargon_import_value(it->second); 
-}
-
-void model3()
-{
-    cardinal_nbr["(root)"]  = 0;
-    cardinal_nbr["A"]       = 1;
-    cardinal_nbr["B"]       = 2;
-    cardinal_nbr["AG"]      = 3;
-    cardinal_nbr["AH"]      = 4;
-    cardinal_nbr["AGA"]     = 5;
-    cardinal_nbr["AGB"]     = 6;
-    cardinal_nbr["AHA"]     = 7;
-    cardinal_nbr["AHB"]     = 8;
-    cardinal_nbr["BG"]      = 9;
-    cardinal_nbr["BH"]      = 10;
-    cardinal_nbr["BGA"]     = 11;
-    cardinal_nbr["BGB"]     = 12;
-    cardinal_nbr["BHA"]     = 13;
-    cardinal_nbr["BHB"]     = 14;
-
-    // 8/r5kp/6pr/8/1n1N4/6R1/6PP/3R3K w - - 0 1
-    thc::ChessPosition cp;
-    cp.Forsyth( "8/r5kp/6pr/8/1n1N4/6R1/6PP/3R3K w - - 0 1" );
-    printf( "Initial position is %s\n", cp.ToDebugStr().c_str() );
-
-    for( auto it=cardinal_nbr.begin(); it!=cardinal_nbr.end(); ++it )
-        scores[it->first] = 0.0; 
-    lines["(root)"] = "";
-    lines["A"]      = "1.Nf5+";
-    lines["AG"]     = "1.Nf5+ Kh8";
-    lines["AGA"]    = "1.Nf5+ Kh8 2.Nxh6";      // White wins a rook
-   scores["AGA"]    = 5.0;
-    lines["AGB"]    = "1.Nf5+ Kh8 2.Rd8#";      // mate
-   scores["AGB"]    = 12.0;
-    lines["AH"]     = "1.Nf5+ Kg8";
-    lines["AHA"]    = "1.Nf5+ Kg8 2.Nxh6+";     // White wins a rook
-   scores["AHA"]    = 5.1;
-    lines["AHB"]    = "1.Nf5+ Kg8 2.h3";        // equal(ish)
-   scores["AHB"]    = 0.1;
-    lines["B"]      = "1.Ne6+";
-    lines["BG"]     = "1.Ne6+ Kh8";
-    lines["BGA"]    = "1.Ne6+ Kh8 2.h3";        // equal(ish)
-   scores["BGA"]    = 0.2;
-    lines["BGB"]    = "1.Ne6+ Kh8 2.Rd8#";      // mate
-   scores["BGB"]    = 12.0;
-    lines["BH"]     = "1.Ne6+ Kg8";
-    lines["BHA"]    = "1.Ne6+ Kg8 2.h3";        // equal(ish)
-   scores["BHA"]    = 0.3;
-    lines["BHB"]    = "1.Ne6+ Kg8 2.Rd8+";      // equal(ish)
-   scores["BHB"]    = 0.5;
-    for( auto it=scores.begin(); it!=scores.end(); ++it )
-        values[it->first] = sargon_import_value(it->second); 
+    lines["(root)"]  = "(root)";    // Because we used this one for the FEN
 }
 
 
 // Calculate a short string key to represent the moves played
 //  eg 1. a4-a5 h6-h5 2. a5-a6 => "AHA"
-static std::string get_position_identifier()
+static std::string get_key()
 {
     thc::ChessPosition cp;
     sargon_export_position( cp );
@@ -538,77 +243,35 @@ static std::string get_position_identifier()
         {
             // In other three move cases we can't work out the whole sequence of moves unless we know
             //  the last move, try to rely on this as little as possible
-            bool a_last = false;
-            bool b_last = false;
-            bool g_last = false;
-            bool h_last = false;
-            unsigned int p = peekw(MLPTRJ);         // Load ptr to last move, use this to disambiguate if required
+            unsigned int p = peekw(MLPTRJ);  // Load ptr to last move
             unsigned char from  = p ? peekb(p+2) : 0;
             thc::Square sq_from;
             bool ok_from = sargon_export_square(from,sq_from);
             if( ok_from )
             {
-                a_last = (thc::get_file(sq_from) == 'a');
-                b_last = (thc::get_file(sq_from) == 'b');
-                g_last = (thc::get_file(sq_from) == 'g');
-                h_last = (thc::get_file(sq_from) == 'h');
-            }
-            if( a1 && g1 && b1 )
-            {
-                if ( a_last )
-                    key = "BGA";
-                else if ( b_last )
-                    key = "AGB";
-                else
-                    key = "[A|B]G[B|A]";    // just in case, never actually observed
-            }
-            else if( a1 && h1 && b1 )
-            {
-                if ( a_last )
-                    key = "BHA";
-                else if ( b_last )
-                    key = "AHB";
-                else
-                    key = "[A|B]H[B|A]";    // just in case, never actually observed
+                bool a_last = (thc::get_file(sq_from) == 'a');
+                bool b_last = (thc::get_file(sq_from) == 'b');
+                bool g_last = (thc::get_file(sq_from) == 'g');
+                bool h_last = (thc::get_file(sq_from) == 'h');
+                if( a1 && g1 && b1 )
+                {
+                    if ( a_last )
+                        key = "BGA";
+                    else if ( b_last )
+                        key = "AGB";
+                }
+                else if( a1 && h1 && b1 )
+                {
+                    if ( a_last )
+                        key = "BHA";
+                    else if ( b_last )
+                        key = "AHB";
+                }
             }
         }
     }
     return key;
 }
-
-
-static std::string get_move_in_line()
-{
-    std::string ret="??";
-    unsigned int  p     = peekw(MLPTRJ);
-    unsigned char from  = peekb(p+2);
-    std::string base = get_position_identifier();   // eg "AG"
-    if( base == "(root)" )
-        base = "";
-    thc::Square sq;
-    bool ok = sargon_export_square(from,sq);
-    if( ok )
-    {
-        std::string temp = base;
-        char c = thc::get_file(sq);
-        temp += c;                              // eg "AGa"
-        std::string key = util::toupper(temp);  // eg "AGA"
-        if( lines.find(key) != lines.end() )
-        {
-            std::string line = lines[key];      // eg "1.e4 e5 2.Nf3"
-            ret = line;                         // eg "1.e4"
-            size_t offset = line.find_last_of(" ");
-            if( offset != std::string::npos )
-            {
-                ret = line.substr(offset+1);    // eg "2.Nf3"
-                if( ret.length() > 0 && !isdigit(ret[0]) )
-                    ret = "1..." + ret;  // eg "e5 -> "1...e5"
-            }
-        }
-    }
-    return ret;
-}
-
 
 // Use a simple example to explore/probe the minimax algorithm and verify it
 static void new_test()
@@ -628,16 +291,10 @@ static void new_test()
     //  callback facility to monitor the algorithm and indeed actively
     //  interfere with it by changing the node evals and watching how that
     //  effects node traversal and generates a best move.
-    // Note that if alpha_beta=true the resulting node values will result
-    // in alpha-beta pruning and all 15 nodes won't be traversed
-    //probe_test_prime(false);
-    //probe_test_prime_simplified();
-    //model();
-    model3();
+    build_model(model3);
     callback_enabled = true;
     callback_kingmove_suppressed = true;
     callback_verbosity = 2;
-    cardinal_list.clear();
     thc::ChessPosition cp;
     cp.Forsyth(pos_probe);
     pokeb(MLPTRJ,0); //need to set this ptr to 0 to get Root position recognised in callback()
@@ -710,73 +367,52 @@ extern "C" {
         //  managable levels.)
         else if( callback_kingmove_suppressed && std::string(msg) == "end of POINTS()" )
         {
-            std::string key = get_position_identifier();
-            std::string cardinal("??");
-            auto it = cardinal_nbr.find(key);
-            if( it != cardinal_nbr.end() )
-            {                                  
-                cardinal_list.push_back(it->second);
-                cardinal = util::sprintf( "%d", it->second );
-            }
-            printf( "Position %s, \"%s\" found\n", cardinal.c_str(), lines[key].c_str() );
-            auto it2 = values.find(key);
-            if( it2 == values.end() )
-                printf( "value not found (?): %s\n", key.c_str() );
-            else
-            {
-                // MODIFY VALUE !
-                unsigned int value = it2->second;
-                volatile uint32_t *peax = &reg_eax;
-                *peax = value;
-            }
-            if( callback_verbosity >= 3 )
-            {
-                unsigned int p = peekw(MLPTRJ); // Load move list pointer
-                unsigned char from  = p ? peekb(p+2) : 0;
-                unsigned char to    = p ? peekb(p+3) : 0;
-                unsigned int value = reg_eax&0xff;
-                thc::ChessPosition cp;
-                sargon_export_position( cp );
-                thc::Square sq_from, sq_to;
-                bool ok = sargon_export_square(from,sq_from);
-                bool root = !ok;
-                sargon_export_square(to,sq_to);
-                char f1 = thc::get_file(sq_from);
-                char f2 = thc::get_rank(sq_from);
-                char t1 = thc::get_file(sq_to);
-                char t2 = thc::get_rank(sq_to);
-                bool was_black = (root || f1=='g' || f1=='h');
-                cp.white = was_black;
-                static int count;
-                std::string s;
-                if( root )
-                    s = util::sprintf( "%d> value=%d/%.1f", count++, value, sargon_export_value(value) );
-                else
-                    s = util::sprintf( "%d>. Last move: %c%c%c%c value=%d/%.1f", count++, f1,f2,t1,t2, value, sargon_export_value(value) );
-                printf( "%s\n", cp.ToDebugStr(s.c_str()).c_str() );
-            }
+            std::string key = get_key();
+            printf( "Position %d, \"%s\" created in tree\n", cardinal_nbr[key], lines[key].c_str() );
+            unsigned int value = values[key];
+            volatile uint32_t *peax = &reg_eax;     // note use of volatile keyword
+            *peax = value;                          // MODIFY VALUE !
         }
 
         // For purposes of minimax tracing experiment, try to figure out
         //  best move calculation
         else if( callback_verbosity>0 && std::string(msg) == "Alpha beta cutoff?" )
         {
-            std::string line = lines[get_position_identifier()];
-            if( line == "" )
-                line = "(root)";
-            printf( "Eval (ply %d), %s => %s", peekb(NPLY), line.c_str(), get_move_in_line().c_str() );
-            if( callback_verbosity <= 1 )
-                printf( "\n" );
-            else
+            std::string key = get_key();
+
+            // Eval takes place after undoing last move, so need to add it back to
+            //  show position meaningfully
+            unsigned int  p     = peekw(MLPTRJ);
+            unsigned char from  = peekb(p+2);
+            thc::Square sq;
+            sargon_export_square(from,sq);
+            char c = thc::get_file(sq);
+            if( key == "(root)" )
+                key = "";
+            key += toupper(c); 
+            printf( "Eval (ply %d), %s\n", peekb(NPLY), lines[key].c_str() );
+            if( callback_verbosity > 1 )
             {
                 unsigned int al  = reg_eax&0xff;
                 unsigned int bx  = reg_ebx&0xffff;
                 unsigned int val = peekb(bx);
-                bool jmp = (al <= val);
-                printf( "; Alpha beta cutoff? Yes if move value=%d/%.1f <= two lower ply value=%d/%.1f, ",
-                    al,  sargon_export_value(al),
-                    val, sargon_export_value(val) );
-                printf( "So %s\n", jmp?"yes":"no" );
+                bool jmp = (al <= val);   // Note that Sargon integer values have reverse sense to
+                                          //  float centipawns.
+                                          //  So jmp if al <= val means
+                                          //     jmp if float(al) >= float(val)
+                std::string float_value = (val==0 ? "MAX" : util::sprintf("%.1f",sargon_export_value(val)) ); // Show "MAX" instead of "12.8"
+                if( jmp )
+                {
+                    printf( "Alpha beta cutoff because move value=%.1f >= two lower ply value=%s\n",
+                    sargon_export_value(al),
+                    float_value.c_str() );
+                }
+                else
+                {
+                    printf( "No alpha beta cutoff because move value=%.1f < two lower ply value=%s\n",
+                    sargon_export_value(al),
+                    float_value.c_str() );
+                }
             }
         }
         else if( callback_verbosity>1 && std::string(msg) == "No. Best move?" )
@@ -784,18 +420,27 @@ extern "C" {
             unsigned int al  = reg_eax&0xff;
             unsigned int bx  = reg_ebx&0xffff;
             unsigned int val = peekb(bx);
-            bool jmp = (al <= val);
-            printf( "Best move? No if move value=%d/%.1f <= one lower ply value=%d/%.1f, ",
-                al,  sargon_export_value(al),
-                val, sargon_export_value(val) );
-            printf( "So %s\n", jmp?"no":"yes" );
+            bool jmp = (al <= val);   // Note that Sargon integer values have reverse sense to
+                                      //  float centipawns.
+                                      //  So jmp if al <= val means
+                                      //     jmp if float(al) >= float(val)
+            std::string float_value = (val==0 ? "MAX" : util::sprintf("%.1f",sargon_export_value(val)) ); // Show "MAX" instead of "12.8"
+            if( jmp )
+            {
+                printf( "Not best move because negated move value=%.1f >= one lower ply value=%s\n",
+                sargon_export_value(al),
+                float_value.c_str() );
+            }
+            else
+            {
+                printf( "Best move because negated move value=%.1f < one lower ply value=%s\n",
+                sargon_export_value(al),
+                float_value.c_str() );
+            }
         }
         else if( callback_verbosity>0 && std::string(msg) == "Yes! Best move" )
         {
-            std::string line = lines[get_position_identifier()];
-            if( line == "" )
-                line = "(root)";
-            printf( "Best move, %s => %s\n", line.c_str(), get_move_in_line().c_str() );
+            printf( "(Confirming best move)\n" );
         }
     }
 };
