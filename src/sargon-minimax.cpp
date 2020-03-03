@@ -272,45 +272,93 @@ static std::string get_key()
     return key;
 }
 
+static std::vector<std::string> big_picture =
+{
+"    Tree Structure          Creation Order            Minimax Order",
+"    ==============          ==============            =============",
+"",
+"                  AGA                     AGA 5                   AGA 1",
+"                 / |                     / |                     / |",
+"                AG |                  3 AG |                  3 AG |",
+"               /|\\ |                   /|\\ |                   /|\\ |",
+"              / | AGB                 / | AGB 6               / | AGB 2",
+"             /  |                    /  |                    /  |",
+"            A   |                 1 A   |                 7 A   |",
+"           /|\\  |                  /|\\  |                  /|\\  |",
+"          / | \\ | AHA             / | \\ | AHA 7           / | \\ | AHA 4",
+"         /  |  \\|/ |             /  |  \\|/ |             /  |  \\|/ |",
+"        /   |   AH |            /   | 4 AH |            /   | 6 AH |",
+"       /    |    \\ |           /    |    \\ |           /    |    \\ |",
+"      /     |     AHB         /     |     AHB 8       /     |     AHB 5",
+"     /      |                /      |                /      |",
+"  (root)    |             (root)    |             (root)    |",
+"     \\      |                \\      |                \\      |",
+"      \\     |     BGA         \\     |     BGA 11      \\     |     BGA 8",
+"       \\    |    / |           \\    |    / |           \\    |    / |",
+"        \\   |   BG |            \\   | 9 BG |            \\   |10 BG |",
+"         \\  |  /|\\ |             \\  |  /|\\ |             \\  |  /|\\ |",
+"          \\ | / |  BG             \\ | / | BGB 12          \\ | / | BGB 9",
+"           \\|/  |                  \\|/  |                  \\|/  |",
+"            B   |                 2 B   |                14 B   |",
+"             \\  |                    \\  |                    \\  |",
+"              \\ | BHA                 \\ | BHA 13              \\ | BHA 11",
+"               \\|/ |                   \\|/ |                   \\|/ |",
+"                BH |                 10 BH |                 13 BH |",
+"                 \\ |                     \\ |                     \\ |",
+"                  BHB                     BHB 14                  BHB 12",
+""
+};
+
+
 static std::vector<std::string> ascii_art =
- {
-     "                  AGA" ,   
-     "                 / |"  , 
-     "               AG  |"  , 
-     "              /| \\ |"  , 
-     "             / |  AGB" ,  
-     "            /  |"      ,  
-     "           A   |"      ,  
-     "          /|\\  |"      ,  
-     "         / | \\ |  AHA" ,  
-     "        /  |  \\| / |"  ,  
-     "       /   |   AH  |"  ,  
-     "      /    |     \\ |"  ,  
-     "     /     |      AHB" ,  
-     "    /      |"          ,  
-     " (root)    |"          ,  
-    "    \\      |"          ,  
-    "     \\     |      BGA" ,  
-    "      \\    |     / |"  ,  
-    "       \\   |   BG  |"  ,  
-    "        \\  |  /| \\ |"  ,  
-    "         \\ | / |  BGB" ,  
-    "          \\|/  |"      ,  
-     "           B   |"      ,  
-    "            \\  |"      ,  
-    "             \\ |  BHA" ,  
-    "              \\| / |"  ,  
-     "               BH  |"  ,  
-    "                 \\ |"  ,  
-     "                  BHB"
- };
+{
+"                    AGA",
+"                   / |",
+"                  /  |",
+"                 AG  |",
+"                /|\\  |",
+"               / | \\ |",
+"              /  |  AGB",
+"             /   |",
+"            A    |",
+"           /|\\   |",
+"          / | \\  |  AHA",
+"         /  |  \\ | / |",
+"        /   |   \\|/  |",
+"       /    |    AH  |",
+"      /     |     \\  |",
+"     /      |      \\ |",
+"    /       |       AHB",
+"   /        |",
+"(root)      |",
+"   \\        |",
+"    \\       |       BGA",
+"     \\      |      / |",
+"      \\     |     /  |",
+"       \\    |    BG  |",
+"        \\   |   /|\\  |",
+"         \\  |  / | \\ |",
+"          \\ | /  |  BGB",
+"           \\|/   |",
+"            B    |",
+"             \\   |",
+"              \\  |  BHA",
+"               \\ | / |",
+"                \\|/  |",
+"                 BH  |",
+"                  \\  |",
+"                   \\ |",
+"                    BHB"
+};
 
 enum ProgressType {create,eval,alpha_beta_yes,alpha_beta_no,bestmove_yes,bestmove_no,bestmove_confirmed};
 struct Progress
 {
     ProgressType pt;
+    unsigned int move_val;
     std::string key;
     std::string msg;
+    std::string diagram_msg;
 };
 static std::vector<Progress> progress;
 
@@ -335,7 +383,7 @@ std::string insert_before_offset( const std::string &s, size_t offset, const std
 std::string insert_at_offset( const std::string &s, size_t offset, const std::string &insert )
 {
     std::string ret;
-    ret =  s.substr( 0, offset );
+    ret = s.substr( 0, offset );
     ret += insert;
     if( offset + insert.length() <= s.length() )
         ret += s.substr( offset + insert.length() );
@@ -380,65 +428,122 @@ static void new_test()
     for( Progress prog: progress )
         printf( "%s\n", prog.msg.c_str() );
 
+    // Print big picture graphics
+    for( std::string s: big_picture )
+        printf( "%s\n", s.c_str() );
+
     // Annotate ascii-art
-    static std::vector<std::string> ascii_copy = ascii_art;
-    std::string key;
-    for( Progress prog: progress )
+    // Step 1 make a map of key -> idx into ascii_art
+    std::map<std::string,int> key_to_ascii_idx;
+    std::map<std::string,size_t> key_to_ascii_offset;
+    for( std::pair<std::string,std::string> key_line: lines )
     {
-        // Fill in missing keys
-        if( prog.pt == eval )
-            key = prog.key;
-        if( prog.key == "" )
-            prog.key = key;  // Use key from most recent eval
+        std::string key = key_line.first;
 
-        // Find the right line to modify
-        if( prog.pt == create )
+        // Find the key
+        int idx = -1;
+        size_t offset ;
+        for( unsigned int i=0; i<ascii_art.size(); i++ )
         {
-            int idx = -1;
-            size_t offset ;
-            for( unsigned int i=0; i<ascii_art.size(); i++ )
+            std::string s = ascii_art[i];
+            offset = s.find(key);
+            if( offset != std::string::npos )
             {
-                std::string s = ascii_art[i];
-                offset = s.find(prog.key);
-                if( offset != std::string::npos )
-                {
-                    size_t next = offset + prog.key.length();
-                    if( next < s.length() && 'A'<= s[next] && s[next]<='H' ) 
-                        continue;   // eg key = "AG" found "AGH", keep looking
-                    size_t prev = offset - 1;
-                    if( prev >= 0 && 'A'<= s[prev] && s[prev]<='H' ) 
-                        continue;   // eg key = "B" found "AGB", keep looking
-                    idx = i;
-                    break;
-                }
+                size_t next = offset + key.length();
+                if( next < s.length() && 'A'<= s[next] && s[next]<='H' ) 
+                    continue;   // eg key = "AG" found "AGH", keep looking
+                int prev = offset - 1; // int in case offset = 0
+                if( prev >= 0 && 'A'<= s[prev] && s[prev]<='H' ) 
+                    continue;   // eg key = "B" found "AGB", keep looking
+                idx = i;
+                break;
             }
+        }
 
-            // Should always find the key
-            if( idx < 0 )
-            {
-                printf( "Unexpected event, key = %s\n", prog.key.c_str() );
-                continue;
-            }
+        // Should always find the key
+        if( idx >= 0 )
+        {
+            key_to_ascii_idx[key]    = idx;
+            key_to_ascii_offset[key] = offset;
+        }
+        else
+            printf( "Unexpected event, key = %s\n", key.c_str() );
+    }
 
-            std::string s = ascii_art[idx];
-            std::string insert = lines[prog.key];
-            std::string t = insert_at_offset( s, offset, insert );
-            ascii_copy[idx] = t;
+    // Step 2 replace eg keys "AG" with lines eg "1.Qa1 Rc6"
+    static std::vector<std::string> ascii_copy = ascii_art;
+    for( std::pair<std::string,std::string> key_line: lines )
+    {
+        std::string key  = key_line.first;
+        std::string line = key_line.second;
+        int idx = key_to_ascii_idx[key];
+        size_t offset = key_to_ascii_offset[key];
+        std::string s = ascii_art[idx];
+        std::string t = insert_at_offset( s, offset, line );
+        ascii_copy[idx] = t;
+    }
+
+    // Annotate lines with progress through minimax calculation
+    int order = 1;
+    std::string eval_key;
+    std::string move_score;
+    for( Progress &prog: progress )
+    {
+        std::string key;
+        std::string msg;
+        switch( prog.pt )
+        {
+            case eval:
+                eval_key = prog.key;
+                move_score = util::sprintf( "%.1f", sargon_export_value(prog.move_val) );
+                key = eval_key;
+                break;
+            case alpha_beta_yes:
+                key = eval_key;
+                msg = move_score + prog.diagram_msg;
+                break;
+            case alpha_beta_no:
+                break;
+            case bestmove_yes:
+                prog.key = eval_key;
+                key = prog.key;
+                msg = move_score + prog.diagram_msg;
+                break;
+            case bestmove_no:
+                key = eval_key;
+                msg = move_score + prog.diagram_msg;
+                break;
+        }
+
+        if( msg != "" )
+        {
+            int idx = key_to_ascii_idx[key];
+            size_t offset = key_to_ascii_offset[key];
+            offset += lines[key].length();
+            std::string s = ascii_copy[idx];
+            std::string insert = util::sprintf(" <-%d: %s",order++,msg.c_str());
+            s = insert_at_offset(s,offset,insert);
+            ascii_copy[idx] = s;
         }
     }
 
-    // Find cut nodes
-    for( unsigned int i=0; i<ascii_art.size(); i++ )
+    // Run PV algorithm
+    int target = 1;
+    for( std::vector<Progress>::reverse_iterator i = progress.rbegin(); 
+        i != progress.rend(); ++i )
     {
-        std::string s = ascii_art[i];
-        std::string t = ascii_copy[i];
-        if( s == t && t.find_first_of("AB") != std::string::npos )
+        if( i->pt == bestmove_yes )
         {
-            util::replace_all(t,"A","*");
-            util::replace_all(t,"B","*");
-            util::replace_all(t,"G","*");
-            util::replace_all(t,"H","*");
-            ascii_copy[i] = t;
+            std::string key = i->key;
+            if( target == i->key.length() )
+            {
+                target++;
+                int idx = key_to_ascii_idx[key];
+                size_t offset = key_to_ascii_offset[key];
+                std::string s = ascii_copy[idx];
+                s = insert_before_offset(s,offset,"*");
+                ascii_copy[idx] = s;
+            }
         }
     }
 
@@ -535,10 +640,6 @@ extern "C" {
             if( key == "(root)" )
                 key = "";
             key += toupper(c); 
-            prog.key = key;
-            prog.pt  = eval;
-            prog.msg = util::sprintf( "Eval (ply %d), %s", peekb(NPLY), lines[key].c_str() );
-            progress.push_back(prog);
             unsigned int al  = reg_eax&0xff;
             unsigned int bx  = reg_ebx&0xffff;
             unsigned int val = peekb(bx);
@@ -547,11 +648,18 @@ extern "C" {
                                       //  So jmp if al <= val means
                                       //     jmp if float(al) >= float(val)
             std::string float_value = (val==0 ? "MAX" : util::sprintf("%.1f",sargon_export_value(val)) ); // Show "MAX" instead of "12.8"
+            prog.key = key;
+            prog.pt  = eval;
+            prog.move_val = al;
+            prog.msg = util::sprintf( "Eval (ply %d), %s", peekb(NPLY), lines[key].c_str() );
+            progress.push_back(prog);
             if( jmp )
             {
                 prog.pt  = alpha_beta_yes;
                 prog.msg = util::sprintf( "Alpha beta cutoff because move value=%.1f >= two lower ply value=%s",
                 sargon_export_value(al),
+                float_value.c_str() );
+                prog.diagram_msg = util::sprintf( " >= %s (two ply lower), so ALPHA BETA CUTOFF",
                 float_value.c_str() );
             }
             else
@@ -574,12 +682,15 @@ extern "C" {
                                       //  So jmp if al <= val means
                                       //     jmp if float(al) >= float(val)
             std::string float_value = (val==0 ? "MAX" : util::sprintf("%.1f",sargon_export_value(val)) ); // Show "MAX" instead of "12.8"
+            std::string neg_float_value = (val==0 ? "-MAX" : util::sprintf("%.1f",0.0-sargon_export_value(val)) ); // Show "-MAX" instead of "-12.8"
             if( jmp )
             {
                 prog.pt  = bestmove_no;
                 prog.msg = util::sprintf( "Not best move because negated move value=%.1f >= one lower ply value=%s",
                 sargon_export_value(al),
                 float_value.c_str() );
+                prog.diagram_msg = util::sprintf( " <= %s so discard",
+                neg_float_value.c_str() );
             }
             else
             {
@@ -587,6 +698,8 @@ extern "C" {
                 prog.msg = util::sprintf( "Best move because negated move value=%.1f < one lower ply value=%s",
                 sargon_export_value(al),
                 float_value.c_str() );
+                prog.diagram_msg = util::sprintf( " > %s so NEW BEST MOVE",
+                neg_float_value.c_str() );
             }
             progress.push_back(prog);
         }
