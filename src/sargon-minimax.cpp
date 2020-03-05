@@ -24,6 +24,8 @@
 // Misc
 static void new_test();
 static std::string get_key();
+static std::string insert_before_offset( const std::string &s, size_t offset, const std::string &insert );
+static std::string insert_at_offset( const std::string &s, size_t offset, const std::string &insert );
 
 // Nodes to track the PV (principal [primary?] variation)
 struct NODE
@@ -48,12 +50,45 @@ int main( int argc, const char *argv[] )
     return 0;
 }
 
-// Data structures to track the 15 positions in minimax example
-static std::map<std::string,unsigned int> values;
-static std::map<std::string,unsigned int> cardinal_nbr;
-static std::map<std::string,std::string> lines;
-static std::map<std::string,double> scores;
+static std::vector<std::string> big_picture =
+{
+"    Tree Structure          Creation Order            Minimax Order",
+"    ==============          ==============            =============",
+"",
+"                  AGA                     AGA 5                   AGA 1",
+"                 / |                     / |                     / |",
+"                AG |                  3 AG |                  3 AG |",
+"               /|\\ |                   /|\\ |                   /|\\ |",
+"              / | AGB                 / | AGB 6               / | AGB 2",
+"             /  |                    /  |                    /  |",
+"            A   |                 1 A   |                 7 A   |",
+"           /|\\  |                  /|\\  |                  /|\\  |",
+"          / | \\ | AHA             / | \\ | AHA 7           / | \\ | AHA 4",
+"         /  |  \\|/ |             /  |  \\|/ |             /  |  \\|/ |",
+"        /   |   AH |            /   | 4 AH |            /   | 6 AH |",
+"       /    |    \\ |           /    |    \\ |           /    |    \\ |",
+"      /     |     AHB         /     |     AHB 8       /     |     AHB 5",
+"     /      |                /      |                /      |",
+"  (root)    |             (root)    |             (root)    |",
+"     \\      |                \\      |                \\      |",
+"      \\     |     BGA         \\     |     BGA 11      \\     |     BGA 8",
+"       \\    |    / |           \\    |    / |           \\    |    / |",
+"        \\   |   BG |            \\   | 9 BG |            \\   |10 BG |",
+"         \\  |  /|\\ |             \\  |  /|\\ |             \\  |  /|\\ |",
+"          \\ | / |  BG             \\ | / | BGB 12          \\ | / | BGB 9",
+"           \\|/  |                  \\|/  |                  \\|/  |",
+"            B   |                 2 B   |                14 B   |",
+"             \\  |                    \\  |                    \\  |",
+"              \\ | BHA                 \\ | BHA 13              \\ | BHA 11",
+"               \\|/ |                   \\|/ |                   \\|/ |",
+"                BH |                 10 BH |                 13 BH |",
+"                 \\ |                     \\ |                     \\ |",
+"                  BHB                     BHB 14                  BHB 12",
+""
+};
 
+// Create simple models to watch minimax algorithm, they're comprised of move sequences that
+//  we map onto our A,B,AG,AH,AGA etc move sequence keys
 struct Position
 {
     std::string key;
@@ -61,12 +96,358 @@ struct Position
     double score;
 };
 
+// A complete model, starting position comments, and a list of all the keyed positions
 struct Model
 {
     std::string fen;
     std::string comment1;
     std::string comment2;
     std::vector<Position> positions;
+};
+
+// Keep track of progress through Sargon's calculation
+enum ProgressType {create,eval,alpha_beta_yes,alpha_beta_no,bestmove_yes,bestmove_no,bestmove_confirmed};
+struct Progress
+{
+    ProgressType pt;
+    unsigned int move_val;
+    unsigned int alphabeta_compare_val;
+    unsigned int minimax_compare_val;
+    std::string key;
+    std::string msg;
+    std::string diagram_msg;
+};
+
+// Draw nice Ascii Art pictures of the whole calculation
+class AsciiArt
+{
+private:
+    std::map<std::string,std::string> lines;
+    std::map<std::string,int> key_to_ascii_idx;
+    std::map<std::string,size_t> key_to_ascii_offset;
+    std::vector<std::string> ascii_art =
+    {
+        "                    AGA",
+        "                   / |",
+        "                  /  |",
+        "                 AG  |",
+        "                /|\\  |",
+        "               / | \\ |",
+        "              /  |  AGB",
+        "             /   |",
+        "            A    |",
+        "           /|\\   |",
+        "          / | \\  |  AHA",
+        "         /  |  \\ | / |",
+        "        /   |   \\|/  |",
+        "       /    |    AH  |",
+        "      /     |     \\  |",
+        "     /      |      \\ |",
+        "    /       |       AHB",
+        "   /        |",
+        "(root)      |",
+        "   \\        |",
+        "    \\       |       BGA",
+        "     \\      |      / |",
+        "      \\     |     /  |",
+        "       \\    |    BG  |",
+        "        \\   |   /|\\  |",
+        "         \\  |  / | \\ |",
+        "          \\ | /  |  BGB",
+        "           \\|/   |",
+        "            B    |",
+        "             \\   |",
+        "              \\  |  BHA",
+        "               \\ | / |",
+        "                \\|/  |",
+        "                 BH  |",
+        "                  \\  |",
+        "                   \\ |",
+        "                    BHB"
+    };
+
+    // Index the keys within the diagram for easy access later
+    void FindKeys()
+    {
+        for( std::pair<std::string,std::string> key_line: lines )
+        {
+            std::string key = key_line.first;
+
+            // Find the key
+            int idx = -1;
+            size_t offset ;
+            for( unsigned int i=0; i<ascii_art.size(); i++ )
+            {
+                std::string s = ascii_art[i];
+                offset = s.find(key);
+                if( offset != std::string::npos )
+                {
+                    size_t next = offset + key.length();
+                    if( next < s.length() && 'A'<= s[next] && s[next]<='H' ) 
+                        continue;   // eg key = "AG" found "AGH", keep looking
+                    int prev = offset - 1; // int in case offset = 0
+                    if( prev >= 0 && 'A'<= s[prev] && s[prev]<='H' ) 
+                        continue;   // eg key = "B" found "AGB", keep looking
+                    idx = i;
+                    break;
+                }
+            }
+
+            // Should always find the key
+            if( idx >= 0 )
+            {
+                key_to_ascii_idx[key]    = idx;
+                key_to_ascii_offset[key] = offset;
+            }
+            else
+                printf( "Unexpected event, key = %s\n", key.c_str() );
+        }
+    }
+
+    // Replace eg keys "AG" with lines eg "1.Qa1 Rc6"
+    void ReplaceKeysWithLines()
+    {
+        for( std::pair<std::string,std::string> key_line: lines )
+        {
+            std::string key  = key_line.first;
+            std::string line = key_line.second;
+            int idx = key_to_ascii_idx[key];
+            size_t offset = key_to_ascii_offset[key];
+            std::string s = ascii_art[idx];
+            std::string t = insert_at_offset( s, offset, line );
+            ascii_art[idx] = t;
+        }
+    }
+
+    // Construct ready to go
+public:
+    AsciiArt( const Model &model )
+    {
+        for( Position pos: model.positions )
+            lines[pos.key]  = pos.moves;
+        FindKeys();
+        ReplaceKeysWithLines();
+    }
+
+    // Add string to end of line
+    void Annotate( const std::string &key,  const std::string &annotation )
+    {
+        int idx = key_to_ascii_idx[key];
+        size_t offset = key_to_ascii_offset[key];
+        offset += lines[key].length();
+        std::string s = ascii_art[idx];
+        s = insert_at_offset(s,offset,annotation);
+        ascii_art[idx] = s;
+    }
+
+    // Add asterisk before line
+    void Asterisk( const std::string &key )
+    {
+        int idx = key_to_ascii_idx[key];
+        size_t offset = key_to_ascii_offset[key];
+        std::string s = ascii_art[idx];
+        s = insert_before_offset(s,offset,"*");
+        ascii_art[idx] = s;
+    }
+
+    // Print the diagram
+    void Print()
+    {
+        for( std::string s: ascii_art )
+            printf( "%s\n", s.c_str() );
+    }
+
+};
+
+// A complete example runs a model and presents the results
+class Example
+{
+private:
+    const Model *pmodel;
+    std::map<std::string,double> scores;
+    std::map<std::string,int> key_to_ascii_idx;
+    std::map<std::string,size_t> key_to_ascii_offset;
+    std::string pv_key;
+    AsciiArt ascii_art;
+
+    // Some variables accessed by callback() need to be visible
+public:
+    std::map<std::string,unsigned int> values;
+    std::map<std::string,unsigned int> cardinal_nbr;
+    std::map<std::string,std::string> lines;
+    std::vector<Progress> progress;
+
+public:
+    // Set up the example
+    Example( const Model &model ) : ascii_art(model)
+    {
+        pmodel = &model;
+        values.clear();
+        cardinal_nbr.clear();
+        lines.clear();
+        scores.clear();
+        cardinal_nbr["(root)"]  = 0;
+        cardinal_nbr["A"]       = 1;
+        cardinal_nbr["B"]       = 2;
+        cardinal_nbr["AG"]      = 3;
+        cardinal_nbr["AH"]      = 4;
+        cardinal_nbr["AGA"]     = 5;
+        cardinal_nbr["AGB"]     = 6;
+        cardinal_nbr["AHA"]     = 7;
+        cardinal_nbr["AHB"]     = 8;
+        cardinal_nbr["BG"]      = 9;
+        cardinal_nbr["BH"]      = 10;
+        cardinal_nbr["BGA"]     = 11;
+        cardinal_nbr["BGB"]     = 12;
+        cardinal_nbr["BHA"]     = 13;
+        cardinal_nbr["BHB"]     = 14;
+        for( Position pos: model.positions )
+        {
+            lines[pos.key]  = pos.moves;
+            scores[pos.key] = pos.score;
+            values[pos.key] = sargon_import_value(pos.score); 
+        }
+    }
+
+    // Run the example
+    void Run()
+    {
+        progress.clear();
+        callback_enabled = true;
+        callback_kingmove_suppressed = true;
+
+        // White king on a1 pawns a4,b3 Black king on h8 pawns g6,h6 we are going
+        //  to use this very dumb position to probe Alpha Beta pruning etc. (we
+        //  will kill the kings so that each side has only two moves available
+        //  at each position).
+        // (Start 'a' pawn on a4 instead of a3 so that 'a' pawn move is generated
+        // first on White's second move, even if 'b' pawn advances on first move)
+        const char *pos_probe = "7k/8/6pp/8/1P6/P7/8/K7 w - - 0 1";
+
+        // Because there are only 2 moves available at each ply, we can explore
+        //  to PLYMAX=3 with only 2 positions at ply 1, 4 positions at ply 2
+        //  and 8 positions at ply 3 (plus 1 root position at ply 0) for a very
+        //  manageable 1+2+4+8 = 15 nodes (i.e. positions) total. We use the
+        //  callback facility to monitor the algorithm and indeed actively
+        //  interfere with it by changing the node evals and watching how that
+        //  effects node traversal and generates a best move.
+        thc::ChessPosition cp;
+        cp.Forsyth(pos_probe);
+        pokeb(MLPTRJ,0); //need to set this ptr to 0 to get Root position recognised in callback()
+        pokeb(MLPTRJ+1,0);
+        pokeb(KOLOR,0);
+        pokeb(PLYMAX,3);
+        sargon(api_INITBD);
+        sargon_import_position(cp);
+        sargon(api_ROYALT);
+        pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
+        nodes.clear();
+        sargon(api_CPTRMV);
+    }
+
+    // Print introduction
+    void PrintIntro( int example_nbr )
+    {
+        // Show position and print initial comment
+        printf("\n");
+        printf( "Example number %d)\n", example_nbr );
+        printf( "-----------------%s\n", example_nbr>=10?"-":"" );
+        thc::ChessPosition cp;
+        cp.Forsyth( pmodel->fen.c_str() );
+        printf( "%s\n", cp.ToDebugStr(pmodel->comment1.c_str()).c_str() );
+    }
+
+    // Annotate ascii art lines with progress through minimax calculation
+    void Annotate()
+    {
+        int order = 1;
+        std::string eval_key;
+        std::string move_score;
+        std::string alphabeta_mini_msg;
+        for( Progress &prog: progress )
+        {
+            std::string key;
+            std::string msg;
+            std::string neg_float_value;
+            std::string float_value;
+            switch( prog.pt )
+            {
+                case eval:
+                    eval_key = prog.key;
+                    move_score = util::sprintf( "%.1f", sargon_export_value(prog.move_val) );
+                    float_value = (prog.alphabeta_compare_val==0 ? "MAX" : util::sprintf("%.1f",sargon_export_value(prog.alphabeta_compare_val)) ); // Show "MAX" instead of "12.8"
+                    neg_float_value = (prog.minimax_compare_val==0 ? "-MAX" : util::sprintf("%.1f",0.0-sargon_export_value(prog.minimax_compare_val)) ); // Show "-MAX" instead of "-12.8"
+                    alphabeta_mini_msg = util::sprintf( " [%s,%s] ", float_value.c_str(), neg_float_value.c_str() );
+                    key = eval_key;
+                    break;
+                case alpha_beta_yes:
+                    key = eval_key;
+                    msg = move_score + alphabeta_mini_msg + move_score + prog.diagram_msg;
+                    break;
+                case alpha_beta_no:
+                    break;
+                case bestmove_yes:
+                    prog.key = eval_key;
+                    key = prog.key;
+                    msg = move_score + alphabeta_mini_msg + move_score + prog.diagram_msg;
+                    break;
+                case bestmove_no:
+                    key = eval_key;
+                    msg = move_score + alphabeta_mini_msg + move_score + prog.diagram_msg;
+                    break;
+            }
+            if( msg != "" )
+            {
+                std::string insert = util::sprintf(" (%d): %s",order++,msg.c_str());
+                ascii_art.Annotate(key,insert);
+            }
+        }
+    }
+
+    // Run PV algorithm, asterisk the PV nodes in ascii art
+    void CalculatePV()
+    {
+        int target = 1;
+        for( std::vector<Progress>::reverse_iterator i=progress.rbegin();  i!=progress.rend(); ++i )
+        {
+            if( i->pt == bestmove_yes )
+            {
+                std::string key = i->key;
+
+                // We are looping in reverse order, scanning for best move choices at level 1,2 then 3
+                if( target == i->key.length() )
+                {
+
+                    // Found, note that last key found handily encodes the whole PV, eg if PV is
+                    // "B", "BG", "BGH", then last pv_key will be "BGH"
+                    pv_key = key;
+                    target++;
+                    ascii_art.Asterisk(key);
+                }
+            }
+        }
+    }
+
+    // Print ascii art diagram
+    void PrintDiagram()
+    {
+        ascii_art.Print();
+    }
+
+    // Print conclusion
+    void PrintConclusion()
+    {
+        // Print PV
+        printf( "\nPV = %s, note that the PV nodes are asterisked\n",  lines[pv_key].c_str() );
+
+        // Print concluding comment
+        printf( "%s\n", pmodel->comment2.c_str() );
+
+        // Print textual summary
+        printf( "\nDetailed log\n" );
+        for( Progress prog: progress )
+            printf( "%s\n", prog.msg.c_str() );
+    }
 };
 
 // White can take a bishop or fork king queen and rook
@@ -197,35 +578,32 @@ static Model model5 =
     }
 };
 
-static void build_model( const Model &model )
+static std::string insert_before_offset( const std::string &s, size_t offset, const std::string &insert )
 {
-    values.clear();
-    cardinal_nbr.clear();
-    lines.clear();
-    scores.clear();
-    cardinal_nbr["(root)"]  = 0;
-    cardinal_nbr["A"]       = 1;
-    cardinal_nbr["B"]       = 2;
-    cardinal_nbr["AG"]      = 3;
-    cardinal_nbr["AH"]      = 4;
-    cardinal_nbr["AGA"]     = 5;
-    cardinal_nbr["AGB"]     = 6;
-    cardinal_nbr["AHA"]     = 7;
-    cardinal_nbr["AHB"]     = 8;
-    cardinal_nbr["BG"]      = 9;
-    cardinal_nbr["BH"]      = 10;
-    cardinal_nbr["BGA"]     = 11;
-    cardinal_nbr["BGB"]     = 12;
-    cardinal_nbr["BHA"]     = 13;
-    cardinal_nbr["BHB"]     = 14;
-    for( Position pos: model.positions )
+    std::string ret;
+    if( insert.length() <= offset )
     {
-        lines[pos.key]  = pos.moves;
-        scores[pos.key] = pos.score;
-        values[pos.key] = sargon_import_value(pos.score); 
+        ret =  s.substr( 0, offset - insert.length() );
+        ret += insert;
+        ret += s.substr( offset );
     }
+    else
+    {
+        ret =  insert.substr( insert.length() - offset );
+        ret += s.substr( offset );
+    }
+    return ret;    
 }
 
+static std::string insert_at_offset( const std::string &s, size_t offset, const std::string &insert )
+{
+    std::string ret;
+    ret = s.substr( 0, offset );
+    ret += insert;
+    if( offset + insert.length() <= s.length() )
+        ret += s.substr( offset + insert.length() );
+    return ret;    
+}
 
 // Calculate a short string key to represent the moves played
 //  eg 1. a4-a5 h6-h5 2. a5-a6 => "AHA"
@@ -323,125 +701,7 @@ static std::string get_key()
     return key;
 }
 
-static std::vector<std::string> big_picture =
-{
-"    Tree Structure          Creation Order            Minimax Order",
-"    ==============          ==============            =============",
-"",
-"                  AGA                     AGA 5                   AGA 1",
-"                 / |                     / |                     / |",
-"                AG |                  3 AG |                  3 AG |",
-"               /|\\ |                   /|\\ |                   /|\\ |",
-"              / | AGB                 / | AGB 6               / | AGB 2",
-"             /  |                    /  |                    /  |",
-"            A   |                 1 A   |                 7 A   |",
-"           /|\\  |                  /|\\  |                  /|\\  |",
-"          / | \\ | AHA             / | \\ | AHA 7           / | \\ | AHA 4",
-"         /  |  \\|/ |             /  |  \\|/ |             /  |  \\|/ |",
-"        /   |   AH |            /   | 4 AH |            /   | 6 AH |",
-"       /    |    \\ |           /    |    \\ |           /    |    \\ |",
-"      /     |     AHB         /     |     AHB 8       /     |     AHB 5",
-"     /      |                /      |                /      |",
-"  (root)    |             (root)    |             (root)    |",
-"     \\      |                \\      |                \\      |",
-"      \\     |     BGA         \\     |     BGA 11      \\     |     BGA 8",
-"       \\    |    / |           \\    |    / |           \\    |    / |",
-"        \\   |   BG |            \\   | 9 BG |            \\   |10 BG |",
-"         \\  |  /|\\ |             \\  |  /|\\ |             \\  |  /|\\ |",
-"          \\ | / |  BG             \\ | / | BGB 12          \\ | / | BGB 9",
-"           \\|/  |                  \\|/  |                  \\|/  |",
-"            B   |                 2 B   |                14 B   |",
-"             \\  |                    \\  |                    \\  |",
-"              \\ | BHA                 \\ | BHA 13              \\ | BHA 11",
-"               \\|/ |                   \\|/ |                   \\|/ |",
-"                BH |                 10 BH |                 13 BH |",
-"                 \\ |                     \\ |                     \\ |",
-"                  BHB                     BHB 14                  BHB 12",
-""
-};
-
-
-static std::vector<std::string> ascii_art =
-{
-"                    AGA",
-"                   / |",
-"                  /  |",
-"                 AG  |",
-"                /|\\  |",
-"               / | \\ |",
-"              /  |  AGB",
-"             /   |",
-"            A    |",
-"           /|\\   |",
-"          / | \\  |  AHA",
-"         /  |  \\ | / |",
-"        /   |   \\|/  |",
-"       /    |    AH  |",
-"      /     |     \\  |",
-"     /      |      \\ |",
-"    /       |       AHB",
-"   /        |",
-"(root)      |",
-"   \\        |",
-"    \\       |       BGA",
-"     \\      |      / |",
-"      \\     |     /  |",
-"       \\    |    BG  |",
-"        \\   |   /|\\  |",
-"         \\  |  / | \\ |",
-"          \\ | /  |  BGB",
-"           \\|/   |",
-"            B    |",
-"             \\   |",
-"              \\  |  BHA",
-"               \\ | / |",
-"                \\|/  |",
-"                 BH  |",
-"                  \\  |",
-"                   \\ |",
-"                    BHB"
-};
-
-enum ProgressType {create,eval,alpha_beta_yes,alpha_beta_no,bestmove_yes,bestmove_no,bestmove_confirmed};
-struct Progress
-{
-    ProgressType pt;
-    unsigned int move_val;
-    unsigned int alphabeta_compare_val;
-    unsigned int minimax_compare_val;
-    std::string key;
-    std::string msg;
-    std::string diagram_msg;
-};
-static std::vector<Progress> progress;
-
-
-std::string insert_before_offset( const std::string &s, size_t offset, const std::string &insert )
-{
-    std::string ret;
-    if( insert.length() <= offset )
-    {
-        ret =  s.substr( 0, offset - insert.length() );
-        ret += insert;
-        ret += s.substr( offset );
-    }
-    else
-    {
-        ret =  insert.substr( insert.length() - offset );
-        ret += s.substr( offset );
-    }
-    return ret;    
-}
-
-std::string insert_at_offset( const std::string &s, size_t offset, const std::string &insert )
-{
-    std::string ret;
-    ret = s.substr( 0, offset );
-    ret += insert;
-    if( offset + insert.length() <= s.length() )
-        ret += s.substr( offset + insert.length() );
-    return ret;    
-}
+static Example *running_example;
 
 // Use a simple example to explore/probe the minimax algorithm and verify it
 static void new_test()
@@ -460,194 +720,27 @@ static void new_test()
         "  non-leaf nodes),\n"
         " Result indicates the result of comparing the score to the thresholds\n" );
 
-    // Loop through multiple example positions
+    // Loop through multiple examples
     int example_nbr = 1;
     std::vector<Model *> models = {&model1,&model2,&model3,&model4,&model5};
     for( Model *model: models )
     {
-        build_model( *model );
-        progress.clear();
-        callback_enabled = true;
-        callback_kingmove_suppressed = true;
+        Example example(*model);
+        running_example = &example;
+        example.Run();
+        example.PrintIntro( example_nbr++ );
 
-        // White king on a1 pawns a4,b3 Black king on h8 pawns g6,h6 we are going
-        //  to use this very dumb position to probe Alpha Beta pruning etc. (we
-        //  will kill the kings so that each side has only two moves available
-        //  at each position).
-        // (Start 'a' pawn on a4 instead of a3 so that 'a' pawn move is generated
-        // first on White's second move, even if 'b' pawn advances on first move)
-        const char *pos_probe = "7k/8/6pp/8/1P6/P7/8/K7 w - - 0 1";
+        // Annotate lines with progress through minimax calculation
+        example.Annotate();
 
-        // Because there are only 2 moves available at each ply, we can explore
-        //  to PLYMAX=3 with only 2 positions at ply 1, 4 positions at ply 2
-        //  and 8 positions at ply 3 (plus 1 root position at ply 0) for a very
-        //  manageable 1+2+4+8 = 15 nodes (i.e. positions) total. We use the
-        //  callback facility to monitor the algorithm and indeed actively
-        //  interfere with it by changing the node evals and watching how that
-        //  effects node traversal and generates a best move.
-        thc::ChessPosition cp;
-        cp.Forsyth(pos_probe);
-        pokeb(MLPTRJ,0); //need to set this ptr to 0 to get Root position recognised in callback()
-        pokeb(MLPTRJ+1,0);
-        pokeb(KOLOR,0);
-        pokeb(PLYMAX,3);
-        sargon(api_INITBD);
-        sargon_import_position(cp);
-        sargon(api_ROYALT);
-        pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
-        nodes.clear();
-        sargon(api_CPTRMV);
-
-        // Show position and print initial comment
-        printf("\n");
-        printf( "Example number %d)\n", example_nbr );
-        printf( "-----------------%s\n", example_nbr>=10?"-":"" );
-        example_nbr++;
-        cp.Forsyth( model->fen.c_str() );
-        printf( "%s\n", cp.ToDebugStr(model->comment1.c_str()).c_str() );
-
-        // Annotate ascii-art
-        // Step 1 make a map of key -> idx into ascii_art
-        std::map<std::string,int> key_to_ascii_idx;
-        std::map<std::string,size_t> key_to_ascii_offset;
-        for( std::pair<std::string,std::string> key_line: lines )
-        {
-            std::string key = key_line.first;
-
-            // Find the key
-            int idx = -1;
-            size_t offset ;
-            for( unsigned int i=0; i<ascii_art.size(); i++ )
-            {
-                std::string s = ascii_art[i];
-                offset = s.find(key);
-                if( offset != std::string::npos )
-                {
-                    size_t next = offset + key.length();
-                    if( next < s.length() && 'A'<= s[next] && s[next]<='H' ) 
-                        continue;   // eg key = "AG" found "AGH", keep looking
-                    int prev = offset - 1; // int in case offset = 0
-                    if( prev >= 0 && 'A'<= s[prev] && s[prev]<='H' ) 
-                        continue;   // eg key = "B" found "AGB", keep looking
-                    idx = i;
-                    break;
-                }
-            }
-
-            // Should always find the key
-            if( idx >= 0 )
-            {
-                key_to_ascii_idx[key]    = idx;
-                key_to_ascii_offset[key] = offset;
-            }
-            else
-                printf( "Unexpected event, key = %s\n", key.c_str() );
-        }
-
-        // Step 2 replace eg keys "AG" with lines eg "1.Qa1 Rc6"
-        static std::vector<std::string> ascii_working = ascii_art;
-        for( std::pair<std::string,std::string> key_line: lines )
-        {
-            std::string key  = key_line.first;
-            std::string line = key_line.second;
-            int idx = key_to_ascii_idx[key];
-            size_t offset = key_to_ascii_offset[key];
-            std::string s = ascii_art[idx];
-            std::string t = insert_at_offset( s, offset, line );
-            ascii_working[idx] = t;
-        }
-
-        // Step 3: Annotate lines with progress through minimax calculation
-        int order = 1;
-        std::string eval_key;
-        std::string move_score;
-        std::string alphabeta_mini_msg;
-        for( Progress &prog: progress )
-        {
-            std::string key;
-            std::string msg;
-            std::string neg_float_value;
-            std::string float_value;
-            switch( prog.pt )
-            {
-                case eval:
-                    eval_key = prog.key;
-                    move_score = util::sprintf( "%.1f", sargon_export_value(prog.move_val) );
-                    float_value = (prog.alphabeta_compare_val==0 ? "MAX" : util::sprintf("%.1f",sargon_export_value(prog.alphabeta_compare_val)) ); // Show "MAX" instead of "12.8"
-                    neg_float_value = (prog.minimax_compare_val==0 ? "-MAX" : util::sprintf("%.1f",0.0-sargon_export_value(prog.minimax_compare_val)) ); // Show "-MAX" instead of "-12.8"
-                    alphabeta_mini_msg = util::sprintf( " [%s,%s] ", float_value.c_str(), neg_float_value.c_str() );
-                    key = eval_key;
-                    break;
-                case alpha_beta_yes:
-                    key = eval_key;
-                    msg = move_score + alphabeta_mini_msg + move_score + prog.diagram_msg;
-                    break;
-                case alpha_beta_no:
-                    break;
-                case bestmove_yes:
-                    prog.key = eval_key;
-                    key = prog.key;
-                    msg = move_score + alphabeta_mini_msg + move_score + prog.diagram_msg;
-                    break;
-                case bestmove_no:
-                    key = eval_key;
-                    msg = move_score + alphabeta_mini_msg + move_score + prog.diagram_msg;
-                    break;
-            }
-            if( msg != "" )
-            {
-                int idx = key_to_ascii_idx[key];
-                size_t offset = key_to_ascii_offset[key];
-                offset += lines[key].length();
-                std::string s = ascii_working[idx];
-                std::string insert = util::sprintf(" (%d): %s",order++,msg.c_str());
-                s = insert_at_offset(s,offset,insert);
-                ascii_working[idx] = s;
-            }
-        }
-
-        // Step 4: Run PV algorithm, asterisk the PV nodes
-        int target = 1;
-        std::string pv_key;
-        for( std::vector<Progress>::reverse_iterator i=progress.rbegin();  i!=progress.rend(); ++i )
-        {
-            if( i->pt == bestmove_yes )
-            {
-                std::string key = i->key;
-
-                // We are looping in reverse order, scanning for best move choices at level 1,2 then 3
-                if( target == i->key.length() )
-                {
-
-                    // Found, note that last key found handily encodes the whole PV, eg if PV is
-                    // "B", "BG", "BGH", then last pv_key will be "BGH"
-                    pv_key = key;
-                    target++;
-                    int idx = key_to_ascii_idx[key];
-                    size_t offset = key_to_ascii_offset[key];
-                    std::string s = ascii_working[idx];
-                    s = insert_before_offset(s,offset,"*");
-                    ascii_working[idx] = s;
-                }
-            }
-        }
+        //Run PV algorithm, asterisk the PV nodes
+        example.CalculatePV();
 
         // Print ascii-art
-        for( std::string s: ascii_working )
-        {
-            printf( "%s\n", s.c_str() );
-        }
+        example.PrintDiagram();
 
-        // Print PV
-        printf( "\nPV = %s, note that the PV nodes are asterisked\n",  lines[pv_key].c_str() );
-
-        // Print concluding comment
-        printf( "%s\n", model->comment2.c_str() );
-
-        // Print textual summary
-        printf( "\nDetailed log\n" );
-        for( Progress prog: progress )
-            printf( "%s\n", prog.msg.c_str() );
+        // Print conclusion
+        example.PrintConclusion();
     }
 }
 
@@ -713,9 +806,9 @@ extern "C" {
             Progress prog;
             prog.pt  = create;
             prog.key = key;
-            prog.msg = util::sprintf( "Position %d, \"%s\" created in tree", cardinal_nbr[key], lines[key].c_str() );
-            progress.push_back(prog);
-            unsigned int value = values[key];
+            prog.msg = util::sprintf( "Position %d, \"%s\" created in tree", running_example->cardinal_nbr[key], running_example->lines[key].c_str() );
+            running_example->progress.push_back(prog);
+            unsigned int value = running_example->values[key];
             volatile uint32_t *peax = &reg_eax;     // note use of volatile keyword
             *peax = value;                          // MODIFY VALUE !
         }
@@ -750,8 +843,8 @@ extern "C" {
             prog.move_val = al;
             prog.alphabeta_compare_val = val;
             prog.minimax_compare_val = peekb(bx+1);
-            prog.msg = util::sprintf( "Eval (ply %d), %s", peekb(NPLY), lines[key].c_str() );
-            progress.push_back(prog);
+            prog.msg = util::sprintf( "Eval (ply %d), %s", peekb(NPLY), running_example->lines[key].c_str() );
+            running_example->progress.push_back(prog);
             if( jmp )
             {
                 prog.pt  = alpha_beta_yes;
@@ -768,7 +861,7 @@ extern "C" {
                 sargon_export_value(al),
                 float_value.c_str() );
             }
-            progress.push_back(prog);
+            running_example->progress.push_back(prog);
         }
         else if( std::string(msg) == "No. Best move?" )
         {
@@ -800,14 +893,14 @@ extern "C" {
                 prog.diagram_msg = util::sprintf( ">%s so NEW BEST MOVE",
                 neg_float_value.c_str() );
             }
-            progress.push_back(prog);
+            running_example->progress.push_back(prog);
         }
         else if( std::string(msg) == "Yes! Best move" )
         {
             Progress prog;
             prog.pt  = bestmove_confirmed;
             prog.msg = "(Confirming best move)";
-            progress.push_back(prog);
+            running_example->progress.push_back(prog);
         }
     }
 };
