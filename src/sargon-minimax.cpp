@@ -22,8 +22,6 @@
 #include "sargon-interface.h"
 
 // Misc
-struct Position;
-static void build_model( const std::vector<Position> &model );
 static void new_test();
 static std::string get_key();
 
@@ -63,89 +61,148 @@ struct Position
     double score;
 };
 
-// White can take a bishop or fork king queen and rook
-static std::vector<Position> model1 =
+struct Model
 {
-   { "(root)", "7k/R1ppp1p1/1p6/4q3/5N1r/3b3P/PP3PP1/Q5K1 w - - 0 1",  0.0},
-   { "A"     , "1.Nxd3",                0.0  },
-   { "AG"    , "1.Nxd3 Qd6",            0.0  },
-   { "AGA"   , "1.Nxd3 Qd6 2.Ne1",      3.3  },    // White wins a bishop
-   { "AGB"   , "1.Nxd3 Qd6 2.Qb1",      3.0  },    // White wins a bishop
-   { "AH"    , "1.Nxd3 Qg5",            0.0  },
-   { "AHA"   , "1.Nxd3 Qg5 2.Rxc7",     3.1  },    // White wins a bishop
-   { "AHB"   , "1.Nxd3 Qg5 2.Kh2",      3.2  },    // White wins a bishop
-   { "B"     , "1.Ng6+",                0.0  },
-   { "BG"    , "1.Ng6+ Kh7",            0.0  },
-   { "BGA"   , "1.Ng6+ Kh7 2.Nxe5",     9.2  },    // White wins a queen
-   { "BGB"   , "1.Ng6+ Kh7 2.Nxh4",     5.0  },    // White wins a rook
-   { "BH"    , "1.Ng6+ Kg8",            0.0  },
-   { "BHA"   , "1.Ng6+ Kg8 2.Nxe5",     9.0  },    // White wins a queen
-   { "BHB"   , "1.Ng6+ Kg8 2.Nxh4",     5.2  }     // White wins a rook
+    std::string fen;
+    std::string comment1;
+    std::string comment2;
+    std::vector<Position> positions;
+};
+
+// White can take a bishop or fork king queen and rook
+static Model model1 =
+{
+   "7k/R1ppp1p1/1p6/4q3/5N1r/3b3P/PP3PP1/Q5K1 w - - 0 1",
+   "White can take a bishop or fork king queen and rook",
+   "There are no Alpha-Beta cutoffs, PV shows white correctly winning queen",
+    {
+       { "A"     , "1.Nxd3",                0.0  },
+       { "AG"    , "1.Nxd3 Qd6",            0.0  },
+       { "AGA"   , "1.Nxd3 Qd6 2.Ne1",      3.3  },    // White wins a bishop
+       { "AGB"   , "1.Nxd3 Qd6 2.Qb1",      3.0  },    // White wins a bishop
+       { "AH"    , "1.Nxd3 Qg5",            0.0  },
+       { "AHA"   , "1.Nxd3 Qg5 2.Rxc7",     3.1  },    // White wins a bishop
+       { "AHB"   , "1.Nxd3 Qg5 2.Kh2",      3.2  },    // White wins a bishop
+       { "B"     , "1.Ng6+",                0.0  },
+       { "BG"    , "1.Ng6+ Kh7",            0.0  },
+       { "BGA"   , "1.Ng6+ Kh7 2.Nxe5",     9.2  },    // White wins a queen
+       { "BGB"   , "1.Ng6+ Kh7 2.Nxh4",     5.0  },    // White wins a rook
+       { "BH"    , "1.Ng6+ Kg8",            0.0  },
+       { "BHA"   , "1.Ng6+ Kg8 2.Nxe5",     9.0  },    // White wins a queen
+       { "BHB"   , "1.Ng6+ Kg8 2.Nxh4",     5.2  }     // White wins a rook
+    }
 };
 
 // White can give Philidor's mate, or defend
-static std::vector<Position> model2 =
+static Model model2 =
 {
-    { "(root)", "1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1", 0.0 },
-    { "A"     , "1.Qg8+",               0.0   },
-    { "AG"    , "1.Qg8+ Nxg8",          0.0   },
-    { "AGA"   , "1.Qg8+ Nxg8 2.Nf7#",   12.0  },   // White gives mate
-    { "AGB"   , "1.Qg8+ Nxg8 2.Nxg8",   -10.0 },   // Black has huge material plus
-    { "AH"    , "1.Qg8+ Rxg8",          0.0   },
-    { "AHA"   , "1.Qg8+ Rxg8 2.Nf7#",   12.0  },   // White gives mate
-    { "AHB"   , "1.Qg8+ Rxg8 2.Nxg8",   -8.0  },   // Black has large material plus
-    { "B"     , "1.Qa1",                0.0   },
-    { "BG"    , "1.Qa1 Rc6",            0.0   },
-    { "BGA"   , "1.Qa1 Rc6 2.Nf7+",     0.0   },   // equal(ish)
-    { "BGB"   , "1.Qa1 Rc6 2.Ng4",      0.0   },   // equal(ish)
-    { "BH"    , "1.Qa1 Ng8",            0.0   },
-    { "BHA"   , "1.Qa1 Ng8 2.Nf7#",     12.0  },   // White gives mate
-    { "BHB"   , "1.Qa1 Ng8 2.Ng4",      0.0   }    // equal(ish)
+    "1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1",
+    "White can give Philidor's mate, or defend",
+    "Philidor's mating line comes first, so plenty of alpha-beta cutoffs",
+    {
+        { "A"     , "1.Qg8+",               0.0   },
+        { "AG"    , "1.Qg8+ Nxg8",          0.0   },
+        { "AGA"   , "1.Qg8+ Nxg8 2.Nf7#",   12.0  },   // White gives mate
+        { "AGB"   , "1.Qg8+ Nxg8 2.Nxg8",   -10.0 },   // Black has huge material plus
+        { "AH"    , "1.Qg8+ Rxg8",          0.0   },
+        { "AHA"   , "1.Qg8+ Rxg8 2.Nf7#",   12.0  },   // White gives mate
+        { "AHB"   , "1.Qg8+ Rxg8 2.Nxg8",   -8.0  },   // Black has large material plus
+        { "B"     , "1.Qa1",                0.0   },
+        { "BG"    , "1.Qa1 Rc6",            0.0   },
+        { "BGA"   , "1.Qa1 Rc6 2.Nf7+",     0.0   },   // equal(ish)
+        { "BGB"   , "1.Qa1 Rc6 2.Ng4",      0.0   },   // equal(ish)
+        { "BH"    , "1.Qa1 Ng8",            0.0   },
+        { "BHA"   , "1.Qa1 Ng8 2.Nf7#",     12.0  },   // White gives mate
+        { "BHB"   , "1.Qa1 Ng8 2.Ng4",      0.0   }    // equal(ish)
+    }
 };
 
 // White can give defend or give Philidor's mate (same as above, with
 //  first move reversed)
-static std::vector<Position> model3 =
+static Model model3 =
 {
-    { "(root)", "1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1", 0.0 },
-    { "A"     , "1.Qa1",                0.0   },
-    { "AG"    , "1.Qa1 Rc6",            0.0   },
-    { "AGA"   , "1.Qa1 Rc6 2.Nf7+",     0.0   },   // equal(ish)
-    { "AGB"   , "1.Qa1 Rc6 2.Ng4",      0.0   },   // equal(ish)
-    { "AH"    , "1.Qa1 Ng8",            0.0   },
-    { "AHA"   , "1.Qa1 Ng8 2.Nf7#",     12.0  },   // White gives mate
-    { "AHB"   , "1.Qa1 Ng8 2.Ng4",      0.0   },   // equal(ish)
-    { "B"     , "1.Qg8+",               0.0   },
-    { "BG"    , "1.Qg8+ Nxg8",          0.0   },
-    { "BGA"   , "1.Qg8+ Nxg8 2.Nf7#",   12.0  },   // White gives mate
-    { "BGB"   , "1.Qg8+ Nxg8 2.Nxg8",   -10.0 },   // Black has huge material plus
-    { "BH"    , "1.Qg8+ Rxg8",          0.0   },
-    { "BHA"   , "1.Qg8+ Rxg8 2.Nf7#",   12.0  },   // White gives mate
-    { "BHB"   , "1.Qg8+ Rxg8 2.Nxg8",   -8.0  }    // Black has large material plus
+    "1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1",
+    "White can defend or give Philidor's mate (same as above, with first move reversed)",
+    "Since Qg8+ is not first choice, there's less alpha-beta cutoffs than example 2",
+    {
+        { "A"     , "1.Qa1",                0.0   },
+        { "AG"    , "1.Qa1 Rc6",            0.0   },
+        { "AGA"   , "1.Qa1 Rc6 2.Nf7+",     0.0   },   // equal(ish)
+        { "AGB"   , "1.Qa1 Rc6 2.Ng4",      0.0   },   // equal(ish)
+        { "AH"    , "1.Qa1 Ng8",            0.0   },
+        { "AHA"   , "1.Qa1 Ng8 2.Nf7#",     12.0  },   // White gives mate
+        { "AHB"   , "1.Qa1 Ng8 2.Ng4",      0.0   },   // equal(ish)
+        { "B"     , "1.Qg8+",               0.0   },
+        { "BG"    , "1.Qg8+ Nxg8",          0.0   },
+        { "BGA"   , "1.Qg8+ Nxg8 2.Nf7#",   12.0  },   // White gives mate
+        { "BGB"   , "1.Qg8+ Nxg8 2.Nxg8",   -10.0 },   // Black has huge material plus
+        { "BH"    , "1.Qg8+ Rxg8",          0.0   },
+        { "BHA"   , "1.Qg8+ Rxg8 2.Nf7#",   12.0  },   // White gives mate
+        { "BHB"   , "1.Qg8+ Rxg8 2.Nxg8",   -8.0  }    // Black has large material plus
+    }
 };
 
 // White can win a rook, or give mate in some lines
-static std::vector<Position> model4 =
+static Model model4 =
 {
-    { "(root)", "8/r5kp/6pr/8/1n1N4/6R1/6PP/3R3K w - - 0 1", 0.0 },
-    { "A"     , "1.Nf5+",               0.0  },
-    { "AG"    , "1.Nf5+ Kh8",           0.0  },
-    { "AGA"   , "1.Nf5+ Kh8 2.Nxh6",    5.0  },    // White wins a rook
-    { "AGB"   , "1.Nf5+ Kh8 2.Rd8#",    12.0 },    // White gives mate
-    { "AH"    , "1.Nf5+ Kg8",           0.0  },
-    { "AHA"   , "1.Nf5+ Kg8 2.Nxh6+",   5.1  },    // White wins a rook
-    { "AHB"   , "1.Nf5+ Kg8 2.h3",      0.1  },    // equal(ish)
-    { "B"     , "1.Ne6+",               0.0  },
-    { "BG"    , "1.Ne6+ Kh8",           0.0  },
-    { "BGA"   , "1.Ne6+ Kh8 2.h3",      0.2  },    // equal(ish)
-    { "BGB"   , "1.Ne6+ Kh8 2.Rd8#",    12.0 },    // White gives mate
-    { "BH"    , "1.Ne6+ Kg8",           0.0  },
-    { "BHA"   , "1.Ne6+ Kg8 2.h3",      0.3  },    // equal(ish)
-    { "BHB"   , "1.Ne6+ Kg8 2.Rd8+",    0.5  }     // equal(ish)
+    "8/r5kp/6pr/8/1n1N4/6R1/6PP/3R3K w - - 0 1",
+    "White can win a rook, or give mate in some lines",
+    "Decision 4) is a good example of Alpha-Beta cutoff. 2.Rd8 mate refutes\n"
+    "2...Kh8, given that 2...Kg8 is not mated. So no need to look at other\n"
+    "replies to 2...Kh8\n",
+    {
+        { "A"     , "1.Nf5+",               0.0  },
+        { "AG"    , "1.Nf5+ Kg8",           0.0  },
+        { "AGA"   , "1.Nf5+ Kg8 2.Nxh6+",   5.1  },    // White wins a rook
+        { "AGB"   , "1.Nf5+ Kg8 2.h3",      0.1  },    // equal(ish)
+        { "AH"    , "1.Nf5+ Kh8",           0.0  },
+        { "AHA"   , "1.Nf5+ Kh8 2.Rd8#",    12.0 },    // White gives mate
+        { "AHB"   , "1.Nf5+ Kh8 2.Nxh6",    5.0  },    // White wins a rook
+        { "B"     , "1.Ne6+",               0.0  },
+        { "BG"    , "1.Ne6+ Kg8",           0.0  },
+        { "BGA"   , "1.Ne6+ Kg8 2.h3",      0.3  },    // equal(ish)
+        { "BGB"   , "1.Ne6+ Kg8 2.Rd8+",    0.5  },    // equal(ish)
+        { "BH"    , "1.Ne6+ Kh8",           0.0  },
+        { "BHA"   , "1.Ne6+ Kh8 2.h3",      0.2  },    // equal(ish)
+        { "BHB"   , "1.Ne6+ Kh8 2.Rd8#",    12.0 }     // White gives mate
+    }
 };
 
-static void build_model( const std::vector<Position> &model )
+// White can take a bishop or fork king queen and rook
+static Model model5 =
 {
+   "7k/R1ppp1p1/1p6/4q3/5N1r/3b3P/PP3PP1/Q5K1 w - - 0 1",
+   "This is the same as Example 1) except the static score for move B 1.Ng6+\n"
+   "is 1.0 (versus 0.0 for move A 1.Nxd3). Static scores for non-leaf nodes\n"
+   "don't affect the ultimate PV calculated, but they do result in\n"
+   "re-ordering of evaluations. The result here is that branch B is\n"
+   "evaluated first, so this time there are Alpha-Beta cutoffs. Alpha-Beta\n"
+   "works best when stronger moves are evaluated first.\n",
+   "So the result is an optimised calculation compared to Example 1)",
+    {
+       { "A"     , "1.Nxd3",                0.0  },
+       { "AG"    , "1.Nxd3 Qd6",            0.0  },
+       { "AGA"   , "1.Nxd3 Qd6 2.Ne1",      3.3  },    // White wins a bishop
+       { "AGB"   , "1.Nxd3 Qd6 2.Qb1",      3.0  },    // White wins a bishop
+       { "AH"    , "1.Nxd3 Qg5",            0.0  },
+       { "AHA"   , "1.Nxd3 Qg5 2.Rxc7",     3.1  },    // White wins a bishop
+       { "AHB"   , "1.Nxd3 Qg5 2.Kh2",      3.2  },    // White wins a bishop
+       { "B"     , "1.Ng6+",                1.0  },
+       { "BG"    , "1.Ng6+ Kh7",            0.0  },
+       { "BGA"   , "1.Ng6+ Kh7 2.Nxe5",     9.2  },    // White wins a queen
+       { "BGB"   , "1.Ng6+ Kh7 2.Nxh4",     5.0  },    // White wins a rook
+       { "BH"    , "1.Ng6+ Kg8",            0.0  },
+       { "BHA"   , "1.Ng6+ Kg8 2.Nxe5",     9.0  },    // White wins a queen
+       { "BHB"   , "1.Ng6+ Kg8 2.Nxh4",     5.2  }     // White wins a rook
+    }
+};
+
+static void build_model( const Model &model )
+{
+    values.clear();
+    cardinal_nbr.clear();
+    lines.clear();
+    scores.clear();
     cardinal_nbr["(root)"]  = 0;
     cardinal_nbr["A"]       = 1;
     cardinal_nbr["B"]       = 2;
@@ -161,18 +218,12 @@ static void build_model( const std::vector<Position> &model )
     cardinal_nbr["BGB"]     = 12;
     cardinal_nbr["BHA"]     = 13;
     cardinal_nbr["BHB"]     = 14;
-    thc::ChessPosition cp;
-    const char *fen = model[0].moves.c_str();
-    cp.Forsyth( fen );
-    printf( "Initial position is %s\n", cp.ToDebugStr().c_str() );
-    bool skip=true; // skip the first
-    for( Position pos: model )
+    for( Position pos: model.positions )
     {
         lines[pos.key]  = pos.moves;
         scores[pos.key] = pos.score;
         values[pos.key] = sargon_import_value(pos.score); 
     }
-    lines["(root)"]  = "(root)";    // Because we used this one for the FEN
 }
 
 
@@ -356,6 +407,8 @@ struct Progress
 {
     ProgressType pt;
     unsigned int move_val;
+    unsigned int alphabeta_compare_val;
+    unsigned int minimax_compare_val;
     std::string key;
     std::string msg;
     std::string diagram_msg;
@@ -393,164 +446,208 @@ std::string insert_at_offset( const std::string &s, size_t offset, const std::st
 // Use a simple example to explore/probe the minimax algorithm and verify it
 static void new_test()
 {
-    // White king on a1 pawns a4,b3 Black king on h8 pawns g6,h6 we are going
-    //  to use this very dumb position to probe Alpha Beta pruning etc. (we
-    //  will kill the kings so that each side has only two moves available
-    //  at each position).
-    // (Start 'a' pawn on a4 instead of a3 so that 'a' pawn move is generated
-    // first on White's second move, even if 'b' pawn advances on first move)
-    const char *pos_probe = "7k/8/6pp/8/1P6/P7/8/K7 w - - 0 1";
-
-    // Because there are only 2 moves available at each ply, we can explore
-    //  to PLYMAX=3 with only 2 positions at ply 1, 4 positions at ply 2
-    //  and 8 positions at ply 3 (plus 1 root position at ply 0) for a very
-    //  manageable 1+2+4+8 = 15 nodes (i.e. positions) total. We use the
-    //  callback facility to monitor the algorithm and indeed actively
-    //  interfere with it by changing the node evals and watching how that
-    //  effects node traversal and generates a best move.
-    build_model(model3);
-    callback_enabled = true;
-    callback_kingmove_suppressed = true;
-    thc::ChessPosition cp;
-    cp.Forsyth(pos_probe);
-    pokeb(MLPTRJ,0); //need to set this ptr to 0 to get Root position recognised in callback()
-    pokeb(MLPTRJ+1,0);
-    pokeb(KOLOR,0);
-    pokeb(PLYMAX,3);
-    sargon(api_INITBD);
-    sargon_import_position(cp);
-    sargon(api_ROYALT);
-    pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
-    nodes.clear();
-    sargon(api_CPTRMV);
-
-    // Print textual summary
-    for( Progress prog: progress )
-        printf( "%s\n", prog.msg.c_str() );
-
     // Print big picture graphics
     for( std::string s: big_picture )
         printf( "%s\n", s.c_str() );
 
-    // Annotate ascii-art
-    // Step 1 make a map of key -> idx into ascii_art
-    std::map<std::string,int> key_to_ascii_idx;
-    std::map<std::string,size_t> key_to_ascii_offset;
-    for( std::pair<std::string,std::string> key_line: lines )
-    {
-        std::string key = key_line.first;
+    // Print explanation of the annotation
+    printf( "\nIn the examples below the lines are annotated as follows;\n"
+        "Moves (N) [A,M] Score Result\n"
+        " N indicates the evaluation order,\n"
+        " A is the Alpha-Beta threshold (two ply down),\n"
+        " M is the minimax threshold (one ply down),\n"
+        " Score is the node score (static score for leaf nodes, minimax score for\n"
+        "  non-leaf nodes),\n"
+        " Result indicates the result of comparing the score to the thresholds\n" );
 
-        // Find the key
-        int idx = -1;
-        size_t offset ;
-        for( unsigned int i=0; i<ascii_art.size(); i++ )
+    // Loop through multiple example positions
+    int example_nbr = 1;
+    std::vector<Model *> models = {&model1,&model2,&model3,&model4,&model5};
+    for( Model *model: models )
+    {
+        build_model( *model );
+        progress.clear();
+        callback_enabled = true;
+        callback_kingmove_suppressed = true;
+
+        // White king on a1 pawns a4,b3 Black king on h8 pawns g6,h6 we are going
+        //  to use this very dumb position to probe Alpha Beta pruning etc. (we
+        //  will kill the kings so that each side has only two moves available
+        //  at each position).
+        // (Start 'a' pawn on a4 instead of a3 so that 'a' pawn move is generated
+        // first on White's second move, even if 'b' pawn advances on first move)
+        const char *pos_probe = "7k/8/6pp/8/1P6/P7/8/K7 w - - 0 1";
+
+        // Because there are only 2 moves available at each ply, we can explore
+        //  to PLYMAX=3 with only 2 positions at ply 1, 4 positions at ply 2
+        //  and 8 positions at ply 3 (plus 1 root position at ply 0) for a very
+        //  manageable 1+2+4+8 = 15 nodes (i.e. positions) total. We use the
+        //  callback facility to monitor the algorithm and indeed actively
+        //  interfere with it by changing the node evals and watching how that
+        //  effects node traversal and generates a best move.
+        thc::ChessPosition cp;
+        cp.Forsyth(pos_probe);
+        pokeb(MLPTRJ,0); //need to set this ptr to 0 to get Root position recognised in callback()
+        pokeb(MLPTRJ+1,0);
+        pokeb(KOLOR,0);
+        pokeb(PLYMAX,3);
+        sargon(api_INITBD);
+        sargon_import_position(cp);
+        sargon(api_ROYALT);
+        pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
+        nodes.clear();
+        sargon(api_CPTRMV);
+
+        // Show position and print initial comment
+        printf("\n");
+        printf( "Example number %d)\n", example_nbr );
+        printf( "-----------------%s\n", example_nbr>=10?"-":"" );
+        example_nbr++;
+        cp.Forsyth( model->fen.c_str() );
+        printf( "%s\n", cp.ToDebugStr(model->comment1.c_str()).c_str() );
+
+        // Annotate ascii-art
+        // Step 1 make a map of key -> idx into ascii_art
+        std::map<std::string,int> key_to_ascii_idx;
+        std::map<std::string,size_t> key_to_ascii_offset;
+        for( std::pair<std::string,std::string> key_line: lines )
         {
-            std::string s = ascii_art[i];
-            offset = s.find(key);
-            if( offset != std::string::npos )
+            std::string key = key_line.first;
+
+            // Find the key
+            int idx = -1;
+            size_t offset ;
+            for( unsigned int i=0; i<ascii_art.size(); i++ )
             {
-                size_t next = offset + key.length();
-                if( next < s.length() && 'A'<= s[next] && s[next]<='H' ) 
-                    continue;   // eg key = "AG" found "AGH", keep looking
-                int prev = offset - 1; // int in case offset = 0
-                if( prev >= 0 && 'A'<= s[prev] && s[prev]<='H' ) 
-                    continue;   // eg key = "B" found "AGB", keep looking
-                idx = i;
-                break;
+                std::string s = ascii_art[i];
+                offset = s.find(key);
+                if( offset != std::string::npos )
+                {
+                    size_t next = offset + key.length();
+                    if( next < s.length() && 'A'<= s[next] && s[next]<='H' ) 
+                        continue;   // eg key = "AG" found "AGH", keep looking
+                    int prev = offset - 1; // int in case offset = 0
+                    if( prev >= 0 && 'A'<= s[prev] && s[prev]<='H' ) 
+                        continue;   // eg key = "B" found "AGB", keep looking
+                    idx = i;
+                    break;
+                }
             }
+
+            // Should always find the key
+            if( idx >= 0 )
+            {
+                key_to_ascii_idx[key]    = idx;
+                key_to_ascii_offset[key] = offset;
+            }
+            else
+                printf( "Unexpected event, key = %s\n", key.c_str() );
         }
 
-        // Should always find the key
-        if( idx >= 0 )
+        // Step 2 replace eg keys "AG" with lines eg "1.Qa1 Rc6"
+        static std::vector<std::string> ascii_working = ascii_art;
+        for( std::pair<std::string,std::string> key_line: lines )
         {
-            key_to_ascii_idx[key]    = idx;
-            key_to_ascii_offset[key] = offset;
-        }
-        else
-            printf( "Unexpected event, key = %s\n", key.c_str() );
-    }
-
-    // Step 2 replace eg keys "AG" with lines eg "1.Qa1 Rc6"
-    static std::vector<std::string> ascii_copy = ascii_art;
-    for( std::pair<std::string,std::string> key_line: lines )
-    {
-        std::string key  = key_line.first;
-        std::string line = key_line.second;
-        int idx = key_to_ascii_idx[key];
-        size_t offset = key_to_ascii_offset[key];
-        std::string s = ascii_art[idx];
-        std::string t = insert_at_offset( s, offset, line );
-        ascii_copy[idx] = t;
-    }
-
-    // Annotate lines with progress through minimax calculation
-    int order = 1;
-    std::string eval_key;
-    std::string move_score;
-    for( Progress &prog: progress )
-    {
-        std::string key;
-        std::string msg;
-        switch( prog.pt )
-        {
-            case eval:
-                eval_key = prog.key;
-                move_score = util::sprintf( "%.1f", sargon_export_value(prog.move_val) );
-                key = eval_key;
-                break;
-            case alpha_beta_yes:
-                key = eval_key;
-                msg = move_score + prog.diagram_msg;
-                break;
-            case alpha_beta_no:
-                break;
-            case bestmove_yes:
-                prog.key = eval_key;
-                key = prog.key;
-                msg = move_score + prog.diagram_msg;
-                break;
-            case bestmove_no:
-                key = eval_key;
-                msg = move_score + prog.diagram_msg;
-                break;
-        }
-
-        if( msg != "" )
-        {
+            std::string key  = key_line.first;
+            std::string line = key_line.second;
             int idx = key_to_ascii_idx[key];
             size_t offset = key_to_ascii_offset[key];
-            offset += lines[key].length();
-            std::string s = ascii_copy[idx];
-            std::string insert = util::sprintf(" <-%d: %s",order++,msg.c_str());
-            s = insert_at_offset(s,offset,insert);
-            ascii_copy[idx] = s;
+            std::string s = ascii_art[idx];
+            std::string t = insert_at_offset( s, offset, line );
+            ascii_working[idx] = t;
         }
-    }
 
-    // Run PV algorithm
-    int target = 1;
-    for( std::vector<Progress>::reverse_iterator i = progress.rbegin(); 
-        i != progress.rend(); ++i )
-    {
-        if( i->pt == bestmove_yes )
+        // Step 3: Annotate lines with progress through minimax calculation
+        int order = 1;
+        std::string eval_key;
+        std::string move_score;
+        std::string alphabeta_mini_msg;
+        for( Progress &prog: progress )
         {
-            std::string key = i->key;
-            if( target == i->key.length() )
+            std::string key;
+            std::string msg;
+            std::string neg_float_value;
+            std::string float_value;
+            switch( prog.pt )
             {
-                target++;
+                case eval:
+                    eval_key = prog.key;
+                    move_score = util::sprintf( "%.1f", sargon_export_value(prog.move_val) );
+                    float_value = (prog.alphabeta_compare_val==0 ? "MAX" : util::sprintf("%.1f",sargon_export_value(prog.alphabeta_compare_val)) ); // Show "MAX" instead of "12.8"
+                    neg_float_value = (prog.minimax_compare_val==0 ? "-MAX" : util::sprintf("%.1f",0.0-sargon_export_value(prog.minimax_compare_val)) ); // Show "-MAX" instead of "-12.8"
+                    alphabeta_mini_msg = util::sprintf( " [%s,%s] ", float_value.c_str(), neg_float_value.c_str() );
+                    key = eval_key;
+                    break;
+                case alpha_beta_yes:
+                    key = eval_key;
+                    msg = move_score + alphabeta_mini_msg + move_score + prog.diagram_msg;
+                    break;
+                case alpha_beta_no:
+                    break;
+                case bestmove_yes:
+                    prog.key = eval_key;
+                    key = prog.key;
+                    msg = move_score + alphabeta_mini_msg + move_score + prog.diagram_msg;
+                    break;
+                case bestmove_no:
+                    key = eval_key;
+                    msg = move_score + alphabeta_mini_msg + move_score + prog.diagram_msg;
+                    break;
+            }
+            if( msg != "" )
+            {
                 int idx = key_to_ascii_idx[key];
                 size_t offset = key_to_ascii_offset[key];
-                std::string s = ascii_copy[idx];
-                s = insert_before_offset(s,offset,"*");
-                ascii_copy[idx] = s;
+                offset += lines[key].length();
+                std::string s = ascii_working[idx];
+                std::string insert = util::sprintf(" (%d): %s",order++,msg.c_str());
+                s = insert_at_offset(s,offset,insert);
+                ascii_working[idx] = s;
             }
         }
-    }
 
-    // Print ascii-art
-    for( std::string s: ascii_copy )
-    {
-        printf( "%s\n", s.c_str() );
+        // Step 4: Run PV algorithm, asterisk the PV nodes
+        int target = 1;
+        std::string pv_key;
+        for( std::vector<Progress>::reverse_iterator i=progress.rbegin();  i!=progress.rend(); ++i )
+        {
+            if( i->pt == bestmove_yes )
+            {
+                std::string key = i->key;
+
+                // We are looping in reverse order, scanning for best move choices at level 1,2 then 3
+                if( target == i->key.length() )
+                {
+
+                    // Found, note that last key found handily encodes the whole PV, eg if PV is
+                    // "B", "BG", "BGH", then last pv_key will be "BGH"
+                    pv_key = key;
+                    target++;
+                    int idx = key_to_ascii_idx[key];
+                    size_t offset = key_to_ascii_offset[key];
+                    std::string s = ascii_working[idx];
+                    s = insert_before_offset(s,offset,"*");
+                    ascii_working[idx] = s;
+                }
+            }
+        }
+
+        // Print ascii-art
+        for( std::string s: ascii_working )
+        {
+            printf( "%s\n", s.c_str() );
+        }
+
+        // Print PV
+        printf( "\nPV = %s, note that the PV nodes are asterisked\n",  lines[pv_key].c_str() );
+
+        // Print concluding comment
+        printf( "%s\n", model->comment2.c_str() );
+
+        // Print textual summary
+        printf( "\nDetailed log\n" );
+        for( Progress prog: progress )
+            printf( "%s\n", prog.msg.c_str() );
     }
 }
 
@@ -651,6 +748,8 @@ extern "C" {
             prog.key = key;
             prog.pt  = eval;
             prog.move_val = al;
+            prog.alphabeta_compare_val = val;
+            prog.minimax_compare_val = peekb(bx+1);
             prog.msg = util::sprintf( "Eval (ply %d), %s", peekb(NPLY), lines[key].c_str() );
             progress.push_back(prog);
             if( jmp )
@@ -659,7 +758,7 @@ extern "C" {
                 prog.msg = util::sprintf( "Alpha beta cutoff because move value=%.1f >= two lower ply value=%s",
                 sargon_export_value(al),
                 float_value.c_str() );
-                prog.diagram_msg = util::sprintf( " >= %s (two ply lower), so ALPHA BETA CUTOFF",
+                prog.diagram_msg = util::sprintf( ">=%s so ALPHA BETA CUTOFF",
                 float_value.c_str() );
             }
             else
@@ -682,14 +781,14 @@ extern "C" {
                                       //  So jmp if al <= val means
                                       //     jmp if float(al) >= float(val)
             std::string float_value = (val==0 ? "MAX" : util::sprintf("%.1f",sargon_export_value(val)) ); // Show "MAX" instead of "12.8"
-            std::string neg_float_value = (val==0 ? "-MAX" : util::sprintf("%.1f",0.0-sargon_export_value(val)) ); // Show "-MAX" instead of "-12.8"
+            std::string neg_float_value = (val==0 ? " -MAX" : util::sprintf("%.1f",0.0-sargon_export_value(val)) ); // Show "-MAX" instead of "-12.8"
             if( jmp )
             {
                 prog.pt  = bestmove_no;
                 prog.msg = util::sprintf( "Not best move because negated move value=%.1f >= one lower ply value=%s",
                 sargon_export_value(al),
                 float_value.c_str() );
-                prog.diagram_msg = util::sprintf( " <= %s so discard",
+                prog.diagram_msg = util::sprintf( "<=%s so discard",
                 neg_float_value.c_str() );
             }
             else
@@ -698,7 +797,7 @@ extern "C" {
                 prog.msg = util::sprintf( "Best move because negated move value=%.1f < one lower ply value=%s",
                 sargon_export_value(al),
                 float_value.c_str() );
-                prog.diagram_msg = util::sprintf( " > %s so NEW BEST MOVE",
+                prog.diagram_msg = util::sprintf( ">%s so NEW BEST MOVE",
                 neg_float_value.c_str() );
             }
             progress.push_back(prog);
