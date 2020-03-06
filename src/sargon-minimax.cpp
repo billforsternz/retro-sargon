@@ -24,21 +24,8 @@
 // Misc
 static void new_test();
 static std::string get_key();
-static std::string insert_before_offset( const std::string &s, size_t offset, const std::string &insert );
-static std::string insert_at_offset( const std::string &s, size_t offset, const std::string &insert );
-
-// Nodes to track the PV (principal [primary?] variation)
-struct NODE
-{
-    unsigned int level;
-    unsigned char from;
-    unsigned char to;
-    unsigned char flags;
-    unsigned char value;
-    NODE() : level(0), from(0), to(0), flags(0), value(0) {}
-    NODE( unsigned int l, unsigned char f, unsigned char t, unsigned char fs, unsigned char v ) : level(l), from(f), to(t), flags(fs), value(v) {}
-};
-static std::vector< NODE > nodes;
+static std::string overwrite_before_offset( const std::string &s, size_t offset, const std::string &insert );
+static std::string overwrite_at_offset( const std::string &s, size_t offset, const std::string &insert );
 
 // Control callback() behaviour
 static bool callback_enabled;
@@ -49,6 +36,97 @@ int main( int argc, const char *argv[] )
     new_test();
     return 0;
 }
+
+/*
+
+The big idea
+============
+
+This is an attempt to peer into Sargon and see how it works. Hopefully it will
+also be a useful exercise for anyone starting out in computer chess programming
+to see a working model of Minimax and Alpha-Beta algorithms and "see" how those
+algorithms work.
+
+The idea of a "model" is very important. The exponentially exploding complexity
+of analysis of a real chess position can overwhelm human attempts to understand
+it in detail. So we build a small model instead. Small enought to be easily
+understood, large enough to capture all the important concepts.
+
+Our model is a 2x2x2 system. That is in the root position, White to play has
+two moves only. In each position reached, Black to play then has two possible
+moves. Finally in each of those positions White to play again has just two
+possible moves. Counting the root position, only 15 positions are encountered.
+
+We use short "key" notation to describe the positions in our models. "A" and
+and "B" are the keys for the positions reached after White's first move. Then
+"AG" and "AH" are the positions reached after Black responds with each of
+their options after "A". Similarly "BG" and "BH" are the positions after
+Black responds to "B". Then "AGA", "AGB" etc. Basically at each turn White's
+moves are A and B, Black's are G and H.
+
+To make Sargon co-operate with this idea we tell it to analyse the following
+simple position to depth 3 ply;
+
+White king on a1 pawns a4,b3. Black king on h8 pawns g6,h6.
+
+Even this position is more complicated than our simple model, because both
+sides have five legal moves rather than two. So we use the Callback facility
+to interfere with Sargon's move generator - suppressing all king moves.
+Now there are just two moves each at each ply, conveniently for our notation
+single square 'a' and 'b' pawn pushes for White and 'g' and 'h' pushes for
+Black. The reason the White 'a' pawn is the only one on the fourth rank is
+just a pesky detail - it ensures Sargon always generates A moves ahead of
+B moves, on the third ply as well as the first.
+
+Of course from a chess perspective nothing is going to be decided in this
+position after just 3 ply, pawn promotion will be well over the horizon. So
+just as we suppressed Sargon's king moves, we will go ahead and interfere with
+Sargon's scoring function using the callback facility, to pretend that the
+positions reached have very different scores. While we are at it, we will
+pretend that the starting position and the lines of play are quite different
+to the actual simple pawn ending, and we'll make up positions and moves that
+match the pretend scores. Sargon doesn't need to know!
+
+The cool thing about this with this simple model approach in hand we will be
+able to watch Sargon accurately calculate (for example) Philidor's smothered
+mate;
+
+We pretend that the initial position is
+
+FEN "1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1",
+
+.rr....k
+....n.pp
+.......N
+........
+........
+........
+Q....PPP
+......K.
+
+Our pretend lines and scores are as follows, format is: {key, line, score}
+
+{ "A"  , "1.Qg8+",             0.0   },
+{ "AG" , "1.Qg8+ Nxg8",        0.0   },
+{ "AGA", "1.Qg8+ Nxg8 2.Nf7#", 12.0  },   // White gives mate
+{ "AGB", "1.Qg8+ Nxg8 2.Nxg8", -10.0 },   // Black has huge material plus
+{ "AH" , "1.Qg8+ Rxg8",        0.0   },
+{ "AHA", "1.Qg8+ Rxg8 2.Nf7#", 12.0  },   // White gives mate
+{ "AHB", "1.Qg8+ Rxg8 2.Nxg8", -8.0  },   // Black has large material plus
+{ "B"  , "1.Qa1",              0.0   },
+{ "BG" , "1.Qa1 Rc6",          0.0   },
+{ "BGA", "1.Qa1 Rc6 2.Nf7+",   0.0   },   // equal(ish)
+{ "BGB", "1.Qa1 Rc6 2.Ng4",    0.0   },   // equal(ish)
+{ "BH" , "1.Qa1 Ng8",          0.0   },
+{ "BHA", "1.Qa1 Ng8 2.Nf7#",   12.0  },   // White gives mate
+{ "BHB", "1.Qa1 Ng8 2.Ng4",    0.0   }    // equal(ish)
+
+I hope this all makes sense. We'll see exactly this model run later, and
+watch Sargon accurately calculate the PV (Principal Variation) as;
+
+PV = 1.Qg8+ Nxg8 2.Nf7#
+
+*/
 
 static std::vector<std::string> big_picture =
 {
@@ -86,6 +164,103 @@ static std::vector<std::string> big_picture =
 "                  BHB                     BHB 14                  BHB 12",
 ""
 };
+
+
+// Calculate a short string key to represent the moves played
+//  eg 1. a4-a5 h6-h5 2. a5-a6 => "AHA"
+static std::string get_key()
+{
+    thc::ChessPosition cp;
+    sargon_export_position( cp );
+    std::string key = "??";
+    int nmoves = 0; // work out how many moves have been played
+    bool a0 = (cp.squares[thc::a3] == 'P');
+    bool a1 = (cp.squares[thc::a4] == 'P');
+    bool a2 = (cp.squares[thc::a5] == 'P');
+    if( a1 )
+        nmoves += 1;
+    else if( a2 )
+        nmoves += 2;
+    bool b0 = (cp.squares[thc::b4] == 'P');
+    bool b1 = (cp.squares[thc::b5] == 'P');
+    bool b2 = (cp.squares[thc::b6] == 'P');
+    if( b1 )
+        nmoves += 1;
+    else if( b2 )
+        nmoves += 2;
+    bool g0 = (cp.squares[thc::g6] == 'p');
+    bool g1 = (cp.squares[thc::g5] == 'p');
+    if( g1 )
+        nmoves += 1;
+    bool h0 = (cp.squares[thc::h6] == 'p');
+    bool h1 = (cp.squares[thc::h5] == 'p');
+    if( h1 )
+        nmoves += 1;
+    if( nmoves == 0 )
+    {
+        key = "(root)";
+    }
+    else if( nmoves == 1 )
+    {
+        if( a1 )
+            key = "A";
+        else if( b1 )
+            key = "B";
+    }
+    else if( nmoves == 2 )
+    {
+        if( a1 && g1 )
+            key = "AG";
+        else if( a1 && h1 )
+            key = "AH";
+        else if( b1 && g1  )
+            key = "BG";
+        else if( b1 && h1 )
+            key = "BH";
+    }
+    else if( nmoves == 3 )
+    {
+        if( a2 && g1 )
+            key = "AGA";
+        else if( a2 && h1 )
+            key = "AHA";
+        else if( b2 && g1 )
+            key = "BGB";
+        else if( b2 && h1 )
+            key = "BHB";
+        else
+        {
+            // In other three move cases we can't work out the whole sequence of moves unless we know
+            //  the last move, try to rely on this as little as possible
+            unsigned int p = peekw(MLPTRJ);  // Load ptr to last move
+            unsigned char from  = p ? peekb(p+2) : 0;
+            thc::Square sq_from;
+            bool ok_from = sargon_export_square(from,sq_from);
+            if( ok_from )
+            {
+                bool a_last = (thc::get_file(sq_from) == 'a');
+                bool b_last = (thc::get_file(sq_from) == 'b');
+                bool g_last = (thc::get_file(sq_from) == 'g');
+                bool h_last = (thc::get_file(sq_from) == 'h');
+                if( a1 && g1 && b1 )
+                {
+                    if ( a_last )
+                        key = "BGA";
+                    else if ( b_last )
+                        key = "AGB";
+                }
+                else if( a1 && h1 && b1 )
+                {
+                    if ( a_last )
+                        key = "BHA";
+                    else if ( b_last )
+                        key = "AHB";
+                }
+            }
+        }
+    }
+    return key;
+}
 
 // Create simple models to watch minimax algorithm, they're comprised of move sequences that
 //  we map onto our A,B,AG,AH,AGA etc move sequence keys
@@ -166,7 +341,46 @@ private:
         "                    BHB"
     };
 
+    // Construct ready to go
+public:
+    AsciiArt( const Model &m )
+    {
+        for( Position pos: m.positions )
+            lines[pos.key]  = pos.moves;
+        FindKeys();
+        ReplaceKeysWithLines();
+    }
+
+    // Add string to end of line
+    void Annotate( const std::string &key,  const std::string &annotation )
+    {
+        int idx = key_to_ascii_idx[key];
+        size_t offset = key_to_ascii_offset[key];
+        offset += lines[key].length();
+        std::string s = ascii_art[idx];
+        s = overwrite_at_offset(s,offset,annotation);
+        ascii_art[idx] = s;
+    }
+
+    // Add asterisk before line
+    void Asterisk( const std::string &key )
+    {
+        int idx = key_to_ascii_idx[key];
+        size_t offset = key_to_ascii_offset[key];
+        std::string s = ascii_art[idx];
+        s = overwrite_before_offset(s,offset,"*");
+        ascii_art[idx] = s;
+    }
+
+    // Print the diagram
+    void Print()
+    {
+        for( std::string s: ascii_art )
+            printf( "%s\n", s.c_str() );
+    }
+
     // Index the keys within the diagram for easy access later
+private:
     void FindKeys()
     {
         for( std::pair<std::string,std::string> key_line: lines )
@@ -214,59 +428,18 @@ private:
             int idx = key_to_ascii_idx[key];
             size_t offset = key_to_ascii_offset[key];
             std::string s = ascii_art[idx];
-            std::string t = insert_at_offset( s, offset, line );
+            std::string t = overwrite_at_offset( s, offset, line );
             ascii_art[idx] = t;
         }
     }
-
-    // Construct ready to go
-public:
-    AsciiArt( const Model &model )
-    {
-        for( Position pos: model.positions )
-            lines[pos.key]  = pos.moves;
-        FindKeys();
-        ReplaceKeysWithLines();
-    }
-
-    // Add string to end of line
-    void Annotate( const std::string &key,  const std::string &annotation )
-    {
-        int idx = key_to_ascii_idx[key];
-        size_t offset = key_to_ascii_offset[key];
-        offset += lines[key].length();
-        std::string s = ascii_art[idx];
-        s = insert_at_offset(s,offset,annotation);
-        ascii_art[idx] = s;
-    }
-
-    // Add asterisk before line
-    void Asterisk( const std::string &key )
-    {
-        int idx = key_to_ascii_idx[key];
-        size_t offset = key_to_ascii_offset[key];
-        std::string s = ascii_art[idx];
-        s = insert_before_offset(s,offset,"*");
-        ascii_art[idx] = s;
-    }
-
-    // Print the diagram
-    void Print()
-    {
-        for( std::string s: ascii_art )
-            printf( "%s\n", s.c_str() );
-    }
-
 };
 
 // A complete example runs a model and presents the results
 class Example
 {
 private:
-    const Model *pmodel;
+    const Model &model;
     std::map<std::string,double> scores;
-    std::map<std::string,int> key_to_ascii_idx;
-    std::map<std::string,size_t> key_to_ascii_offset;
     std::string pv_key;
     AsciiArt ascii_art;
 
@@ -279,13 +452,8 @@ public:
 
 public:
     // Set up the example
-    Example( const Model &model ) : ascii_art(model)
+    Example( const Model &m ) : ascii_art(m), model(m)
     {
-        pmodel = &model;
-        values.clear();
-        cardinal_nbr.clear();
-        lines.clear();
-        scores.clear();
         cardinal_nbr["(root)"]  = 0;
         cardinal_nbr["A"]       = 1;
         cardinal_nbr["B"]       = 2;
@@ -341,7 +509,6 @@ public:
         sargon_import_position(cp);
         sargon(api_ROYALT);
         pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
-        nodes.clear();
         sargon(api_CPTRMV);
     }
 
@@ -353,8 +520,8 @@ public:
         printf( "Example number %d)\n", example_nbr );
         printf( "-----------------%s\n", example_nbr>=10?"-":"" );
         thc::ChessPosition cp;
-        cp.Forsyth( pmodel->fen.c_str() );
-        printf( "%s\n", cp.ToDebugStr(pmodel->comment1.c_str()).c_str() );
+        cp.Forsyth( model.fen.c_str() );
+        printf( "%s\n", cp.ToDebugStr(model.comment1.c_str()).c_str() );
     }
 
     // Annotate ascii art lines with progress through minimax calculation
@@ -407,21 +574,20 @@ public:
     // Run PV algorithm, asterisk the PV nodes in ascii art
     void CalculatePV()
     {
+        // Loop in reverse order, scanning for best move choices at level 1 (then 2 then 3)
         int target = 1;
-        for( std::vector<Progress>::reverse_iterator i=progress.rbegin();  i!=progress.rend(); ++i )
+        for( std::vector<Progress>::reverse_iterator it=progress.rbegin();  it!=progress.rend(); ++it )
         {
-            if( i->pt == bestmove_yes )
+            if( it->pt == bestmove_yes )
             {
-                std::string key = i->key;
-
-                // We are looping in reverse order, scanning for best move choices at level 1,2 then 3
-                if( target == i->key.length() )
+                std::string key = it->key;
+                if( target == it->key.length() )
                 {
+                    target++;
 
                     // Found, note that last key found handily encodes the whole PV, eg if PV is
                     // "B", "BG", "BGH", then last pv_key will be "BGH"
                     pv_key = key;
-                    target++;
                     ascii_art.Asterisk(key);
                 }
             }
@@ -441,7 +607,7 @@ public:
         printf( "\nPV = %s, note that the PV nodes are asterisked\n",  lines[pv_key].c_str() );
 
         // Print concluding comment
-        printf( "%s\n", pmodel->comment2.c_str() );
+        printf( "%s\n", model.comment2.c_str() );
 
         // Print textual summary
         printf( "\nDetailed log\n" );
@@ -578,7 +744,8 @@ static Model model5 =
     }
 };
 
-static std::string insert_before_offset( const std::string &s, size_t offset, const std::string &insert )
+// A little string utility
+static std::string overwrite_before_offset( const std::string &s, size_t offset, const std::string &insert )
 {
     std::string ret;
     if( insert.length() <= offset )
@@ -595,7 +762,8 @@ static std::string insert_before_offset( const std::string &s, size_t offset, co
     return ret;    
 }
 
-static std::string insert_at_offset( const std::string &s, size_t offset, const std::string &insert )
+// Another little string utility
+static std::string overwrite_at_offset( const std::string &s, size_t offset, const std::string &insert )
 {
     std::string ret;
     ret = s.substr( 0, offset );
@@ -605,102 +773,7 @@ static std::string insert_at_offset( const std::string &s, size_t offset, const 
     return ret;    
 }
 
-// Calculate a short string key to represent the moves played
-//  eg 1. a4-a5 h6-h5 2. a5-a6 => "AHA"
-static std::string get_key()
-{
-    thc::ChessPosition cp;
-    sargon_export_position( cp );
-    std::string key = "??";
-    int nmoves = 0; // work out how many moves have been played
-    bool a0 = (cp.squares[thc::a3] == 'P');
-    bool a1 = (cp.squares[thc::a4] == 'P');
-    bool a2 = (cp.squares[thc::a5] == 'P');
-    if( a1 )
-        nmoves += 1;
-    else if( a2 )
-        nmoves += 2;
-    bool b0 = (cp.squares[thc::b4] == 'P');
-    bool b1 = (cp.squares[thc::b5] == 'P');
-    bool b2 = (cp.squares[thc::b6] == 'P');
-    if( b1 )
-        nmoves += 1;
-    else if( b2 )
-        nmoves += 2;
-    bool g0 = (cp.squares[thc::g6] == 'p');
-    bool g1 = (cp.squares[thc::g5] == 'p');
-    if( g1 )
-        nmoves += 1;
-    bool h0 = (cp.squares[thc::h6] == 'p');
-    bool h1 = (cp.squares[thc::h5] == 'p');
-    if( h1 )
-        nmoves += 1;
-    if( nmoves == 0 )
-    {
-        key = "(root)";
-    }
-    else if( nmoves == 1 )
-    {
-        if( a1 )
-            key = "A";
-        else if( b1 )
-            key = "B";
-    }
-    else if( nmoves == 2 )
-    {
-        if( a1 && g1 )
-            key = "AG";
-        else if( a1 && h1 )
-            key = "AH";
-        else if( b1 && g1  )
-            key = "BG";
-        else if( b1 && h1 )
-            key = "BH";
-    }
-    else if( nmoves == 3 )
-    {
-        if( a2 && g1 )
-            key = "AGA";
-        else if( a2 && h1 )
-            key = "AHA";
-        else if( b2 && g1 )
-            key = "BGB";
-        else if( b2 && h1 )
-            key = "BHB";
-        else
-        {
-            // In other three move cases we can't work out the whole sequence of moves unless we know
-            //  the last move, try to rely on this as little as possible
-            unsigned int p = peekw(MLPTRJ);  // Load ptr to last move
-            unsigned char from  = p ? peekb(p+2) : 0;
-            thc::Square sq_from;
-            bool ok_from = sargon_export_square(from,sq_from);
-            if( ok_from )
-            {
-                bool a_last = (thc::get_file(sq_from) == 'a');
-                bool b_last = (thc::get_file(sq_from) == 'b');
-                bool g_last = (thc::get_file(sq_from) == 'g');
-                bool h_last = (thc::get_file(sq_from) == 'h');
-                if( a1 && g1 && b1 )
-                {
-                    if ( a_last )
-                        key = "BGA";
-                    else if ( b_last )
-                        key = "AGB";
-                }
-                else if( a1 && h1 && b1 )
-                {
-                    if ( a_last )
-                        key = "BHA";
-                    else if ( b_last )
-                        key = "AHB";
-                }
-            }
-        }
-    }
-    return key;
-}
-
+// Callback needs access to the running example
 static Example *running_example;
 
 // Use a simple example to explore/probe the minimax algorithm and verify it
@@ -744,6 +817,9 @@ static void new_test()
     }
 }
 
+// Sargon calls back into this function as it runs, we can monitor what's going on by
+//  reading registers and peeking at memory, and influence it by modifying registers
+//  and poking at memory.
 extern "C" {
     void callback( uint32_t reg_edi, uint32_t reg_esi, uint32_t reg_ebp, uint32_t reg_esp,
                    uint32_t reg_ebx, uint32_t reg_edx, uint32_t reg_ecx, uint32_t reg_eax,
@@ -767,17 +843,6 @@ extern "C" {
             *peax = a_reg;
             return;
         }
-        else if( 0 == strcmp(msg,"Yes! Best move") )
-        {
-            unsigned int  p     = peekw(MLPTRJ);
-            unsigned int  level = peekb(NPLY);
-            unsigned char from  = peekb(p+2);
-            unsigned char to    = peekb(p+3);
-            unsigned char flags = peekb(p+4);
-            unsigned char value = peekb(p+5);
-            NODE n(level,from,to,flags,value);
-            nodes.push_back(n);
-        }
         if( !callback_enabled )
             return;
 
@@ -790,10 +855,10 @@ extern "C" {
             {
                 // Change al to 2 and ch to 1 and MPIECE will exit without
                 //  generating (non-castling) king moves
-                volatile uint32_t *peax = &reg_eax;
-                *peax = 2;
-                volatile uint32_t *pecx = &reg_ecx;
-                *pecx = 0x100;
+                volatile uint32_t *peax = &reg_eax;   // note use of volatile keyword
+                *peax = 2;                            // MODIFY VALUE !
+                volatile uint32_t *pecx = &reg_ecx;   // note use of volatile keyword
+                *pecx = 0x100;                        // MODIFY VALUE !
             }
         }
 
@@ -806,14 +871,16 @@ extern "C" {
             Progress prog;
             prog.pt  = create;
             prog.key = key;
-            prog.msg = util::sprintf( "Position %d, \"%s\" created in tree", running_example->cardinal_nbr[key], running_example->lines[key].c_str() );
+            prog.msg = util::sprintf( "Position %d, \"%s\" created in tree",
+                                            running_example->cardinal_nbr[key],
+                                            running_example->lines[key].c_str() );
             running_example->progress.push_back(prog);
             unsigned int value = running_example->values[key];
             volatile uint32_t *peax = &reg_eax;     // note use of volatile keyword
             *peax = value;                          // MODIFY VALUE !
         }
 
-        // For purposes of minimax tracing experiment, try to figure out
+        // For purposes of minimax tracing experiment, describe and annotate the
         //  best move calculation
         else if( std::string(msg) == "Alpha beta cutoff?" )
         {
@@ -845,7 +912,7 @@ extern "C" {
             prog.minimax_compare_val = peekb(bx+1);
             prog.msg = util::sprintf( "Eval (ply %d), %s", peekb(NPLY), running_example->lines[key].c_str() );
             running_example->progress.push_back(prog);
-            if( jmp )
+            if( jmp )   // jmp matches the Sargon assembly code jump decision. Jump if Alpha-Beta cutoff
             {
                 prog.pt  = alpha_beta_yes;
                 prog.msg = util::sprintf( "Alpha beta cutoff because move value=%.1f >= two lower ply value=%s",
@@ -875,7 +942,7 @@ extern "C" {
                                       //     jmp if float(al) >= float(val)
             std::string float_value = (val==0 ? "MAX" : util::sprintf("%.1f",sargon_export_value(val)) ); // Show "MAX" instead of "12.8"
             std::string neg_float_value = (val==0 ? " -MAX" : util::sprintf("%.1f",0.0-sargon_export_value(val)) ); // Show "-MAX" instead of "-12.8"
-            if( jmp )
+            if( jmp )   // jmp matches the Sargon assembly code jump decision. Jump if not best move
             {
                 prog.pt  = bestmove_no;
                 prog.msg = util::sprintf( "Not best move because negated move value=%.1f >= one lower ply value=%s",
