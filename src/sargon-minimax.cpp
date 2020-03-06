@@ -21,21 +21,17 @@
 #include "sargon-asm-interface.h"
 #include "sargon-interface.h"
 
+// Entry points
+void sargon_minimax_main();
+bool sargon_minimax_regression_test( bool quiet);
+
 // Misc
-static void new_test();
 static std::string get_key();
 static std::string overwrite_before_offset( const std::string &s, size_t offset, const std::string &insert );
 static std::string overwrite_at_offset( const std::string &s, size_t offset, const std::string &insert );
 
 // Control callback() behaviour
-static bool callback_enabled;
-static bool callback_kingmove_suppressed;
-
-int main( int argc, const char *argv[] )
-{
-    new_test();
-    return 0;
-}
+static bool callback_minimax_mods_active;
 
 /*
 
@@ -271,7 +267,7 @@ struct Position
     double score;
 };
 
-// A complete model, starting position comments, and a list of all the keyed positions
+// A complete model; starting position, comments, and a list of all the keyed positions
 struct Model
 {
     std::string fen;
@@ -481,8 +477,7 @@ public:
     void Run()
     {
         progress.clear();
-        callback_enabled = true;
-        callback_kingmove_suppressed = true;
+        callback_minimax_mods_active = true;
 
         // White king on a1 pawns a4,b3 Black king on h8 pawns g6,h6 we are going
         //  to use this very dumb position to probe Alpha Beta pruning etc. (we
@@ -510,6 +505,7 @@ public:
         sargon(api_ROYALT);
         pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
         sargon(api_CPTRMV);
+        callback_minimax_mods_active = false;
     }
 
     // Print introduction
@@ -614,6 +610,19 @@ public:
         for( Progress prog: progress )
             printf( "%s\n", prog.msg.c_str() );
     }
+
+    // Detailed log
+    std::string DetailedLog()
+    {
+        std::string s;
+        for( Progress prog: progress )
+        {
+            s += prog.msg;
+            s += '\n';
+        }
+        return s;
+    }
+
 };
 
 // White can take a bishop or fork king queen and rook
@@ -744,7 +753,7 @@ static Model model5 =
     }
 };
 
-// A little string utility
+// Consider moving this simple string utility to util.cpp
 static std::string overwrite_before_offset( const std::string &s, size_t offset, const std::string &insert )
 {
     std::string ret;
@@ -762,7 +771,7 @@ static std::string overwrite_before_offset( const std::string &s, size_t offset,
     return ret;    
 }
 
-// Another little string utility
+// Consider moving this simple string utility to util.cpp
 static std::string overwrite_at_offset( const std::string &s, size_t offset, const std::string &insert )
 {
     std::string ret;
@@ -777,7 +786,7 @@ static std::string overwrite_at_offset( const std::string &s, size_t offset, con
 static Example *running_example;
 
 // Use a simple example to explore/probe the minimax algorithm and verify it
-static void new_test()
+void sargon_minimax_main()
 {
     // Print big picture graphics
     for( std::string s: big_picture )
@@ -817,6 +826,297 @@ static void new_test()
     }
 }
 
+// For regression testing, check just check that we get expected detailed log
+std::string model1_detailed_log =
+"Position 0, \"\" created in tree\n"
+"Position 1, \"1.Nxd3\" created in tree\n"
+"Position 2, \"1.Ng6+\" created in tree\n"
+"Position 3, \"1.Nxd3 Qd6\" created in tree\n"
+"Position 4, \"1.Nxd3 Qg5\" created in tree\n"
+"Position 5, \"1.Nxd3 Qd6 2.Ne1\" created in tree\n"
+"Eval (ply 3), 1.Nxd3 Qd6 2.Ne1\n"
+"No alpha beta cutoff because move value=3.3 < two lower ply value=MAX\n"
+"Best move because negated move value=-3.3 < one lower ply value=MAX\n"
+"(Confirming best move)\n"
+"Position 6, \"1.Nxd3 Qd6 2.Qb1\" created in tree\n"
+"Eval (ply 3), 1.Nxd3 Qd6 2.Qb1\n"
+"No alpha beta cutoff because move value=3.0 < two lower ply value=MAX\n"
+"Not best move because negated move value=-3.0 >= one lower ply value=-3.3\n"
+"Eval (ply 2), 1.Nxd3 Qd6\n"
+"No alpha beta cutoff because move value=-3.3 < two lower ply value=MAX\n"
+"Best move because negated move value=3.3 < one lower ply value=MAX\n"
+"(Confirming best move)\n"
+"Position 7, \"1.Nxd3 Qg5 2.Rxc7\" created in tree\n"
+"Eval (ply 3), 1.Nxd3 Qg5 2.Rxc7\n"
+"No alpha beta cutoff because move value=3.1 < two lower ply value=3.3\n"
+"Best move because negated move value=-3.1 < one lower ply value=MAX\n"
+"(Confirming best move)\n"
+"Position 8, \"1.Nxd3 Qg5 2.Kh2\" created in tree\n"
+"Eval (ply 3), 1.Nxd3 Qg5 2.Kh2\n"
+"No alpha beta cutoff because move value=3.2 < two lower ply value=3.3\n"
+"Best move because negated move value=-3.2 < one lower ply value=-3.1\n"
+"(Confirming best move)\n"
+"Eval (ply 2), 1.Nxd3 Qg5\n"
+"No alpha beta cutoff because move value=-3.2 < two lower ply value=MAX\n"
+"Best move because negated move value=3.2 < one lower ply value=3.3\n"
+"(Confirming best move)\n"
+"Eval (ply 1), 1.Nxd3\n"
+"No alpha beta cutoff because move value=3.2 < two lower ply value=MAX\n"
+"Best move because negated move value=-3.2 < one lower ply value=MAX\n"
+"(Confirming best move)\n"
+"Position 9, \"1.Ng6+ Kh7\" created in tree\n"
+"Position 10, \"1.Ng6+ Kg8\" created in tree\n"
+"Position 11, \"1.Ng6+ Kh7 2.Nxe5\" created in tree\n"
+"Eval (ply 3), 1.Ng6+ Kh7 2.Nxe5\n"
+"No alpha beta cutoff because move value=9.2 < two lower ply value=MAX\n"
+"Best move because negated move value=-9.2 < one lower ply value=-3.2\n"
+"(Confirming best move)\n"
+"Position 12, \"1.Ng6+ Kh7 2.Nxh4\" created in tree\n"
+"Eval (ply 3), 1.Ng6+ Kh7 2.Nxh4\n"
+"No alpha beta cutoff because move value=5.0 < two lower ply value=MAX\n"
+"Not best move because negated move value=-5.0 >= one lower ply value=-9.2\n"
+"Eval (ply 2), 1.Ng6+ Kh7\n"
+"No alpha beta cutoff because move value=-9.2 < two lower ply value=-3.2\n"
+"Best move because negated move value=9.2 < one lower ply value=MAX\n"
+"(Confirming best move)\n"
+"Position 13, \"1.Ng6+ Kg8 2.Nxe5\" created in tree\n"
+"Eval (ply 3), 1.Ng6+ Kg8 2.Nxe5\n"
+"No alpha beta cutoff because move value=9.0 < two lower ply value=9.2\n"
+"Best move because negated move value=-9.0 < one lower ply value=-3.2\n"
+"(Confirming best move)\n"
+"Position 14, \"1.Ng6+ Kg8 2.Nxh4\" created in tree\n"
+"Eval (ply 3), 1.Ng6+ Kg8 2.Nxh4\n"
+"No alpha beta cutoff because move value=5.2 < two lower ply value=9.2\n"
+"Not best move because negated move value=-5.2 >= one lower ply value=-9.0\n"
+"Eval (ply 2), 1.Ng6+ Kg8\n"
+"No alpha beta cutoff because move value=-9.0 < two lower ply value=-3.2\n"
+"Best move because negated move value=9.0 < one lower ply value=9.2\n"
+"(Confirming best move)\n"
+"Eval (ply 1), 1.Ng6+\n"
+"No alpha beta cutoff because move value=9.0 < two lower ply value=MAX\n"
+"Best move because negated move value=-9.0 < one lower ply value=-3.2\n"
+"(Confirming best move)\n";
+
+static std::string model2_detailed_log =
+"Position 0, \"\" created in tree\n"
+"Position 1, \"1.Qg8+\" created in tree\n"
+"Position 2, \"1.Qa1\" created in tree\n"
+"Position 3, \"1.Qg8+ Nxg8\" created in tree\n"
+"Position 4, \"1.Qg8+ Rxg8\" created in tree\n"
+"Position 5, \"1.Qg8+ Nxg8 2.Nf7#\" created in tree\n"
+"Eval (ply 3), 1.Qg8+ Nxg8 2.Nf7#\n"
+"No alpha beta cutoff because move value=12.0 < two lower ply value=MAX\n"
+"Best move because negated move value=-12.0 < one lower ply value=MAX\n"
+"(Confirming best move)\n"
+"Position 6, \"1.Qg8+ Nxg8 2.Nxg8\" created in tree\n"
+"Eval (ply 3), 1.Qg8+ Nxg8 2.Nxg8\n"
+"No alpha beta cutoff because move value=-10.0 < two lower ply value=MAX\n"
+"Not best move because negated move value=10.0 >= one lower ply value=-12.0\n"
+"Eval (ply 2), 1.Qg8+ Nxg8\n"
+"No alpha beta cutoff because move value=-12.0 < two lower ply value=MAX\n"
+"Best move because negated move value=12.0 < one lower ply value=MAX\n"
+"(Confirming best move)\n"
+"Position 7, \"1.Qg8+ Rxg8 2.Nf7#\" created in tree\n"
+"Eval (ply 3), 1.Qg8+ Rxg8 2.Nf7#\n"
+"Alpha beta cutoff because move value=12.0 >= two lower ply value=12.0\n"
+"Eval (ply 1), 1.Qg8+\n"
+"No alpha beta cutoff because move value=12.0 < two lower ply value=MAX\n"
+"Best move because negated move value=-12.0 < one lower ply value=MAX\n"
+"(Confirming best move)\n"
+"Position 9, \"1.Qa1 Rc6\" created in tree\n"
+"Position 10, \"1.Qa1 Ng8\" created in tree\n"
+"Position 11, \"1.Qa1 Rc6 2.Nf7+\" created in tree\n"
+"Eval (ply 3), 1.Qa1 Rc6 2.Nf7+\n"
+"No alpha beta cutoff because move value=0.0 < two lower ply value=MAX\n"
+"Not best move because negated move value=0.0 >= one lower ply value=-12.0\n"
+"Position 12, \"1.Qa1 Rc6 2.Ng4\" created in tree\n"
+"Eval (ply 3), 1.Qa1 Rc6 2.Ng4\n"
+"No alpha beta cutoff because move value=0.0 < two lower ply value=MAX\n"
+"Not best move because negated move value=0.0 >= one lower ply value=-12.0\n"
+"Eval (ply 2), 1.Qa1 Rc6\n"
+"Alpha beta cutoff because move value=-12.0 >= two lower ply value=-12.0\n";
+
+std::string model3_detailed_log =
+"Position 0, \"\" created in tree\n"
+"Position 1, \"1.Qa1\" created in tree\n"
+"Position 2, \"1.Qg8+\" created in tree\n"
+"Position 3, \"1.Qa1 Rc6\" created in tree\n"
+"Position 4, \"1.Qa1 Ng8\" created in tree\n"
+"Position 5, \"1.Qa1 Rc6 2.Nf7+\" created in tree\n"
+"Eval (ply 3), 1.Qa1 Rc6 2.Nf7+\n"
+"No alpha beta cutoff because move value=0.0 < two lower ply value=MAX\n"
+"Best move because negated move value=0.0 < one lower ply value=MAX\n"
+"(Confirming best move)\n"
+"Position 6, \"1.Qa1 Rc6 2.Ng4\" created in tree\n"
+"Eval (ply 3), 1.Qa1 Rc6 2.Ng4\n"
+"No alpha beta cutoff because move value=0.0 < two lower ply value=MAX\n"
+"Not best move because negated move value=0.0 >= one lower ply value=0.0\n"
+"Eval (ply 2), 1.Qa1 Rc6\n"
+"No alpha beta cutoff because move value=0.0 < two lower ply value=MAX\n"
+"Best move because negated move value=0.0 < one lower ply value=MAX\n"
+"(Confirming best move)\n"
+"Position 7, \"1.Qa1 Ng8 2.Nf7#\" created in tree\n"
+"Eval (ply 3), 1.Qa1 Ng8 2.Nf7#\n"
+"Alpha beta cutoff because move value=12.0 >= two lower ply value=0.0\n"
+"Eval (ply 1), 1.Qa1\n"
+"No alpha beta cutoff because move value=0.0 < two lower ply value=MAX\n"
+"Best move because negated move value=0.0 < one lower ply value=MAX\n"
+"(Confirming best move)\n"
+"Position 9, \"1.Qg8+ Nxg8\" created in tree\n"
+"Position 10, \"1.Qg8+ Rxg8\" created in tree\n"
+"Position 11, \"1.Qg8+ Nxg8 2.Nf7#\" created in tree\n"
+"Eval (ply 3), 1.Qg8+ Nxg8 2.Nf7#\n"
+"No alpha beta cutoff because move value=12.0 < two lower ply value=MAX\n"
+"Best move because negated move value=-12.0 < one lower ply value=0.0\n"
+"(Confirming best move)\n"
+"Position 12, \"1.Qg8+ Nxg8 2.Nxg8\" created in tree\n"
+"Eval (ply 3), 1.Qg8+ Nxg8 2.Nxg8\n"
+"No alpha beta cutoff because move value=-10.0 < two lower ply value=MAX\n"
+"Not best move because negated move value=10.0 >= one lower ply value=-12.0\n"
+"Eval (ply 2), 1.Qg8+ Nxg8\n"
+"No alpha beta cutoff because move value=-12.0 < two lower ply value=0.0\n"
+"Best move because negated move value=12.0 < one lower ply value=MAX\n"
+"(Confirming best move)\n"
+"Position 13, \"1.Qg8+ Rxg8 2.Nf7#\" created in tree\n"
+"Eval (ply 3), 1.Qg8+ Rxg8 2.Nf7#\n"
+"Alpha beta cutoff because move value=12.0 >= two lower ply value=12.0\n"
+"Eval (ply 1), 1.Qg8+\n"
+"No alpha beta cutoff because move value=12.0 < two lower ply value=MAX\n"
+"Best move because negated move value=-12.0 < one lower ply value=0.0\n"
+"(Confirming best move)\n";
+
+std::string model4_detailed_log =
+"Position 0, \"\" created in tree\n"
+"Position 1, \"1.Nf5+\" created in tree\n"
+"Position 2, \"1.Ne6+\" created in tree\n"
+"Position 3, \"1.Nf5+ Kg8\" created in tree\n"
+"Position 4, \"1.Nf5+ Kh8\" created in tree\n"
+"Position 5, \"1.Nf5+ Kg8 2.Nxh6+\" created in tree\n"
+"Eval (ply 3), 1.Nf5+ Kg8 2.Nxh6+\n"
+"No alpha beta cutoff because move value=5.1 < two lower ply value=MAX\n"
+"Best move because negated move value=-5.1 < one lower ply value=MAX\n"
+"(Confirming best move)\n"
+"Position 6, \"1.Nf5+ Kg8 2.h3\" created in tree\n"
+"Eval (ply 3), 1.Nf5+ Kg8 2.h3\n"
+"No alpha beta cutoff because move value=0.1 < two lower ply value=MAX\n"
+"Not best move because negated move value=-0.1 >= one lower ply value=-5.1\n"
+"Eval (ply 2), 1.Nf5+ Kg8\n"
+"No alpha beta cutoff because move value=-5.1 < two lower ply value=MAX\n"
+"Best move because negated move value=5.1 < one lower ply value=MAX\n"
+"(Confirming best move)\n"
+"Position 7, \"1.Nf5+ Kh8 2.Rd8#\" created in tree\n"
+"Eval (ply 3), 1.Nf5+ Kh8 2.Rd8#\n"
+"Alpha beta cutoff because move value=12.0 >= two lower ply value=5.1\n"
+"Eval (ply 1), 1.Nf5+\n"
+"No alpha beta cutoff because move value=5.1 < two lower ply value=MAX\n"
+"Best move because negated move value=-5.1 < one lower ply value=MAX\n"
+"(Confirming best move)\n"
+"Position 9, \"1.Ne6+ Kg8\" created in tree\n"
+"Position 10, \"1.Ne6+ Kh8\" created in tree\n"
+"Position 11, \"1.Ne6+ Kg8 2.h3\" created in tree\n"
+"Eval (ply 3), 1.Ne6+ Kg8 2.h3\n"
+"No alpha beta cutoff because move value=0.3 < two lower ply value=MAX\n"
+"Not best move because negated move value=-0.3 >= one lower ply value=-5.1\n"
+"Position 12, \"1.Ne6+ Kg8 2.Rd8+\" created in tree\n"
+"Eval (ply 3), 1.Ne6+ Kg8 2.Rd8+\n"
+"No alpha beta cutoff because move value=0.5 < two lower ply value=MAX\n"
+"Not best move because negated move value=-0.5 >= one lower ply value=-5.1\n"
+"Eval (ply 2), 1.Ne6+ Kg8\n"
+"Alpha beta cutoff because move value=-5.1 >= two lower ply value=-5.1\n";
+
+std::string model5_detailed_log =
+"Position 0, \"\" created in tree\n"
+"Position 1, \"1.Nxd3\" created in tree\n"
+"Position 2, \"1.Ng6+\" created in tree\n"
+"Position 9, \"1.Ng6+ Kh7\" created in tree\n"
+"Position 10, \"1.Ng6+ Kg8\" created in tree\n"
+"Position 11, \"1.Ng6+ Kh7 2.Nxe5\" created in tree\n"
+"Eval (ply 3), 1.Ng6+ Kh7 2.Nxe5\n"
+"No alpha beta cutoff because move value=9.2 < two lower ply value=MAX\n"
+"Best move because negated move value=-9.2 < one lower ply value=MAX\n"
+"(Confirming best move)\n"
+"Position 12, \"1.Ng6+ Kh7 2.Nxh4\" created in tree\n"
+"Eval (ply 3), 1.Ng6+ Kh7 2.Nxh4\n"
+"No alpha beta cutoff because move value=5.0 < two lower ply value=MAX\n"
+"Not best move because negated move value=-5.0 >= one lower ply value=-9.2\n"
+"Eval (ply 2), 1.Ng6+ Kh7\n"
+"No alpha beta cutoff because move value=-9.2 < two lower ply value=MAX\n"
+"Best move because negated move value=9.2 < one lower ply value=MAX\n"
+"(Confirming best move)\n"
+"Position 13, \"1.Ng6+ Kg8 2.Nxe5\" created in tree\n"
+"Eval (ply 3), 1.Ng6+ Kg8 2.Nxe5\n"
+"No alpha beta cutoff because move value=9.0 < two lower ply value=9.2\n"
+"Best move because negated move value=-9.0 < one lower ply value=MAX\n"
+"(Confirming best move)\n"
+"Position 14, \"1.Ng6+ Kg8 2.Nxh4\" created in tree\n"
+"Eval (ply 3), 1.Ng6+ Kg8 2.Nxh4\n"
+"No alpha beta cutoff because move value=5.2 < two lower ply value=9.2\n"
+"Not best move because negated move value=-5.2 >= one lower ply value=-9.0\n"
+"Eval (ply 2), 1.Ng6+ Kg8\n"
+"No alpha beta cutoff because move value=-9.0 < two lower ply value=MAX\n"
+"Best move because negated move value=9.0 < one lower ply value=9.2\n"
+"(Confirming best move)\n"
+"Eval (ply 1), 1.Ng6+\n"
+"No alpha beta cutoff because move value=9.0 < two lower ply value=MAX\n"
+"Best move because negated move value=-9.0 < one lower ply value=MAX\n"
+"(Confirming best move)\n"
+"Position 3, \"1.Nxd3 Qd6\" created in tree\n"
+"Position 4, \"1.Nxd3 Qg5\" created in tree\n"
+"Position 5, \"1.Nxd3 Qd6 2.Ne1\" created in tree\n"
+"Eval (ply 3), 1.Nxd3 Qd6 2.Ne1\n"
+"No alpha beta cutoff because move value=3.3 < two lower ply value=MAX\n"
+"Not best move because negated move value=-3.3 >= one lower ply value=-9.0\n"
+"Position 6, \"1.Nxd3 Qd6 2.Qb1\" created in tree\n"
+"Eval (ply 3), 1.Nxd3 Qd6 2.Qb1\n"
+"No alpha beta cutoff because move value=3.0 < two lower ply value=MAX\n"
+"Not best move because negated move value=-3.0 >= one lower ply value=-9.0\n"
+"Eval (ply 2), 1.Nxd3 Qd6\n"
+"Alpha beta cutoff because move value=-9.0 >= two lower ply value=-9.0\n";
+
+// Regression test
+bool sargon_minimax_regression_test( bool quiet)
+{
+    bool ok = true;
+
+    // Loop through multiple examples
+    int example_nbr = 1;
+    std::vector<Model *> models = {&model1,&model2,&model3,&model4,&model5};
+    for( Model *model: models )
+    {
+        Example example(*model);
+        running_example = &example;
+        example.Run();
+        std::string s = example.DetailedLog();
+        std::string t;
+        switch( example_nbr )
+        {
+            case 1: t = model1_detailed_log; break;
+            case 2: t = model2_detailed_log; break;
+            case 3: t = model3_detailed_log; break;
+            case 4: t = model4_detailed_log; break;
+            case 5: t = model5_detailed_log; break;
+        }
+        bool pass = (s==t);
+        std::string result = util::sprintf( "%s model%d: %s", pass?"PASS":"FAIL", example_nbr, model->comment1.c_str() );
+        if( result.length() > 79 )
+            result = result.substr(0,75) + "...";
+        printf( "%s\n", result.c_str() );
+        if( !pass )
+        {
+            ok = false;
+            if( !quiet )
+            {
+                printf( "Expected:\n" );
+                printf( "%s\n", t.c_str() );
+                printf( "Actual:\n" );
+                printf( "%s\n", s.c_str() );
+            }
+        }
+        example_nbr++;
+    }
+    return ok;
+}
+
 // Sargon calls back into this function as it runs, we can monitor what's going on by
 //  reading registers and peeking at memory, and influence it by modifying registers
 //  and poking at memory.
@@ -843,12 +1143,12 @@ extern "C" {
             *peax = a_reg;
             return;
         }
-        if( !callback_enabled )
+        if( !callback_minimax_mods_active )
             return;
 
         // For purposes of minimax tracing experiment, we only want two possible
         //  moves in each position - achieved by suppressing King moves
-        if( callback_kingmove_suppressed && std::string(msg) == "Suppress King moves" )
+        if( std::string(msg) == "Suppress King moves" )
         {
             unsigned char piece = peekb(T1);
             if( piece == 6 )    // King?
@@ -865,7 +1165,7 @@ extern "C" {
         // For purposes of minimax tracing experiment, we inject our own points
         //  score for each known position (we keep the number of positions to
         //  managable levels.)
-        else if( callback_kingmove_suppressed && std::string(msg) == "end of POINTS()" )
+        else if( std::string(msg) == "end of POINTS()" )
         {
             std::string key = get_key();
             Progress prog;
