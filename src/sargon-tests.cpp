@@ -22,18 +22,10 @@
 #include "sargon-interface.h"
 
 // Individual tests
-bool sargon_position_tests( bool quiet, bool no_very_slow_tests );
-bool sargon_whole_game_tests( bool quiet, bool no_very_slow_tests );
-bool sargon_algorithm_explore( bool quiet, bool alpha_beta );
-
-// Suites of tests
-bool sargon_tests_quiet();
-bool sargon_tests_quiet_comprehensive();
-bool sargon_tests_verbose();
-bool sargon_tests_verbose_comprehensive();
-
-// Misc
-static std::string convert_to_key( unsigned char from, unsigned char to, const thc::ChessPosition &cp );
+bool sargon_position_tests( bool quiet, int comprehensive );
+bool sargon_whole_game_tests( bool quiet, int comprehensive );
+extern void sargon_minimax_main();
+extern bool sargon_minimax_regression_test( bool quiet);
 
 // Misc diagnostics
 void dbg_ptrs();
@@ -41,280 +33,109 @@ void dbg_position();
 void diagnostics();
 void on_exit_diagnostics() {}
 
-// Nodes to track the PV (principal [primary?] variation)
-struct NODE
-{
-    unsigned int level;
-    unsigned char from;
-    unsigned char to;
-    unsigned char flags;
-    unsigned char value;
-    NODE() : level(0), from(0), to(0), flags(0), value(0) {}
-    NODE( unsigned int l, unsigned char f, unsigned char t, unsigned char fs, unsigned char v ) : level(l), from(f), to(t), flags(fs), value(v) {}
-};
-static std::vector< NODE > nodes;
-
-// Control callback() behaviour
-static bool callback_enabled;
-static bool callback_kingmove_suppressed;
-static bool callback_quiet;
-static std::vector<unsigned int> cardinal_list;
-
-// Prime the callback routine to modify node values for simple 15 node minimax
-//  algorithm example
-void probe_test_prime( bool alpha_beta );
-
 // main()
 int main( int argc, const char *argv[] )
 {
+    bool ok = false, minimax_doc=false, quiet=false;
+    std::string test_types;
+    int comprehensive = 1;
+    for( int i=1; i<argc; i++ )
+    {
+        std::string s= argv[i];
+        if( !ok && s.find_first_not_of("gpm") == std::string::npos )
+        {
+            test_types = s;
+            ok = true;
+        }
+        else if( !ok && s=="doc" )
+        {
+            minimax_doc = true;
+            ok = true;
+        }
+        else if( s=="-1" || s=="-2" || s=="-3" )
+        {
+            comprehensive = s[1]-'1';
+        }
+        else if( s=="-v" )
+        {
+            quiet = false;
+        }
+        else
+        {
+            ok = false;
+            break;
+        }
+    }
+
+#ifdef _DEBUG
+    test_types = "m";
+    ok = true;
+#endif
+    if( !ok )
+    {
+        printf( "Sargon test suite\n"
+                "Usage:\n"
+                "sargon-tests tests|doc [-1|-2|-3] [-v]\n"
+                "\n"
+                "tests = combine 'p' for position tests, 'g' for whole game tests, 'm' for minimax tests\n"
+                "     OR 'doc' run minimax models and print results in the form of documentation\n"
+                "\n"
+                "-1|-2|-3 = fast, middling or comprehensive suite of tests respectively\n"
+                "\n"
+                "-v is verbose\n"
+                "\n"
+                "Examples:\n"
+                " sargon-tests pg -3 -v\n"
+                "    Run a comprhensive, verbose set of position and whole game tests\n"
+                " sargon-tests doc\n"        
+                "    Run the minimax models and print out the results as documentation\n"
+        );
+    }
+
     util::tests();
-    bool ok = sargon_tests_quiet_comprehensive();
-    if( ok )
-        printf( "All tests passed\n" );
+    if( minimax_doc )
+        sargon_minimax_main();
     else
-        printf( "Not all tests passed\n" );
+    {
+        bool ok=true, passed;
+        if( test_types.find('p') != std::string::npos )
+        {
+            passed = sargon_position_tests(quiet, true);
+            if( !passed )
+                ok = false;
+        }
+        if( test_types.find('g') != std::string::npos )
+        {
+            passed = sargon_whole_game_tests(quiet, true);
+            if( !passed )
+                ok = false;
+        }
+        if( test_types.find('m') != std::string::npos )
+        {
+            passed = sargon_minimax_regression_test(quiet);
+            if( !passed )
+                ok = false;
+        }
+        if( ok )
+            printf( "All tests passed\n" );
+        else
+            printf( "Not all tests passed\n" );
+    }
     on_exit_diagnostics();
     return ok ? 0 : -1;
 }
 
-bool sargon_tests_quiet()
-{
-    bool ok=true;
-    bool passed = sargon_algorithm_explore(true, false);
-    if( !passed )
-        ok = false;
-    passed = sargon_algorithm_explore(true, true);
-    if( !passed )
-        ok = false;
-    passed = sargon_position_tests(true, true);
-    if( !passed )
-        ok = false;
-    passed = sargon_whole_game_tests(true, true);
-    if( !passed )
-        ok = false;
-    return ok;
-}
-
-bool sargon_tests_quiet_comprehensive()
-{
-    bool ok=true;
-    bool passed = sargon_algorithm_explore(true, false);
-    if( !passed )
-        ok = false;
-    passed = sargon_algorithm_explore(true, true);
-    if( !passed )
-        ok = false;
-    passed = sargon_position_tests(true, false);
-    if( !passed )
-        ok = false;
-    passed = sargon_whole_game_tests(true, false);
-    if( !passed )
-        ok = false;
-    return ok;
-}
-
-bool sargon_tests_verbose()
-{
-    bool ok=true;
-    bool passed = sargon_algorithm_explore(false, false);
-    if( !passed )
-        ok = false;
-    passed = sargon_algorithm_explore(false, true);
-    if( !passed )
-        ok = false;
-    passed = sargon_position_tests(false, true);
-    if( !passed )
-        ok = false;
-    passed = sargon_whole_game_tests(false, true);
-    if( !passed )
-        ok = false;
-    return ok;
-}
-
-bool sargon_tests_verbose_comprehensive()
-{
-    bool ok=true;
-    bool passed = sargon_algorithm_explore(false, false);
-    if( !passed )
-        ok = false;
-    passed = sargon_algorithm_explore(false, true);
-    if( !passed )
-        ok = false;
-    passed = sargon_position_tests(false, false);
-    if( !passed )
-        ok = false;
-    passed = sargon_whole_game_tests(false, false);
-    if( !passed )
-        ok = false;
-    return ok;
-}
-
-// Calculate a short string key to represent the moves played
-//  eg 1. a4-a5 h6-h5 2. a5-a6 => "AHA"
-static std::string convert_to_key( unsigned char from, unsigned char to, const thc::ChessPosition &cp )
-{
-    std::string key = "??";
-    thc::Square sq_from, sq_to;
-    int nmoves = 0;
-    bool ok_from = sargon_export_square(from,sq_from);
-    bool ok_to = sargon_export_square(to,sq_to);
-    if( !ok_from || !ok_to )
-        key = "(root)";
-    else
-    {
-        bool a0 = (cp.squares[thc::a3] == 'P');
-        bool a1 = (cp.squares[thc::a4] == 'P');
-        bool a2 = (cp.squares[thc::a5] == 'P');
-        if( a1 )
-            nmoves += 1;
-        else if( a2 )
-            nmoves += 2;
-        bool b0 = (cp.squares[thc::b3] == 'P');
-        bool b1 = (cp.squares[thc::b4] == 'P');
-        bool b2 = (cp.squares[thc::b5] == 'P');
-        if( b1 )
-            nmoves += 1;
-        else if( b2 )
-            nmoves += 2;
-        bool g0 = (cp.squares[thc::g6] == 'p');
-        bool g1 = (cp.squares[thc::g5] == 'p');
-        if( g1 )
-            nmoves += 1;
-        bool h0 = (cp.squares[thc::h6] == 'p');
-        bool h1 = (cp.squares[thc::h5] == 'p');
-        if( h1 )
-            nmoves += 1;
-        bool a_last = (thc::get_file(sq_to) == 'a');
-        bool b_last = (thc::get_file(sq_to) == 'b');
-        bool g_last = (thc::get_file(sq_to) == 'g');
-        bool h_last = (thc::get_file(sq_to) == 'h');
-        if( nmoves == 3 )
-        {
-            if( a_last && a2 && g1)
-                key = "AGA";
-            else if( a_last && a1 && g1 )
-                key = "BGA";
-            else if( a_last && a2 && h1 )
-                key = "AHA";
-            else if( a_last && a1 && h1 )
-                key = "BHA";
-            else if( b_last && b2 && g1 )
-                key = "BGB";
-            else if( b_last && b1 && g1 )
-                key = "AGB";
-            else if( b_last && b2 && h1 )
-                key = "BHB";
-            else if( b_last && b1 && h1 )
-                key = "AHB";
-        }
-        else if( nmoves == 2 )
-        {
-            if( g_last && a1 )
-                key = "AG";
-            else if( g_last && b1 )
-                key = "BG";
-            else if( h_last && a1 )
-                key = "AH";
-            else if( h_last && b1 )
-                key = "BH";
-        }
-        else if( nmoves == 1 )
-        {
-            if( a1 )
-                key = "A";
-            else if( b1 )
-                key = "B";
-        }
-    }
-    return key;
-}
-
-// Use a simple example to explore/probe the minimax algorithm and verify it
-bool sargon_algorithm_explore( bool quiet, bool alpha_beta  )
-{
-    bool ok=true;
-    printf( "* Minimax %salgorithm tests\n", alpha_beta?"plus alpha-beta pruning ":"" );
-
-    // W king on a1 pawns a3 and b3, B king on h8 pawns g6 and h6 we are going
-    //  to use this very dumb position to probe Alpha Beta pruning etc. (we
-    //  will kill the kings so that each side has only two moves available
-    //  at each position)
-    const char *pos_probe = "7k/8/6pp/8/8/PP6/8/K7 w - - 0 1";
-
-    // Because there are only 2 moves available at each ply, we can explore
-    //  to PLYMAX=3 with only 2 positions at ply 1, 4 positions at ply 2
-    //  and 8 positions at ply 3 (plus 1 root position at ply 0) for a very
-    //  manageable 1+2+4+8 = 15 nodes (i.e. positions) total. We use the
-    //  callback facility to monitor the algorithm and indeed actively
-    //  interfere with it by changing the node evals and watching how that
-    //  effects node traversal and generates a best move.
-    // Note that if alpha_beta=true the resulting node values will result
-    // in alpha-beta pruning and all 15 nodes won't be traversed
-    probe_test_prime(alpha_beta);
-    callback_enabled = true;
-    callback_kingmove_suppressed = true;
-    callback_quiet = quiet;
-    cardinal_list.clear();
-    thc::ChessPosition cp;
-    cp.Forsyth(pos_probe);
-    pokeb(MLPTRJ,0); //need to set this ptr to 0 to get Root position recognised in callback()
-    pokeb(MLPTRJ+1,0);
-    pokeb(KOLOR,0);
-    pokeb(PLYMAX,3);
-    sargon(api_INITBD);
-    sargon_import_position(cp);
-    sargon(api_ROYALT);
-    pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
-    if( alpha_beta )
-        printf("Expect 3 of 15 positions (8,13 and 14) to be skipped\n" );
-    else
-        printf("Expect all 15 positions 0-14 to be traversed in order\n" );
-    nodes.clear();
-    sargon(api_CPTRMV);
-    bool pass=false;
-    if( alpha_beta )
-    {
-        std::vector<unsigned int> expect = {0,1,2,3,4,5,6,7,9,10,11,12};
-        pass = (expect==cardinal_list);
-    }
-    else
-    {
-        std::vector<unsigned int> expect = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14};
-        pass = (expect==cardinal_list);
-    }
-    if( !pass )
-        ok = false;
-    printf( "Expected traverse order (%salpha-beta pruning): %s\n",
-                alpha_beta?"":"no ", pass ? "PASS" : "FAIL" );
-    char buf[5];
-    memcpy( buf, peek(MVEMSG), 4 );
-    buf[4] = '\0';
-    const char *solution = alpha_beta? "a3a4" : "b3b4";
-    pass = (0==strcmp(solution,buf));
-    printf( "Simple 15 node best move calculation (%salpha-beta pruning): %s\n",
-                alpha_beta?"":"no ", pass ? "PASS" : "FAIL" );
-    if( !pass )
-    {
-        ok = false;
-        printf( "FAIL reason: Expected=%s, Calculated=%s\n", solution, buf );
-    }
-    return ok;
-}
-
-bool sargon_whole_game_tests( bool quiet, bool no_very_slow_tests )
+bool sargon_whole_game_tests( bool quiet, int comprehensive )
 {
     bool ok = true;
     printf( "* Whole game tests\n" );
-    callback_enabled = false;
-    for( int i=0; i<6; i++ )
+    int nbr_tests_to_run = 2;
+    if( comprehensive > 1 )
+        nbr_tests_to_run = comprehensive==2 ? 4 : 6;
+    for( int i=0; i<nbr_tests_to_run; i++ )
     {
         int plymax = "334455"[i] - '0'; // two 3 ply games, then 2 4 ply games, then 2 5 ply games
         printf( "Entire PLYMAX=%d 1.%c4 game test ", plymax, i%2==0 ? 'd' : 'e' );
-        if( plymax==5 && no_very_slow_tests )
-        {
-            printf( "** Skipping very slow test **\n" );
-            continue;
-        }
         std::string game_text;
         std::string between_moves;
         thc::ChessRules cr;
@@ -336,7 +157,6 @@ bool sargon_whole_game_tests( bool quiet, bool no_very_slow_tests )
                 sargon_import_position(cr);
                 sargon(api_ROYALT);
             }
-            nodes.clear();
             sargon(api_CPTRMV);
             thc::ChessRules cr_after;
             sargon_export_position(cr_after);
@@ -434,11 +254,10 @@ struct TEST
     const char *solution;   // As terse string
 };
 
-bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
+bool sargon_position_tests( bool quiet, int comprehensive )
 {
     bool ok = true;
     printf( "* Test position tests\n" );
-    callback_enabled = false;
 
     /*
 
@@ -562,7 +381,10 @@ bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
     };
 
     int nbr_tests = sizeof(tests)/sizeof(tests[0]);
-    for( int i=0; i<nbr_tests; i++ )
+    int nbr_tests_to_run = nbr_tests;
+    if( comprehensive < 3 )
+        nbr_tests_to_run = comprehensive==2 ? nbr_tests-1 : 10;
+    for( int i=0; i<nbr_tests_to_run; i++ )
     {
         TEST *pt = &tests[i];
         thc::ChessPosition cp;
@@ -586,18 +408,9 @@ bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
             printf( "Test position idx=%d\n", i );
             dbg_position();
         } */
-        printf( "Test %d of %d: PLYMAX=%d:", i+1, nbr_tests, pt->plymax_required );
+        printf( "Test %d of %d: PLYMAX=%d:", i+1, nbr_tests_to_run, pt->plymax_required );
         if( 0 == strcmp(pt->fen,"2rq1r1k/3npp1p/3p1n1Q/pp1P2N1/8/2P4P/1P4P1/R4R1K w - - 0 1") )
-        {
-            if( no_very_slow_tests )
-            {
-                printf( "** Skipping very slow test **\n" );
-                break;
-            }
-            else
-                printf( " (sorry this particular test is very slow) :" );
-        }
-        nodes.clear();
+            printf( " (sorry this particular test is very slow) :" );
         sargon(api_CPTRMV);
         if( !quiet )
         {
@@ -612,69 +425,6 @@ bool sargon_position_tests( bool quiet, bool no_very_slow_tests )
         {
             ok = false;
             printf( "FAIL reason: Expected=%s, Calculated=%s\n", pt->solution, sargon_move.c_str() );
-        }
-
-        // Print move chain
-        if( !quiet )
-        {
-            int nbr = nodes.size();
-            int search_start = nbr-1;
-            unsigned int target = 1;
-            int last_found=0;
-            for(;;)
-            {
-                for( int i=search_start; i>=0; i-- )
-                {
-                    NODE *n = &nodes[i];
-                    unsigned int level = n->level;
-                    if( level == target )
-                    {
-                        last_found = i;
-                        unsigned char from  = n->from;
-                        unsigned char to    = n->to;
-                        unsigned char value = n->value;
-                        double fvalue = sargon_export_value(value);
-                        printf( "level=%d, from=%s, to=%s value=%d/%.1f\n", n->level, algebraic(from).c_str(), algebraic(to).c_str(), value, fvalue );
-                        if( level == pt->plymax_required )
-                            break;
-                        else
-                            target++;
-                    }
-                }
-                if( target == 1 )
-                    break;
-                else
-                {
-                    printf("\n");
-                    target = 1;
-                    search_start = last_found-1;
-                }
-            }
-            for( int i=0; i<nbr; i++ )
-            {
-                NODE *n = &nodes[i];
-                unsigned int level = n->level;
-                unsigned char from  = n->from;
-                unsigned char to    = n->to;
-                unsigned char value = n->value;
-                double fvalue = sargon_export_value(value);
-                printf( " level=%d, from=%s, to=%s value=%d/%.1f\n", n->level, algebraic(from).c_str(), algebraic(to).c_str(), value, fvalue );
-            }
-            //diagnostics();
-        }
-    }
-    if( !quiet )
-    {
-        int offset = MLEND;
-        while( offset > 0 )
-        {
-            unsigned char b = peekb(offset);
-            if( b )
-            {
-                printf("Last non-zero in memory is addr=0x%04x data=0x%02x\n", offset, b );
-                break;
-            }
-            offset--;
         }
     }
     return ok;
@@ -789,318 +539,4 @@ void diagnostics()
         }
     }
 }
-
-// Data structures to track the 15 positions in minimax example
-static std::map<std::string,unsigned int> values;
-static std::map<std::string,unsigned int> cardinal_nbr;
-
-// Prime the callback routine to modify node values for simple 15 node minimax
-//  algorithm example
-void probe_test_prime( bool alpha_beta )
-{
-    cardinal_nbr["(root)"]  = 0;
-    cardinal_nbr["A"]       = 1;
-    cardinal_nbr["B"]       = 2;
-    cardinal_nbr["AG"]      = 3;
-    cardinal_nbr["AH"]      = 4;
-    cardinal_nbr["AGB"]     = 5;
-    cardinal_nbr["AGA"]     = 6;
-    cardinal_nbr["AHB"]     = 7;
-    cardinal_nbr["AHA"]     = 8;
-    cardinal_nbr["BG"]      = 9;
-    cardinal_nbr["BH"]      = 10;
-    cardinal_nbr["BGA"]     = 11;
-    cardinal_nbr["BGB"]     = 12;
-    cardinal_nbr["BHA"]     = 13;
-    cardinal_nbr["BHB"]     = 14;
-
-/*
-
-Example 1, no Alpha Beta pruning (move played is 1.b4, value 3.0)
-
-     <-MAX       <-MIN       <-MAX
-
-0-------+-----1-----+-----3-----+------5 
-0.0->3.0|   1.a4    |   1...g5  |    2.b4
-        | 8.0->2.0  |  7.0->5.0 |       5.0
-        |           |           |     <-5.0
-        |           |           |     
-        |           |           +------6 
-        |           |                2.a5
-        |           |                   4.0
-        |           |               
-        |           |               
-        |           +-----4-----+------7 
-        |              1...h5   |    2.b4
-        |              3.0->2.0 |       1.0
-        |                 <-2.0 |        
-        |                       |     
-        |                       +------8 
-        |                            2.a5
-        |                               2.0
-        |                             <-2.0
-        |                           
-        +------2----+-----9-----+------11
-            1.b4    |  1...g5   |    2.a4
-          6.0->3.0  |  5.5->4.0 |       4.0
-             <-3.0  |           |     <-4.0
-                    |           |    
-                    |           |    
-                    |           +------12
-                    |                2.b5
-                    |                   3.0
-                    |             
-                    |             
-                    |             
-                    +-----10----+------13
-                       1...h5   |    2.a4
-                       4.0->3.0 |       3.0
-                          <-3.0 |     <-3.0
-                                |    
-                                |    
-                                +------14
-                                     2.b5
-                                        1.0
-                                        1.0
-
-*/
-    if( !alpha_beta )
-    {
-        values["(root)"] = sargon_import_value(0.0);
-        values["A"]      = sargon_import_value(8.0);
-        values["AG"]     = sargon_import_value(7.0);
-        values["AGB"]    = sargon_import_value(5.0);
-        values["AGA"]    = sargon_import_value(4.0);
-        values["AH"]     = sargon_import_value(3.0);
-        values["AHB"]    = sargon_import_value(1.0);
-        values["AHA"]    = sargon_import_value(2.0);
-        values["B"]      = sargon_import_value(6.0);
-        values["BG"]     = sargon_import_value(5.5);
-        values["BGA"]    = sargon_import_value(4.0);
-        values["BGB"]    = sargon_import_value(3.0);
-        values["BH"]     = sargon_import_value(4.0);
-        values["BHA"]    = sargon_import_value(3.0);
-        values["BHB"]    = sargon_import_value(1.0);
-    }
-/*
-
-Example 2, Alpha Beta pruning (move played is 1.a4, value 5.0)
-
-     <-MAX       <-MIN       <-MAX
-
-0-------+-----1-----+-----3-----+------5 
-0.0->5.0|   1.a4    |   1...g5  |    2.b4
-        | 6.0->5.0  |  6.0->5.0 |       5.0
-        |    <-5.0  |     <-5.0 |     <-5.0
-        |           |           |     
-        |           |           +------6 
-        |           |                2.a5
-        |           |                   4.0
-        |           |               
-        |           |               
-        |           +-----4-----+------7 
-        |              1...h5   |    2.b4
-        |              4.0      |      11.0  Cutoff 11.0>5.0, guarantees 4,7,8 won't affect score of
-        |                       |            node 1 (nodes marked with * not evaluated)
-        |                       |     
-        |                       +------8*
-        |                                  
-        |                                  
-        |                                  
-        |                           
-        +------2----+-----9-----+------11
-            1.b4    |  1...g5   |    2.a4
-          6.0->4.0  |  6.0->4.0 |       4.0
-                    |     <-4.0 |     <-4.0
-                    |           |    
-                    |           |    
-                    |           +------12
-                    |                2.b5
-                    |                   3.0  Cutoff, at this point we can be sure node 2 is going to be
-                    |                        4.0 or lower, irrespective of nodes 10,13,14, therefore
-                    |                        node 2 cannot beat node 1
-                    |             
-                    +-----10----+------13*
-                       1...h5   |    2.a4
-                       4.0      |          
-                                |    
-                                |    
-                                |    
-                                +------14*
-                                     2.b5
-                                           
-
-*/
-
-    if( alpha_beta )
-    {
-        values["(root)"] = sargon_import_value(0.0);
-        values["A"]      = sargon_import_value(6.0);
-        values["AG"]     = sargon_import_value(6.0);
-        values["AGB"]    = sargon_import_value(5.0);
-        values["AGA"]    = sargon_import_value(4.0);
-        values["AH"]     = sargon_import_value(4.0);
-        values["AHB"]    = sargon_import_value(11.0);
-        values["AHA"]    = sargon_import_value(2.0);
-        values["B"]      = sargon_import_value(6.0);
-        values["BG"]     = sargon_import_value(6.0);
-        values["BGA"]    = sargon_import_value(4.0);
-        values["BGB"]    = sargon_import_value(3.0);
-        values["BH"]     = sargon_import_value(4.0);
-        values["BHA"]    = sargon_import_value(1.0);
-        values["BHB"]    = sargon_import_value(3.0);
-    }
-}
-
-
-extern "C" {
-    void callback( uint32_t reg_edi, uint32_t reg_esi, uint32_t reg_ebp, uint32_t reg_esp,
-                   uint32_t reg_ebx, uint32_t reg_edx, uint32_t reg_ecx, uint32_t reg_eax,
-                   uint32_t reg_eflags )
-    {
-        uint32_t *sp = &reg_edi;
-        sp--;
-
-        // expecting code at return address to be 0xeb = 2 byte opcode, (0xeb + 8 bit relative jump),
-        uint32_t ret_addr = *sp;
-        const unsigned char *code = (const unsigned char *)ret_addr;
-        const char *msg = (const char *)(code+2);   // ASCIIZ text should come after that
-
-        if( 0 == strcmp(msg,"LDAR") )
-        {
-            // For testing purposes, make LDAR output increment, results in
-            //  deterministic choice of book moves
-            static uint8_t a_reg;
-            a_reg++;
-            volatile uint32_t *peax = &reg_eax;
-            *peax = a_reg;
-            return;
-        }
-        else if( 0 == strcmp(msg,"Yes! Best move") )
-        {
-            unsigned int  p     = peekw(MLPTRJ);
-            unsigned int  level = peekb(NPLY);
-            unsigned char from  = peekb(p+2);
-            unsigned char to    = peekb(p+3);
-            unsigned char flags = peekb(p+4);
-            unsigned char value = peekb(p+5);
-            NODE n(level,from,to,flags,value);
-            nodes.push_back(n);
-        }
-        if( !callback_enabled )
-            return;
-        if( std::string(msg) == "After FNDMOV()" )
-        {
-            if( !callback_quiet )
-            {
-                printf( "After FNDMOV()\n" );
-                diagnostics();
-            }
-        }
-
-        // For purposes of minimax tracing experiment, we only want two possible
-        //  moves in each position - achieved by suppressing King moves
-        else if( callback_kingmove_suppressed && std::string(msg) == "Suppress King moves" )
-        {
-            unsigned char piece = peekb(T1);
-            if( piece == 6 )    // King?
-            {
-                // Change al to 2 and ch to 1 and MPIECE will exit without
-                //  generating (non-castling) king moves
-                volatile uint32_t *peax = &reg_eax;
-                *peax = 2;
-                volatile uint32_t *pecx = &reg_ecx;
-                *pecx = 0x100;
-            }
-        }
-
-        // For purposes of minimax tracing experiment, we inject our own points
-        //  score for each known position (we keep the number of positions to
-        //  managable levels.)
-        else if( callback_kingmove_suppressed && std::string(msg) == "end of POINTS()" )
-        {
-            unsigned int p = peekw(MLPTRJ); // Load move list pointer
-            unsigned char from  = p ? peekb(p+2) : 0;
-            unsigned char to    = p ? peekb(p+3) : 0;
-            unsigned int value = reg_eax&0xff;
-            thc::ChessPosition cp;
-            sargon_export_position( cp );
-            std::string key = convert_to_key( from, to, cp );
-            std::string cardinal("??");
-            auto it = cardinal_nbr.find(key);
-            if( it != cardinal_nbr.end() )
-            {                                  
-                cardinal_list.push_back(it->second);
-                cardinal = util::sprintf( "%d", it->second );
-            }
-            printf( "Position %s, \"%s\" found\n", cardinal.c_str(), key.c_str() );
-            auto it2 = values.find(key);
-            if( it2 == values.end() )
-                printf( "value not found (?): %s\n", key.c_str() );
-            else
-            {
-
-                // MODIFY VALUE !
-                value = it2->second;
-                volatile uint32_t *peax = &reg_eax;
-                *peax = value;
-            }
-            if( !callback_quiet )
-            {
-                thc::Square sq_from, sq_to;
-                bool ok = sargon_export_square(from,sq_from);
-                bool root = !ok;
-                sargon_export_square(to,sq_to);
-                char f1 = thc::get_file(sq_from);
-                char f2 = thc::get_rank(sq_from);
-                char t1 = thc::get_file(sq_to);
-                char t2 = thc::get_rank(sq_to);
-                bool was_black = (root || f1=='g' || f1=='h');
-                cp.white = was_black;
-                static int count;
-                std::string s;
-                if( root )
-                    s = util::sprintf( "%d> value=%d/%.1f", count++, value, sargon_export_value(value) );
-                else
-                    s = util::sprintf( "%d>. Last move: %c%c%c%c value=%d/%.1f", count++, f1,f2,t1,t2, value, sargon_export_value(value) );
-                printf( "%s\n", cp.ToDebugStr(s.c_str()).c_str() );
-            }
-        }
-
-        // For purposes of minimax tracing experiment, try to figure out
-        //  best move calculation
-        else if( !callback_quiet && std::string(msg) == "Alpha beta cutoff?" )
-        {
-            unsigned int al  = reg_eax&0xff;
-            unsigned int bx  = reg_ebx&0xffff;
-            unsigned int val = peekb(bx);
-            bool jmp = (al <= val);
-            printf( "Ply level %d\n", peekb(NPLY));
-            printf( "Alpha beta cutoff? Yes if move value=%d/%.1f <= two lower ply value=%d/%.1f, ",
-                al,  sargon_export_value(al),
-                val, sargon_export_value(val) );
-            printf( "So %s\n", jmp?"yes":"no" );
-        }
-        else if( !callback_quiet && std::string(msg) == "No. Best move?" )
-        {
-            unsigned int al  = reg_eax&0xff;
-            unsigned int bx  = reg_ebx&0xffff;
-            unsigned int val = peekb(bx);
-            bool jmp = (al <= val);
-            printf( "Ply level %d\n", peekb(NPLY));
-            printf( "Best move? No if move value=%d/%.1f <= one lower ply value=%d/%.1f, ",
-                al,  sargon_export_value(al),
-                val, sargon_export_value(val) );
-            printf( "So %s\n", jmp?"no":"yes" );
-        }
-        else if( !callback_quiet && std::string(msg) == "Yes! Best move" )
-        {
-            unsigned int p      = peekw(MLPTRJ);
-            unsigned char from  = peekb(p+2);
-            unsigned char to    = peekb(p+3);
-            printf( "Best move found: %s%s\n", algebraic(from).c_str(), algebraic(to).c_str() );
-        }
-    }
-};
-
 
