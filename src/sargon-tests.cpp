@@ -16,6 +16,7 @@
 #include <map>
 #include <set>
 #include <algorithm>
+#include <chrono>
 #include "util.h"
 #include "thc.h"
 #include "sargon-asm-interface.h"
@@ -36,7 +37,7 @@ void on_exit_diagnostics() {}
 // main()
 int main( int argc, const char *argv[] )
 {
-    bool ok = false, minimax_doc=false, quiet=false;
+    bool ok = false, minimax_doc=false, quiet=true;
     std::string test_types;
     int comprehensive = 1;
     for( int i=1; i<argc; i++ )
@@ -54,7 +55,7 @@ int main( int argc, const char *argv[] )
         }
         else if( s=="-1" || s=="-2" || s=="-3" )
         {
-            comprehensive = s[1]-'1';
+            comprehensive = s[1]-'0';   // "-3" -> 3 etc
         }
         else if( s=="-v" )
         {
@@ -90,6 +91,7 @@ int main( int argc, const char *argv[] )
                 " sargon-tests doc\n"        
                 "    Run the minimax models and print out the results as documentation\n"
         );
+        return -1;
     }
 
     util::tests();
@@ -97,29 +99,33 @@ int main( int argc, const char *argv[] )
         sargon_minimax_main();
     else
     {
+        std::chrono::time_point<std::chrono::steady_clock> base = std::chrono::steady_clock::now();
         bool ok=true, passed;
-        if( test_types.find('p') != std::string::npos )
+        for( char c: test_types )
         {
-            passed = sargon_position_tests(quiet, true);
-            if( !passed )
-                ok = false;
+            if( c == 'p' )
+            {
+                passed = sargon_position_tests(quiet,comprehensive);
+                if( !passed )
+                    ok = false;
+            }
+            else if( c == 'g' )
+            {
+                passed = sargon_whole_game_tests(quiet,comprehensive);
+                if( !passed )
+                    ok = false;
+            }
+            else if( c == 'm' )
+            {
+                passed = sargon_minimax_regression_test(quiet);
+                if( !passed )
+                    ok = false;
+            }
         }
-        if( test_types.find('g') != std::string::npos )
-        {
-            passed = sargon_whole_game_tests(quiet, true);
-            if( !passed )
-                ok = false;
-        }
-        if( test_types.find('m') != std::string::npos )
-        {
-            passed = sargon_minimax_regression_test(quiet);
-            if( !passed )
-                ok = false;
-        }
-        if( ok )
-            printf( "All tests passed\n" );
-        else
-            printf( "Not all tests passed\n" );
+        std::chrono::time_point<std::chrono::steady_clock> now = std::chrono::steady_clock::now();
+        std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - base);
+        double elapsed = static_cast<double>(ms.count());
+        printf( "%s tests passed. Elapsed time = %.3f seconds\n", ok?"All":"Not all", elapsed/1000.0 ); 
     }
     on_exit_diagnostics();
     return ok ? 0 : -1;
@@ -257,7 +263,7 @@ struct TEST
 bool sargon_position_tests( bool quiet, int comprehensive )
 {
     bool ok = true;
-    printf( "* Test position tests\n" );
+    printf( "* Known position tests\n" );
 
     /*
 
@@ -347,6 +353,7 @@ bool sargon_position_tests( bool quiet, int comprehensive )
 
         // CTWBFK Pos 34, page 62 - solution Re7-f7+
         { "5k2/3KR3/4B3/8/3P4/8/8/6q1 w - - 0 1", 5, "e7f7" },
+        
         // CTWBFK Pos 7, page 102 - solution Nc3-d5. For a long time this was a fail
         //  Sargon plays Bd4xb6 instead, so a -2 move instead of a +2 move. Fixed
         //  after adding call to ROYALT() after setting position
@@ -401,13 +408,6 @@ bool sargon_position_tests( bool quiet, int comprehensive )
             std::string s = cp.ToDebugStr( "Position after test position set" );
             printf( "%s\n", s.c_str() );
         }
-        //pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
-    /*  if( i<2 )
-        {
-            printf( "%s\n", cp.ToDebugStr().c_str() );
-            printf( "Test position idx=%d\n", i );
-            dbg_position();
-        } */
         printf( "Test %d of %d: PLYMAX=%d:", i+1, nbr_tests_to_run, pt->plymax_required );
         if( 0 == strcmp(pt->fen,"2rq1r1k/3npp1p/3p1n1Q/pp1P2N1/8/2P4P/1P4P1/R4R1K w - - 0 1") )
             printf( " (sorry this particular test is very slow) :" );

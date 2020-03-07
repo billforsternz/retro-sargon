@@ -271,6 +271,7 @@ struct Position
 struct Model
 {
     std::string fen;
+    std::string pv;
     std::string comment1;
     std::string comment2;
     std::vector<Position> positions;
@@ -568,8 +569,23 @@ public:
     }
 
     // Run PV algorithm, asterisk the PV nodes in ascii art
-    void CalculatePV()
+    std::string CalculatePV()
     {
+        // To avoid assuming Annotate() has run and copied eval key to bestmove_yes key
+        std::string eval_key;
+        for( Progress &prog: progress )
+        {
+            switch( prog.pt )
+            {
+                case eval:
+                    eval_key = prog.key;
+                    break;
+                case bestmove_yes:
+                    prog.key = eval_key;
+                    break;
+            }
+        }
+
         // Loop in reverse order, scanning for best move choices at level 1 (then 2 then 3)
         int target = 1;
         for( std::vector<Progress>::reverse_iterator it=progress.rbegin();  it!=progress.rend(); ++it )
@@ -588,6 +604,7 @@ public:
                 }
             }
         }
+        return lines[pv_key];
     }
 
     // Print ascii art diagram
@@ -628,24 +645,25 @@ public:
 // White can take a bishop or fork king queen and rook
 static Model model1 =
 {
-   "7k/R1ppp1p1/1p6/4q3/5N1r/3b3P/PP3PP1/Q5K1 w - - 0 1",
-   "White can take a bishop or fork king queen and rook",
-   "There are no Alpha-Beta cutoffs, PV shows white correctly winning queen",
+    "7k/R1ppp1p1/1p6/4q3/5N1r/3b3P/PP3PP1/Q5K1 w - - 0 1",
+    "1.Ng6+ Kg8 2.Nxe5",
+    "White can take a bishop or fork king queen and rook",
+    "There are no Alpha-Beta cutoffs, PV shows white correctly winning queen",
     {
-       { "A"     , "1.Nxd3",                0.0  },
-       { "AG"    , "1.Nxd3 Qd6",            0.0  },
-       { "AGA"   , "1.Nxd3 Qd6 2.Ne1",      3.3  },    // White wins a bishop
-       { "AGB"   , "1.Nxd3 Qd6 2.Qb1",      3.0  },    // White wins a bishop
-       { "AH"    , "1.Nxd3 Qg5",            0.0  },
-       { "AHA"   , "1.Nxd3 Qg5 2.Rxc7",     3.1  },    // White wins a bishop
-       { "AHB"   , "1.Nxd3 Qg5 2.Kh2",      3.2  },    // White wins a bishop
-       { "B"     , "1.Ng6+",                0.0  },
-       { "BG"    , "1.Ng6+ Kh7",            0.0  },
-       { "BGA"   , "1.Ng6+ Kh7 2.Nxe5",     9.2  },    // White wins a queen
-       { "BGB"   , "1.Ng6+ Kh7 2.Nxh4",     5.0  },    // White wins a rook
-       { "BH"    , "1.Ng6+ Kg8",            0.0  },
-       { "BHA"   , "1.Ng6+ Kg8 2.Nxe5",     9.0  },    // White wins a queen
-       { "BHB"   , "1.Ng6+ Kg8 2.Nxh4",     5.2  }     // White wins a rook
+        { "A"     , "1.Nxd3",                0.0  },
+        { "AG"    , "1.Nxd3 Qd6",            0.0  },
+        { "AGA"   , "1.Nxd3 Qd6 2.Ne1",      3.3  },    // White wins a bishop
+        { "AGB"   , "1.Nxd3 Qd6 2.Qb1",      3.0  },    // White wins a bishop
+        { "AH"    , "1.Nxd3 Qg5",            0.0  },
+        { "AHA"   , "1.Nxd3 Qg5 2.Rxc7",     3.1  },    // White wins a bishop
+        { "AHB"   , "1.Nxd3 Qg5 2.Kh2",      3.2  },    // White wins a bishop
+        { "B"     , "1.Ng6+",                0.0  },
+        { "BG"    , "1.Ng6+ Kh7",            0.0  },
+        { "BGA"   , "1.Ng6+ Kh7 2.Nxe5",     9.2  },    // White wins a queen
+        { "BGB"   , "1.Ng6+ Kh7 2.Nxh4",     5.0  },    // White wins a rook
+        { "BH"    , "1.Ng6+ Kg8",            0.0  },
+        { "BHA"   , "1.Ng6+ Kg8 2.Nxe5",     9.0  },    // White wins a queen
+        { "BHB"   , "1.Ng6+ Kg8 2.Nxh4",     5.2  }     // White wins a rook
     }
 };
 
@@ -653,6 +671,7 @@ static Model model1 =
 static Model model2 =
 {
     "1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1",
+    "1.Qg8+ Nxg8 2.Nf7#",
     "White can give Philidor's mate, or defend",
     "Philidor's mating line comes first, so plenty of alpha-beta cutoffs",
     {
@@ -678,6 +697,7 @@ static Model model2 =
 static Model model3 =
 {
     "1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1",
+    "1.Qg8+ Nxg8 2.Nf7#",
     "White can defend or give Philidor's mate (same as above, with first move reversed)",
     "Since Qg8+ is not first choice, there's less alpha-beta cutoffs than example 2",
     {
@@ -702,6 +722,7 @@ static Model model3 =
 static Model model4 =
 {
     "8/r5kp/6pr/8/1n1N4/6R1/6PP/3R3K w - - 0 1",
+    "1.Nf5+ Kg8 2.Nxh6+",
     "White can win a rook, or give mate in some lines",
     "Decision 4) is a good example of Alpha-Beta cutoff. 2.Rd8 mate refutes\n"
     "2...Kh8, given that 2...Kg8 is not mated. So no need to look at other\n"
@@ -727,29 +748,30 @@ static Model model4 =
 // White can take a bishop or fork king queen and rook
 static Model model5 =
 {
-   "7k/R1ppp1p1/1p6/4q3/5N1r/3b3P/PP3PP1/Q5K1 w - - 0 1",
-   "This is the same as Example 1) except the static score for move B 1.Ng6+\n"
-   "is 1.0 (versus 0.0 for move A 1.Nxd3). Static scores for non-leaf nodes\n"
-   "don't affect the ultimate PV calculated, but they do result in\n"
-   "re-ordering of evaluations. The result here is that branch B is\n"
-   "evaluated first, so this time there are Alpha-Beta cutoffs. Alpha-Beta\n"
-   "works best when stronger moves are evaluated first.\n",
-   "So the result is an optimised calculation compared to Example 1)",
+    "7k/R1ppp1p1/1p6/4q3/5N1r/3b3P/PP3PP1/Q5K1 w - - 0 1",
+    "1.Ng6+ Kg8 2.Nxe5",
+    "This is the same as Example 1) except the static score for move B 1.Ng6+\n"
+    "is 1.0 (versus 0.0 for move A 1.Nxd3). Static scores for non-leaf nodes\n"
+    "don't affect the ultimate PV calculated, but they do result in\n"
+    "re-ordering of evaluations. The result here is that branch B is\n"
+    "evaluated first, so this time there are Alpha-Beta cutoffs. Alpha-Beta\n"
+    "works best when stronger moves are evaluated first.\n",
+    "So the result is an optimised calculation compared to Example 1)",
     {
-       { "A"     , "1.Nxd3",                0.0  },
-       { "AG"    , "1.Nxd3 Qd6",            0.0  },
-       { "AGA"   , "1.Nxd3 Qd6 2.Ne1",      3.3  },    // White wins a bishop
-       { "AGB"   , "1.Nxd3 Qd6 2.Qb1",      3.0  },    // White wins a bishop
-       { "AH"    , "1.Nxd3 Qg5",            0.0  },
-       { "AHA"   , "1.Nxd3 Qg5 2.Rxc7",     3.1  },    // White wins a bishop
-       { "AHB"   , "1.Nxd3 Qg5 2.Kh2",      3.2  },    // White wins a bishop
-       { "B"     , "1.Ng6+",                1.0  },
-       { "BG"    , "1.Ng6+ Kh7",            0.0  },
-       { "BGA"   , "1.Ng6+ Kh7 2.Nxe5",     9.2  },    // White wins a queen
-       { "BGB"   , "1.Ng6+ Kh7 2.Nxh4",     5.0  },    // White wins a rook
-       { "BH"    , "1.Ng6+ Kg8",            0.0  },
-       { "BHA"   , "1.Ng6+ Kg8 2.Nxe5",     9.0  },    // White wins a queen
-       { "BHB"   , "1.Ng6+ Kg8 2.Nxh4",     5.2  }     // White wins a rook
+        { "A"     , "1.Nxd3",                0.0  },
+        { "AG"    , "1.Nxd3 Qd6",            0.0  },
+        { "AGA"   , "1.Nxd3 Qd6 2.Ne1",      3.3  },    // White wins a bishop
+        { "AGB"   , "1.Nxd3 Qd6 2.Qb1",      3.0  },    // White wins a bishop
+        { "AH"    , "1.Nxd3 Qg5",            0.0  },
+        { "AHA"   , "1.Nxd3 Qg5 2.Rxc7",     3.1  },    // White wins a bishop
+        { "AHB"   , "1.Nxd3 Qg5 2.Kh2",      3.2  },    // White wins a bishop
+        { "B"     , "1.Ng6+",                1.0  },
+        { "BG"    , "1.Ng6+ Kh7",            0.0  },
+        { "BGA"   , "1.Ng6+ Kh7 2.Nxe5",     9.2  },    // White wins a queen
+        { "BGB"   , "1.Ng6+ Kh7 2.Nxh4",     5.0  },    // White wins a rook
+        { "BH"    , "1.Ng6+ Kg8",            0.0  },
+        { "BHA"   , "1.Ng6+ Kg8 2.Nxe5",     9.0  },    // White wins a queen
+        { "BHB"   , "1.Ng6+ Kg8 2.Nxh4",     5.2  }     // White wins a rook
     }
 };
 
@@ -815,7 +837,7 @@ void sargon_minimax_main()
         // Annotate lines with progress through minimax calculation
         example.Annotate();
 
-        //Run PV algorithm, asterisk the PV nodes
+        // Run PV algorithm, asterisk the PV nodes
         example.CalculatePV();
 
         // Print ascii-art
@@ -1077,6 +1099,7 @@ std::string model5_detailed_log =
 bool sargon_minimax_regression_test( bool quiet)
 {
     bool ok = true;
+    printf( "* Minimax algorithm tests\n" );
 
     // Loop through multiple examples
     int example_nbr = 1;
@@ -1086,7 +1109,8 @@ bool sargon_minimax_regression_test( bool quiet)
         Example example(*model);
         running_example = &example;
         example.Run();
-        std::string s = example.DetailedLog();
+        std::string pv = example.CalculatePV();
+        std::string s =  example.DetailedLog();
         std::string t;
         switch( example_nbr )
         {
@@ -1096,8 +1120,8 @@ bool sargon_minimax_regression_test( bool quiet)
             case 4: t = model4_detailed_log; break;
             case 5: t = model5_detailed_log; break;
         }
-        bool pass = (s==t);
-        std::string result = util::sprintf( "%s model%d: %s", pass?"PASS":"FAIL", example_nbr, model->comment1.c_str() );
+        bool pass = (pv==model->pv && s==t);
+        std::string result = util::sprintf( "Model %d: %s %s", example_nbr, pass?"PASS":"FAIL", model->comment1.c_str() );
         if( result.length() > 79 )
             result = result.substr(0,75) + "...";
         printf( "%s\n", result.c_str() );
@@ -1106,10 +1130,20 @@ bool sargon_minimax_regression_test( bool quiet)
             ok = false;
             if( !quiet )
             {
-                printf( "Expected:\n" );
-                printf( "%s\n", t.c_str() );
-                printf( "Actual:\n" );
-                printf( "%s\n", s.c_str() );
+                if( pv != model->pv )
+                {
+                    printf( "Expected PV: " );
+                    printf( "%s ", model->pv.c_str() );
+                    printf( "Actual PV: " );
+                    printf( "%s\n", pv.c_str() );
+                }
+                else
+                {
+                    printf( "Expected:\n" );
+                    printf( "%s\n", t.c_str() );
+                    printf( "Actual:\n" );
+                    printf( "%s\n", s.c_str() );
+                }
             }
         }
         example_nbr++;
