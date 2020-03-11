@@ -902,7 +902,7 @@ void translate_init()
     // MOV reg8_mem8, reg8_mem8 -> MOV reg8_mem8, reg8_mem8
     xlat["MOV"] = { "MOV\t%s,%s",  "LD\t%s,%s", NULL, reg8_mem8_reg8_mem8 };
 
-    // MVI NULL, reg8_mem8, imm8 -> MOV NULL, reg8_mem8, imm8
+    // MVI reg8_mem8, imm8 -> MOV reg8_mem8, imm8
     xlat["MVI"] = { "MOV\t%s,%s", "LD\t%s,%s", NULL, reg8_mem8_imm8 };
 
     //
@@ -1245,5 +1245,34 @@ void translate_init()
     xlat[".BYTE"] = { "DB\t%s", "DB\t%s", NULL, echo };
     xlat[".WORD"] = { "DD\t%s", "DW\t%s", NULL, echo };
     xlat[".LOC"]  = { ";ORG\t%s", "ORG\t%s", NULL, echo };
+ }
+
+ // Optionally replace the LAHF/SAHF versions - don't really need to preserve flags in these
+ //  instructions in Sargon
+ void translate_init_slim_down()
+ {
+    // DAD reg16 -> LAHF; ADD ebx,reg16; SAHF        //CY (only) should be affected, but our emulation preserves flags
+    xlat["DAD"] = { "ADD\tbx,%s",  "ADD\thl,%s", "ADD\tbx,%s", reg16 };
+
+    // DADX reg16 -> LAHF; ADD esi,reg16; SAHF       //CY (only) should be affected, but our emulation preserves flags
+    xlat["DADX"] = { "ADD\tsi,%s", "ADD\tix,%s", "ADD\tsi,%s", reg16 };
+
+    // DADY reg16 -> LAHF; ADD edi,reg16; SAHF;      //CY (only) should be affected, but our emulation preserves flags
+    xlat["DADY"] = { "tADD\tdi,%s",  "ADD\tiy,%s", "ADD\tdi,%s", reg16 };  // not actually used in codebas
+
+    // INX reg16 -> LAHF; INC reg16; SAHF;      ## INC reg16; Z80 flags unaffected, X86 INC preserve CY only
+    xlat["INX"] = { "INC\t%s",  "INC\t%s", NULL, reg16 };
+
+    // DCX reg16 -> LAHF; DEC reg16; SAHF;      ## DEC reg16; Z80 flags unaffected, X86 DEC preserve CY only
+    xlat["DCX"] = { "DEC\t%s", "DEC\t%s", NULL, reg16 };
+
+    // SET n,reg8 -> LAHF; OR reg8,mask[n]; SAHF
+    xlat["SET"] = { "OR\t%s,%s", "SET\t%s,%s", NULL, set_n_reg8 };
+
+    // RES n,reg8 -> LAHF; AND reg8,not mask[n]; SAHF
+    xlat["RES"] = { "AND\t%s,%s", "RES\t%s,%s", NULL, clr_n_reg8 };
+
+    // DJNZ addr -> LAHF; DEC ch; JNZ addr; SAHF; ## flags affected at addr (sadly not much to be done)
+    xlat["DJNZ"] = { "DEC ch\n\tJNZ\t%s", "DJNZ\t%s", NULL, echo };
 }
 

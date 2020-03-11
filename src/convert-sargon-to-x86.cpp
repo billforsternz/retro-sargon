@@ -23,7 +23,7 @@
 #include "util.h"
 #include "translate.h"
 
-void convert( std::string fin, std::string asm_fout,  std::string report_fout, std::string asm_interface_fout );
+void convert( bool relax_switch, std::string fin, std::string asm_fout,  std::string report_fout, std::string asm_interface_fout );
 std::string detabify( const std::string &s, bool push_comment_to_right=false );
 
 // Each source line can optionally be transformed to Z80 mnemonics (or hybrid Z80 plus X86 registers mnemonics)
@@ -53,6 +53,9 @@ int main( int argc, const char *argv[] )
     "Usage:\n"
     " convert [switches] sargon.asm sargon-out.asm [report.txt] [asm-interface.h]\n"
     "Switches:\n"
+    " -relax Relax strict Z80->X86 flag compatibility. Applying this flag eliminates LAHF/SAHF pairs around\n"
+    "        some X86 instructions. Reduces compatibility (burden of proof passes to programmer) but improves\n"
+    "        performance. For Sargon, manual checking suggests it's okay to use this flag.\n"
     "Each source line can optionally be transformed to Z80 mnemonics (or hybrid Z80 plus X86 registers mnemonics)\n"
     " so -transform_none or -transform_z80 or -transform_hybrid, default is -transform_none\n"
     "After optional transformation, the original line can be kept, discarded or commented out\n"
@@ -62,6 +65,7 @@ int main( int argc, const char *argv[] )
     "Note that all three output files will be generated, if the optional output filenames aren't\n"
     "provided, names will be auto generated from the main output filename";
     int argi = 1;
+    bool relax_switch=false;
     while( argc >= 2)
     {
         std::string arg( argv[argi] );
@@ -69,7 +73,9 @@ int main( int argc, const char *argv[] )
             break;
         else
         {
-            if( arg == "-transform_none" )
+            if( arg == "-relax" )
+                relax_switch = true;
+            else if( arg == "-transform_none" )
                 transform_switch = transform_none;
             else if( arg == "-transform_z80" )
                 transform_switch = transform_z80;
@@ -110,7 +116,8 @@ int main( int argc, const char *argv[] )
     std::string report_fout = argc>=4 ? argv[argi+2] : fout + "-report.txt";
     std::string asm_interface_fout = argc>=5 ? argv[argi+3] : fout + "-asm-interface.h";
     printf( "convert(%s,%s,%s,%s)\n", fin.c_str(), fout.c_str(), report_fout.c_str(), asm_interface_fout.c_str() );
-    convert(fin,fout,report_fout,asm_interface_fout);
+    convert(relax_switch,fin,fout,report_fout,asm_interface_fout);
+    return 0;
 }
 
 enum statement_typ {empty, discard, illegal, comment_only, comment_only_indented, directive, equate, normal};
@@ -133,7 +140,7 @@ struct name_plus_parameters
     std::set<std::vector<std::string>> parameters;
 };
 
-void convert( std::string fin, std::string fout, std::string report_fout, std::string asm_interface_fout )
+void convert( bool relax_switch, std::string fin, std::string fout, std::string report_fout, std::string asm_interface_fout )
 {
     std::ifstream in(fin);
     if( !in )
@@ -197,6 +204,8 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
     std::map< std::string, std::set<std::vector<std::string>> > instructions;
     bool data_mode = true;
     translate_init();
+    if( relax_switch )
+        translate_init_slim_down();
 
     // We can enable (or disable) callback to C++ code
     bool callback_enabled = true;

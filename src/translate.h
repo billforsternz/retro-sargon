@@ -8,6 +8,7 @@
 #define TRANSLATE_H_INCLUDED
 
 void translate_init();
+void translate_init_slim_down();
 
 // Return true if translated    
 bool translate_z80( const std::string &line, const std::string &instruction, const std::vector<std::string> &parameters, bool hybrid, std::string &out );
