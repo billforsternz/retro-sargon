@@ -31,7 +31,7 @@ BPAWN   =       BLACK+PAWN
 
 ;***********************************************************
 ; TABLES SECTION
-;**********************************************************
+;***********************************************************
         .IF_X86
 _DATA   SEGMENT
 PUBLIC  _sargon_base_address
@@ -39,7 +39,7 @@ PUBLIC  _sargon_move_gen_counter
 _sargon_base_address:
         .ENDIF
         .LOC 100h
-TBASE:
+TBASE =         .
 ;TBASE must be page aligned, but not page 0, because an
 ;extensively used trick is to test whether the hi byte of
 ;a pointer == 0 and to consider this as a equivalent to
@@ -382,7 +382,8 @@ BMOVES: .BYTE   35,55,10H
 ;
 ; MLVAL   --  The field in the move entry which contains the
 ;             score assigned to the move.
-;**********************************************************
+;
+;***********************************************************
 
 
 ;*** TEMP TODO BEGIN
@@ -2249,52 +2250,53 @@ BM9:    INR     M               ; (P-Q4)
 ;               piece on its own color square is produced
 ;               by moving in a kernel of 6 blocks.
 ;*******************************************************
-        .LOC    START+384
-BLBASE  =       START+512
-BLOCK   =       .-BLBASE
-        .RADIX  16
-        .BYTE   80,80,80,80     ; Black Pawn on White square
-        .BYTE   80,0A0,90,80
-        .BYTE   80,0AF,9F,80
-        .BYTE   80,83,83,80
-        .BYTE   80,0B0,0B0,80   ; Black Knight on White square
-        .BYTE   0BE,0BF,0BF,95
-        .BYTE   0A0,0BE,0BF,85
-        .BYTE   83,83,83,81
-        .BYTE   80,0A0,00,80    ; Black Bishop on White square
-        .BYTE   0A8,0BF,0BD,80
-        .BYTE   82,0AF,87,80
-        .BYTE   82,83,83,80
-        .BYTE   80,80,80,80     ; Black Rook on White square
-        .BYTE   8A,0BE,0BD,85
-        .BYTE   80,0BF,0BF,80
-        .BYTE   82,83,83,81
-        .BYTE   90,80,80,90     ; Black Queen on White square
-        .BYTE   0BF,0B4,0BE,95
-        .BYTE   8B,0BF,9F,81
-        .BYTE   83,83,83,81
-        .BYTE   80,0B8,90,80    ; Black King on White square
-        .BYTE   0BC,0BA,0B8,94
-        .BYTE   0AF,0BF,0BF,85
-        .BYTE   83,83,83,81
-        .BYTE   90,0B0,0B0,80   ; Toppled Black King
-        .BYTE   0BF,0BF,0B7,80
-        .BYTE   9F,0BF,0BD,80
-        .BYTE   80,80,88,9D
-KERNEL  =       .-BLBASE
-        .BYTE   0BF,9F,0AF,0BF,9A,0A5   ; Pawn Kernel
-        .BYTE   89,0AF,0BF,9F,0B9,9F    ; Knight Kernel
-        .BYTE   97,0BE,96,0BD,9B,0B9    ; Bishop Kernel
-        .BYTE   0B5,0A1,92,0BF,0AA,95   ; Rook Kernel
-        .BYTE   0A8,9B,0B9,0B6,0AF,0A7  ; Queen Kernel
-        .BYTE   0A3,85,0A7,9A,0BF,9F    ; King Kernel
-        .BYTE   0A8,0BF,89,0A2,8F,86    ; Toppled King Kernel
-        .RADIX  10
+        ORG     START+384
+BLBASE  EQU     START+512
+BLOCK   EQU     $-BLBASE
+        DB      $80,$80,$80,$80     ; Black Pawn on White square
+        DB      $80,$A0,$90,$80
+        DB      $80,$AF,$9F,$80
+        DB      $80,$83,$83,$80
+        DB      $80,$B0,$B0,$80   ; Black Knight on White square
+        DB      $BE,$BF,$BF,$95
+        DB      $A0,$BE,$BF,$85
+        DB      $83,$83,$83,$81
+        DB      $80,$A0,$00,$80    ; Black Bishop on White square
+        DB      $A8,$BF,$BD,$80
+        DB      $82,$AF,$87,$80
+        DB      $82,$83,$83,$80
+        DB      $80,$80,$80,$80     ; Black Rook on White square
+        DB      $8A,$BE,$BD,$85
+        DB      $80,$BF,$BF,$80
+        DB      $82,$83,$83,$81
+        DB      $90,$80,$80,$90     ; Black Queen on White square
+        DB      $BF,$B4,$BE,$95
+        DB      $8B,$BF,$9F,$81
+        DB      $83,$83,$83,$81
+        DB      $80,$B8,$90,$80    ; Black King on White square
+        DB      $BC,$BA,$B8,$94
+        DB      $AF,$BF,$BF,$85
+        DB      $83,$83,$83,$81
+        DB      $90,$B0,$B0,$80   ; Toppled Black King
+        DB      $BF,$BF,$B7,$80
+        DB      $9F,$BF,$BD,$80
+        DB      $80,$80,$88,$9D
+KERNEL  EQU     $-BLBASE
+        DB      $BF,$9F,$AF,$BF,$9A,$A5 ; Pawn Kernel
+        DB      $89,$AF,$BF,$9F,$B9,$9F ; Knight Kernel
+        DB      $97,$BE,$96,$BD,$9B,$B9 ; Bishop Kernel
+        DB      $B5,$A1,$92,$BF,$AA,$95 ; Rook Kernel
+        DB      $A8,$9B,$B9,$B6,$AF,$A7 ; Queen Kernel
+        DB      $A3,$85,$A7,$9A,$BF,$9F ; King Kernel
+        DB      $A8,$BF,$89,$A2,$8F,$86 ; Toppled King Kernel
+        
+        
+        
 
 ;*******************************************************
 ; STANDARD MESSAGES
 ;*******************************************************
-        .LOC    START+1800H
+        ORG     START+1800H
 GRTTNG: .ASCII  "WELCOME TO CHESS! CARE FOR A GAME?"
 ANAMSG: .ASCII  "WOULD YOU LIKE TO ANALYZE A POSITION?"
 CLRMSG: .ASCII  "DO YOU WANT TO PLAY WHITE(w) OR BLACK(b)?"
@@ -2303,23 +2305,23 @@ TITLE2: .ASCII  "PLAYER"
 SPACE:  .ASCII  "          "    ; For output of blank area
 MVENUM: .ASCII  "01 "
 TITLE3: .ASCII  "  "
-        .ASCII  [^H83]          ; Part of TITLE 3 - Underlines
-        .ASCII  [^H83]
-        .ASCII  [^H83]
-        .ASCII  [^H83]
-        .ASCII  [^H83]
-        .ASCII  [^H83]
+        .ASCII  '[',$83,']'          ; Part of TITLE 3 - Underlines
+        .ASCII  '[',$83,']'
+        .ASCII  '[',$83,']'
+        .ASCII  '[',$83,']'
+        .ASCII  '[',$83,']'
+        .ASCII  '[',$83,']'
         .ASCII  " "
-        .ASCII  [^H83]
-        .ASCII  [^H83]
-        .ASCII  [^H83]
-        .ASCII  [^H83]
-        .ASCII  [^H83]
-        .ASCII  [^H83]
+        .ASCII  '[',$83,']'
+        .ASCII  '[',$83,']'
+        .ASCII  '[',$83,']'
+        .ASCII  '[',$83,']'
+        .ASCII  '[',$83,']'
+        .ASCII  '[',$83,']'
         .ASCII  " "
 MVEMSG: .ASCII  "a1-a1"
-O.O:    .ASCII  "0-0  "
-O.O.O:  .ASCII  "0-0-0"
+O_O:    .ASCII  "0-0  "
+O_O_O:  .ASCII  "0-0-0"
 CKMSG:  .ASCII  "CHECK"
 MTMSG:  .ASCII  "MATE IN "
 MTPL:   .ASCII  "2"
@@ -2331,8 +2333,8 @@ CRTNES: .ASCII  "IS THIS RIGHT?"
 PLYDEP: .ASCII  "SELECT LOOK AHEAD (1-6)"
 TITLE4: .ASCII  "                "
 WSMOVE: .ASCII  "WHOSE MOVE IS IT?"
-BLANKR: .ASCII  [^H1C]                  ; Control-\
-P.PEP:  .ASCII  "PxPep"
+BLANKR: .ASCII  '[',$1C,']'              ; Control-\
+P_PEP:  .ASCII  "PxPep"
 INVAL1: .ASCII  "INVALID MOVE"
 INVAL2: .ASCII  "TRY AGAIN"
 
@@ -2355,29 +2357,38 @@ LINECT: .BYTE   0       ; Current line number
 ; of the Jupiter III computer.
 ;*******************************************************
 ;*** OUTPUT <CR><LF> ***
-        .DEFINE CARRET=
-        [RST    7
-        .BYTE   92H,1AH
-        .WORD   0]
+CARRET  MACRO
+        RST    38h
+        .BYTE  92H,1AH
+        .WORD  0
+        ENDM
+
 ;*** CLEAR SCREEN ***
-        .DEFINE CLRSCR=
-        [RST    7
-        .BYTE   0B2H,1AH
-        .WORD   BLANKR,1]
+CLRSCR  MACRO
+        RST    38h
+        .BYTE  0B2H,1AH
+        .WORD  BLANKR,1
+        ENDM
+
 ;*** PRINT ANY LINE (NAME, LENGTH) ***
-        .DEFINE PRTLIN[NAME,LNGTH)=
-        [RST    7
-        .BYTE   0B2H,1AH
-        .WORD   NAME,LNGTH]
+PRTLIN  MACRO NAME,LNGTH
+        RST    38h
+        .BYTE  0B2H,1AH
+        .WORD  NAME,LNGTH
+        ENDM
+
 ;*** PRINT ANY BLOCK (NAME, LENGTH) ***
-        .DEFINE PRTBLK[NAME,LNGTH]=
-        [RST    7
-        .BYTE   0B3H,1AH
-        .WORD   NAME,LNGTH]
+PRTBLK  MACRO NAME,LNGTH
+        RST    38h
+        .BYTE  0B3H,1AH
+        .WORD  NAME,LNGTH
+        ENDM
+
 ;*** EXIT TO MONITOR ***
-        .DEFINE EXIT=
-        [RST    7
-        .BYTE   01FH)
+EXIT    MACRO
+        RST    38h
+        .BYTE  01FH
+        ENDM
 
 ;***********************************************************
 ; MAIN PROGRAM DRIVER
@@ -2570,13 +2581,13 @@ CP0C:   CALL    MOVE            ; Produce move on board array
         JMPR    CP1C            ; Jump
 CP10:   BIT     1,B             ; King side castle ?
         JRZ     rel020          ; No - jump
-        PRTBLK  O.O,5           ; Output "O-O"
+        PRTBLK  O_O,5           ; Output "O-O"
         JMPR    CP1C            ; Jump
 rel020: BIT     2,B             ; Queen side castle ?
         JRZ     rel021          ; No - jump
-        PRTBLK  O.O.O,5         ; Output "O-O-O"
+        PRTBLK  O_O_O,5         ; Output "O-O-O"
         JMPR    CP1C            ; Jump
-rel021: PRTBLK  P.PEP,5         ; Output "PxPep" - En passant
+rel021: PRTBLK  P_PEP,5         ; Output "PxPep" - En passant
 CP1C:   LDA     COLOR           ; Should computer call check ?
         MOV     B,A
         XRI     80H             ; Toggle color
@@ -3566,7 +3577,7 @@ EX14:   POP     PSW             ; Restore registers
 ;
 ; ARGUMENTS:  --  The "from" position is passed in register
 ;                 C, and the "to" position in register E.
-;**********************************************************
+;***********************************************************
 MAKEMV: PUSH    PSW             ; Save register
         PUSH    B
         PUSH    D
