@@ -40,13 +40,16 @@ generate_t generate_switch = generate_x86;
 
 int main( int argc, const char *argv[] )
 {
-#if 0
-    //transform_switch = transform_z80;
-    //generate_switch = generate_none;
-    //original_switch = original_keep;
-    //convert("../original/sargon3.asm","../original/sargon4.asm", "../original/sargon-step4.asm-report.txt", "../original/sargon-step4.asm-asm-interface.h" );
-    convert("../original/sargon5.asm","../original/t5-3.asm","../original/translated.asm-report.txt","../original/translated.asm-asm-interface.h");
-    return 0;
+#if 1
+    const char *test_args[] =
+    {
+        "Release/project-convert-sargon-to-x86.exe",
+        "-generate_z80",
+        "../stages/sargon5.asm",
+        "out.asm"
+    };
+    argc = sizeof(test_args) / sizeof(test_args[0]);
+    argv = test_args;
 #endif
     const char *usage=
     "Read, understand, convert sargon source code\n"
@@ -120,14 +123,14 @@ int main( int argc, const char *argv[] )
     return 0;
 }
 
-enum statement_typ {empty, discard, illegal, comment_only, comment_only_indented, directive, equate, normal};
+enum statement_typ {empty, discard, illegal, comment_only, comment_only_indented, equate, normal};
 
 struct statement
 {
     statement_typ typ;
     std::string label;
+    bool label_has_colon_terminator;
     std::string equate;
-    std::string directive;
     std::string instruction;
     std::vector<std::string> parameters;
     std::string comment;
@@ -139,6 +142,242 @@ struct name_plus_parameters
     std::string name;
     std::set<std::vector<std::string>> parameters;
 };
+
+// Check ASM line syntax - it's not an industrial strength ASM parser, but it's more than
+//  sufficient in most cases and will highlight cases where a little manual editing/conversion
+//  might be required
+// Supported syntax:
+//  [label[:]] instruction [parameters,..]
+// label and instruction must be alphanum + '_' + '.'
+// parameters are less strict, basically anything between commas
+// semicolon anywhere initiates comment, so ;rest of line is comment
+// complete parameters can be singly ' or " quoted. Commas and semicolons lose their magic in quotes
+//
+static void parse( const std::string &line, statement &stmt )
+{
+    enum { init, in_comment, in_label, before_instruction, in_instruction, after_instruction,
+           in_parm, in_quoted_parm, in_double_quoted_parm,
+           between_parms_before_comma, between_parms_after_comma, err } state;
+    state = init;
+    std::string parm;
+    stmt.typ = normal;
+    stmt.label_has_colon_terminator = false;
+    for( unsigned int i=0; state!=err && i<line.length(); i++ )
+    {
+        char c = line[i];
+        char next = '\0';
+        if( i+1 < line.length() )
+            next = line[i+1];
+        switch( state )
+        {
+            case init:
+            {
+                if( c == ';' )
+                {
+                    state = in_comment;
+                    stmt.typ = comment_only;
+                }
+                else if( c == ' ' )
+                {
+                    state = before_instruction;
+                }
+                else if( c == ':' )
+                {
+                    state = err;
+                }
+                else
+                {
+                    state = in_label;
+                    stmt.label = c;
+                }
+                break;
+            }
+            case in_comment:
+            {
+                stmt.comment += c;
+                break;
+            }
+            case in_label:
+            {
+                if( c == ';' )
+                {
+                    state = in_comment;
+                }
+                else if( c == ' ' )
+                    state = before_instruction;
+                else if( c == ':' )
+                {
+                    if( next==' ' || next=='\0' )
+                    {
+                        stmt.label_has_colon_terminator = true;
+                        state = before_instruction;
+                    }
+                    else
+                        state = err;
+                }
+                else
+                {
+                    stmt.label += c;
+                }
+                break;
+            }
+            case before_instruction:
+            {
+                if( c == ';' )
+                {
+                    state = in_comment;
+                    if( stmt.label == "" )
+                        stmt.typ = comment_only_indented;
+                }
+                else if( c != ' ' )
+                {
+                    state = in_instruction;
+                    stmt.instruction += c;
+                }
+                break;
+            }
+            case in_instruction:
+            {
+                if( c == ';' )
+                {
+                    state = in_comment;
+                }
+                else if( c == ' ' )
+                {
+                    state = after_instruction;
+                }
+                else
+                {
+                    stmt.instruction += c;
+                }
+                break;
+            }
+            case after_instruction:
+            {
+                if( c == ';' )
+                {
+                    state = in_comment;
+                }
+                else if( c != ' ' )
+                {
+                    parm = c;
+                    if( c == '\'' )
+                        state = in_quoted_parm;
+                    else if( c == '\"' )
+                        state = in_double_quoted_parm;
+                    else
+                        state = in_parm;
+                }
+                break;
+            }
+            case in_parm:
+            {
+                if( c == ';' )
+                {
+                    util::rtrim(parm);
+                    stmt.parameters.push_back(parm);
+                    state = in_comment;
+                }
+                else if( c == ',' )
+                {
+                    util::rtrim(parm);
+                    stmt.parameters.push_back(parm);
+                    state = between_parms_after_comma;
+                }
+                else
+                {
+                    parm += c;
+                }
+                break;
+            }
+            case in_quoted_parm:
+            {
+                if( c == '\'' )
+                {
+                    parm += c;
+                    stmt.parameters.push_back(parm);
+                    state = between_parms_before_comma;
+                }
+                else
+                {
+                    parm += c;
+                }
+                break;
+            }
+            case in_double_quoted_parm:
+            {
+                if( c == '\"' )
+                {
+                    parm += c;
+                    stmt.parameters.push_back(parm);
+                    state = between_parms_before_comma;
+                }
+                else
+                {
+                    parm += c;
+                }
+                break;
+            }
+            case between_parms_before_comma:
+            {
+                if( c == ';' )
+                {
+                    state = in_comment;
+                }
+                else if( c == ',' )
+                {
+                    state = between_parms_after_comma;
+                }
+                break;
+            }
+            case between_parms_after_comma:
+            {
+                if( c == ',' )
+                    state = err;
+                else if( c != ' ' )
+                {
+                    parm = c;
+                    if( c == '\'' )
+                        state = in_quoted_parm;
+                    else if( c == '\"' )
+                        state = in_double_quoted_parm;
+                    else
+                        state = in_parm;
+                }
+                break;
+            }
+        }
+    }
+    const char *identifier_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._";
+    if( util::toupper(stmt.label).find_first_not_of(identifier_chars) != std::string::npos )
+        stmt.typ = illegal;
+    if( stmt.instruction != "=" && util::toupper(stmt.instruction).find_first_not_of(identifier_chars) != std::string::npos )
+        stmt.typ = illegal;
+    if( state == init )
+        stmt.typ = empty;
+    else if( state==before_instruction && stmt.label=="" )
+        stmt.typ = empty;
+    else if( state == err || state==between_parms_after_comma || state==in_quoted_parm || state==in_double_quoted_parm )
+        stmt.typ = illegal;
+    else if( state == in_parm )
+    {
+        util::rtrim(parm);
+        stmt.parameters.push_back(parm);
+    }
+    stmt.instruction = util::toupper(stmt.instruction);
+    if( stmt.instruction == "=" || util::toupper(stmt.instruction) == "EQU" )
+    {
+        if( stmt.label == "" || stmt.label_has_colon_terminator || stmt.parameters.size()!=1 )
+            stmt.typ = illegal;
+        else
+        {
+            stmt.typ = equate;
+            stmt.equate = stmt.label;
+            stmt.label = "";
+        }
+    }
+}
+
 
 void convert( bool relax_switch, std::string fin, std::string fout, std::string report_fout, std::string asm_interface_fout )
 {
@@ -211,7 +450,12 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
     bool callback_enabled = true;
 
     // .IF controls let us switch between three modes (currently)
-    enum { mode_normal, mode_pass_thru, mode_suspended } mode = mode_normal;
+    enum { mode_normal, mode_x86, mode_z80 } mode = mode_normal;
+        // mode_normal, converting 8080 to x86 (or z80 if generate_z80)
+        // mode_x86, added x86 code to be passed through
+        // mode_z80, z80 only code
+        //   if generate_z80 convert 8080 -> z80
+        //   if generate_x86 remove it
 
     unsigned int track_location = 0;
     for(;;)
@@ -223,129 +467,11 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
         std::string line_original = line;
         util::replace_all(line,"\t"," ");
         statement stmt;
-        stmt.typ = normal;
-        stmt.label = "";
-        stmt.equate = "";
-        stmt.instruction = "";
-        stmt.parameters.clear();
-        stmt.comment = "";
-        bool done = false;
-
-        // Discards
-        if( line.length() == 0 )
-        {
-            stmt.typ = empty;
-            done = true;
-        }
-        else if( line[0] == '<' )
-        {
-            stmt.typ = discard;
-            done = true;
-        }
-
-        // Get rid of comments
-        if( !done )
-        {
-            size_t offset = line.find(';');
-            if( offset != std::string::npos )
-            {
-                stmt.comment = line.substr(offset+1);
-                line = line.substr(0,offset);
-                util::rtrim(line);
-                if( offset==0 || line.length()==0 )
-                {
-                    stmt.typ = offset==0 ? comment_only : comment_only_indented;
-                    done = true;
-                }
-            }
-        }
-
-        // Labels and directives
-        if( !done && line[0]!=' ' )
-        {
-            stmt.typ = line[0]=='.' ? directive : equate;
-            if( stmt.typ == directive )
-                stmt.directive = line;
-            for( unsigned int i=0; i<line.length(); i++ )
-            {
-                char c = line[i];
-                if( isascii(c) && !isalnum(c) ) 
-                {
-                    if( c==':' && i>0 )
-                    {
-                        stmt.typ = normal;
-                        stmt.label = line.substr(0,i);
-                        std::string temp = line.substr(i+1);
-                        line = " " + temp;
-                        break;
-                    }
-                    else if( c==' ' && stmt.typ == directive )
-                    {
-                        stmt.directive = line.substr(0,i);
-                        line = line.substr(i);
-                        break;
-                    }
-                    else if( c==' ' && stmt.typ == equate )
-                    {
-                        stmt.equate = line.substr(0,i);
-                        line = line.substr(i);
-                        break;
-                    }
-                }
-            }
-            if( stmt.typ==equate && stmt.equate=="" )
-                stmt.typ = illegal;
-            if( stmt.typ == illegal )
-                done = true;
-        }
-
-        // Get statement and parameters
-        if( !done && line[0]==' ' )
-        {
-            util::ltrim(line);
-            line += " ";    // to get last parameter
-            bool in_parm = true;
-            int start = 0;
-            for( unsigned int i=0; i<line.length(); i++ )
-            {
-                char c = line[i];
-                if( in_parm )
-                {
-                    if( c==' ' || c==',' )
-                    {
-                        std::string parm = line.substr( start, i-start );
-                        in_parm = false;
-                        if( parm.length() > 0 )
-                        {
-                            if( start==0 && stmt.typ==equate )
-                            {
-                                if( parm != "=" )
-                                {
-                                    stmt.typ = illegal;
-                                    break;
-                                }
-                            }
-                            else if( start==0 && stmt.typ==normal )
-                                stmt.instruction = parm;
-                            else
-                                stmt.parameters.push_back(parm);
-                        }
-                    }
-                }
-                else
-                {
-                    if( c!=' ' && c!=',' )
-                    {
-                        start = i;
-                        in_parm = true;
-                    }
-                }
-            }
-        }
+        parse( line, stmt );
 
         // Reduce to a few simple types of line
         std::string line_out="";
-        done = false;
+        bool done = false;
         switch(stmt.typ)
         {
             case empty:
@@ -364,9 +490,6 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
                 line_out += stmt.comment;
                 done = true;
                 break;
-            case directive:             // looks like "directives" are simply unindented normal instructions
-                stmt.typ = normal;
-                stmt.instruction = stmt.directive;  // and fall through
             case normal:
                 line_out = "NORMAL";
                 if( stmt.instruction == "BYTE" )
@@ -438,34 +561,29 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
             }
             else if( stmt.instruction == ".IF_Z80" )
             {
-                mode = mode_suspended;
-                handled = true;         
-            }
-            else if( stmt.instruction == ".IF_16BIT" )
-            {
-                mode = mode_normal;
+                mode = mode_z80;
                 handled = true;         
             }
             else if( stmt.instruction == ".IF_X86" )
             {
-                mode = mode_pass_thru;
+                mode = mode_x86;
                 handled = true;         
             }
             else if( stmt.instruction == ".ELSE" )
             {
-                if( mode == mode_suspended )
-                    mode = mode_pass_thru;
-                else if( mode == mode_pass_thru )
-                    mode = mode_suspended;
+                if( mode == mode_z80 )
+                    mode = mode_x86;
+                else if( mode == mode_x86 )
+                    mode = mode_z80;
                 else if( mode == mode_normal )
-                    mode = mode_suspended;
+                    mode = mode_z80;
                 else
                     printf( "Error, unexpected .ELSE\n" );
                 handled = true;         
             }
             else if( stmt.instruction == ".ENDIF" )
             {
-                if( mode == mode_suspended ||  mode == mode_pass_thru )
+                if( mode == mode_z80 ||  mode == mode_x86 )
                     mode = mode_normal;
                 else
                     printf( "Error, unexpected .ENDIF\n" );
@@ -473,8 +591,23 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
             }
         }
 
+        // Our mode switch commands is passed through only if generate_z80
+        if( handled )
+        {
+            if( generate_switch == generate_z80 )
+                util::putline( asm_out, line_original );
+            continue;
+        }
+
+        // In .IF_Z80 mode, discard unless generate_switch == generate_z80
+        if( mode == mode_z80 )
+        {
+            if( generate_switch != generate_z80 )
+                continue;
+        }
+
         // Pass through new X86 code
-        if( mode==mode_pass_thru && !handled )
+        if( mode==mode_x86 )
         {
 
             // special handling of lines like "api_n_X:"
@@ -515,10 +648,7 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
             continue;
         }
 
-        if( mode == mode_suspended  )
-            continue;
-
-        // Generate assembly language output
+        // Handle comments
         switch( stmt.typ )
         {
             case empty:
@@ -538,9 +668,6 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
                 break;
         }
         if( stmt.typ!=normal && stmt.typ!=equate )
-            continue;
-
-        if( handled || mode == mode_pass_thru )
             continue;
 
         // Optionally transform source lines to Z80 mnemonics
@@ -565,6 +692,8 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
                 }
             }
         }
+
+        // Keep, discard or comment out source lines before conversion
         switch( original_switch )
         {
             case original_comment_out:
