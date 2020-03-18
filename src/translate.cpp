@@ -32,6 +32,7 @@ enum ParameterPattern
     reg8_mem8_reg8_mem8,
     reg8_mem8_imm8,
     reg16_imm16,
+    rst_z80,
     none
 };
 
@@ -138,6 +139,8 @@ bool is_reg16( const std::string &parm, std::string &out )
         out = "si";
     else if( parm == "Y" )
         out = "di";
+    else if( parm == "SP" )
+        out = "sp";
     else
         ret = false;
     return ret;
@@ -284,6 +287,8 @@ bool is_reg16_z80( const std::string &parm, std::string &out, bool hybrid )
         out = hybrid ? "si" : "ix";
     else if( parm == "Y" )
         out = hybrid ? "di" : "iy";
+    else if( parm == "SP" )
+        out = "sp";
     else
         ret = false;
     return ret;
@@ -562,6 +567,39 @@ bool translate_z80( const std::string &line, const std::string &instruction, con
                 printf( "Error: Illegal imm16 parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
                 return false;
             }
+            break;
+        }
+        case rst_z80:
+        {
+            if( parameters.size() != 1 )
+            {
+                printf( "Error: Need one parameter, line=[%s]\n", line.c_str() );
+                return false;
+            }
+            std::string parm = parameters[0];
+            std::string out1;
+            if( parm == "7" )
+                out1 = "38h";
+            else if( parm == "6" )
+                out1 = "30h";
+            else if( parm == "5" )
+                out1 = "28h";
+            else if( parm == "4" )
+                out1 = "20h";
+            else if( parm == "3" )
+                out1 = "18h";
+            else if( parm == "2" )
+                out1 = "10h";
+            else if( parm == "1" )
+                out1 = "08h";
+            else if( parm == "0" )
+                out1 = "00h";
+            else
+            {
+                printf( "Error: Illegal rst parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            z80_out = util::sprintf( format, out1.c_str() );
             break;
         }
     }
@@ -887,6 +925,11 @@ bool translate_x86( const std::string &line, const std::string &instruction, con
             }
             break;
         }
+        case rst_z80:
+        {
+            printf( "Error: RST doesn\'t translate to x86 line=[%s]\n", line.c_str() );
+            return false;
+        }
     }
     return true;
 }
@@ -1118,6 +1161,12 @@ void translate_init()
     // RZ -> JNZ temp; RET; temp:
     xlat["RZ"] = { "JNZ\t%s\n\tRET\n%s:", "RET\tZ", NULL, jump_around };
 
+    // RM -> JNS temp; RET; temp:
+    xlat["RM"] = { "JNS\t%s\n\tRET\n%s:", "RET\tM", NULL, jump_around };
+
+    // RP -> JS temp; RET; temp:
+    xlat["RP"] = { "JS\t%s\n\tRET\n%s:", "RET\tP", NULL, jump_around };
+
     //
     // Jumps
     //
@@ -1138,14 +1187,29 @@ void translate_init()
     // JMPR addr -> JMP addr (avoid relative jumps unless we get into mega optimisation)
     xlat["JMPR"] = { "JMP\t%s", "JR\t%s", NULL, echo };
 
+    // JC addr -> JC addr
+    xlat["JC"] = { "JC\t%s", "JP\tC,%s", NULL, echo };
+
+    // JNC addr -> JNC addr
+    xlat["JNC"] = { "JNC\t%s", "JP\tNC,%s", NULL, echo };
+
+    // JZ addr -> JZ addr
+    xlat["JZ"] = { "JZ\t%s", "JP\tZ,%s", NULL, echo };
+
     // JNZ addr -> JNZ addr
     xlat["JNZ"] = { "JNZ\t%s", "JP\tNZ,%s", NULL, echo };
 
-    // JP addr -> JNS addr  (jump sign not set [i.e.positive])
+    // JP addr -> JNS addr  (jump sign not set [i.e. positive])
     xlat["JP"] = { "JNS\t%s", "JP\tP,%s", NULL, echo };
+
+    // JM addr -> JS addr  (jump sign set [i.e. negative])
+    xlat["JM"] = { "JS\t%s", "JP\tM,%s", NULL, echo };
 
     // JPE addr -> JPE addr  (jump parity even - check this one, parity bit not 100% compatible) 
     xlat["JPE"] = { "JPE\t%s",  "JP\tPE,%s", NULL, echo };
+
+    // JPO addr -> JPO addr  (jump parity odd - doesn't occur in Sargon)
+    xlat["JPO"] = { "JPO\t%s",  "JP\tPO,%s", NULL, echo };
 
     // JRC addr -> JC addr
     xlat["JRC"] = { "JC\t%s", "JR\tC,%s", NULL, echo };
@@ -1158,9 +1222,6 @@ void translate_init()
 
     // JRZ addr -> JZ addr
     xlat["JRZ"] = { "JZ\t%s", "JR\tZ,%s", NULL, echo };
-
-    // JZ addr -> JZ addr
-    xlat["JZ"] = { "JZ\t%s", "JMP\tZ,%s", NULL, echo };
 
     //
     // Load memory -> register
@@ -1230,6 +1291,9 @@ void translate_init()
 
     // CPIR (CCIR in quirky assembler) -> macro/call
     xlat["CCIR"] = { "Z80_CPIR", "CPIR", NULL, none };
+
+    // RST
+    xlat["RST"] = { "Z80_RST",  "RST\t%s", "RST\t%s", rst_z80 };
 
     //
     // Macros
