@@ -367,7 +367,6 @@ static bool process( const std::string &s )
          "total callbacks=%lu\n"
          "bestmove callbacks=%lu\n"
          "end of points callbacks=%lu\n"
-         "sargon_move_gen_counter=%lu\n"
          "max_variance_so_far=%lu\n"
          "max length of PV vector=%lu\n"
          "max time between bestmove callbacks=%lu\n",
@@ -375,7 +374,6 @@ static bool process( const std::string &s )
             total_callbacks,
             bestmove_callbacks,
             end_of_points_callbacks,
-            sargon_move_gen_counter,
             max_variance_so_far,
             max_len_so_far,
             max_gap_so_far );
@@ -422,7 +420,6 @@ static std::string cmd_go( const std::vector<std::string> &fields )
 {
     stop_rsp = "";
     the_pv.clear();
-    sargon_move_gen_counter = 0;
     base_time = elapsed_milliseconds();
     total_callbacks = 0;
     bestmove_callbacks = 0;
@@ -472,7 +469,6 @@ static void cmd_go_infinite()
     int plymax=3;
     bool aborted = false;
     the_pv.clear();
-    sargon_move_gen_counter = 0;
     base_time = elapsed_milliseconds();
     total_callbacks = 0;
     bestmove_callbacks = 0;
@@ -606,7 +602,7 @@ static void ProgressReport()
     std::string buf_score;
     bool done=false;
     unsigned long now_time = elapsed_milliseconds();	
-    int nodes = sargon_move_gen_counter;
+    int nodes = end_of_points_callbacks;
     unsigned long elapsed_time = now_time-base_time;
     if( elapsed_time == 0 )
         elapsed_time++;
