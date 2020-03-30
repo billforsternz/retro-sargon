@@ -1,11 +1,8 @@
 /*
 
-  A program to convert Z80 assembly languae to X86
+  A program to convert Z80 assembly language to X86
   
   */
-
-
-
 
 #define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
@@ -31,31 +28,34 @@ bool translate_x86( const std::string &line, const std::string &instruction, con
 void convert( std::string fin, std::string asm_fout,  std::string report_fout, std::string asm_interface_fout );
 std::string detabify( const std::string &s, bool push_comment_to_right=false );
 
-// Each source line can optionally be transformed to Z80 mnemonics (or hybrid Z80 plus X86 registers mnemonics)
-enum transform_t { transform_none, transform_z80, transform_hybrid };
-static transform_t transform_switch = transform_none;
-
 // After optional transformation, the original line can be kept, discarded or commented out
 enum original_t { original_keep, original_comment_out, original_discard };
 original_t original_switch = original_discard;
 
-// Generated equivalent code can optionally be generated, in various flavours
-enum generate_t { generate_x86, generate_z80, generate_hybrid, generate_none };
-generate_t generate_switch = generate_x86;
-
 int main( int argc, const char *argv[] )
 {
 #if 1
-    transform_switch = transform_none;
-    generate_switch = generate_x86;
-    original_switch = original_discard;
-    convert("../stages/sargon5b.asm","x1.asm","x1-report.txt", "x1-asm-interface.h");
-    return 0;
+    const char *test_args[] =
+    {
+        "Release/z80-to-x86.exe",
+        "../stages/sargon-z80-plus-x86.asm",
+        "../stages/sargon-x86.asm"
+    };
+    argc = sizeof(test_args) / sizeof(test_args[0]);
+    argv = test_args;
 #endif
     const char *usage=
     "Read, understand, convert sargon source code\n"
     "Usage:\n"
-    " z80-to-x86 [switches] z80-code-in.asm x86-code-out.asm [report.txt]\n";
+    " z80-to-x86 [switches] z80-code-in.asm x86-code-out.asm [report.txt] [asm-interface.h]\n"
+    "Switches:\n"
+    " -relax Relax strict Z80->X86 flag compatibility. Applying this flag eliminates LAHF/SAHF pairs around\n"
+    "        some X86 instructions. Reduces compatibility (burden of proof passes to programmer) but improves\n"
+    "        performance. For Sargon, manual checking suggests it's okay to use this flag.\n"
+    "The original line can be kept, discarded or commented out\n"
+    " so -original_keep or -original_comment_out or -original_discard, default is -original_discard\n"
+    "Note that all three output files will be generated, if the optional output filenames aren't\n"
+    "provided, names will be auto generated from the main output filename";
     int argi = 1;
     while( argc >= 2)
     {
@@ -64,26 +64,12 @@ int main( int argc, const char *argv[] )
             break;
         else
         {
-            if( arg == "-transform_none" )
-                transform_switch = transform_none;
-            else if( arg == "-transform_z80" )
-                transform_switch = transform_z80;
-            else if( arg == "-transform_hybrid" )
-                transform_switch = transform_hybrid;
-            else if( arg == "-original_keep" )
+            if( arg == "-original_keep" )
                 original_switch = original_keep;
             else if( arg == "-original_discard" )
                 original_switch =original_discard;
             else if( arg == "-original_comment_out" )
                 original_switch = original_comment_out;
-            else if( arg == "-generate_x86" )
-                generate_switch = generate_x86;
-            else if( arg == "-generate_z80" )
-                generate_switch = generate_z80;
-            else if( arg == "-generate_hybrid" )
-                generate_switch = generate_hybrid;
-            else if( arg == "-generate_none" )
-                generate_switch = generate_none;
             else
             {
                 printf( "Unknown switch %s\n", arg.c_str() );
@@ -502,11 +488,6 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
                 mode = mode_suspended;
                 handled = true;         
             }
-            else if( stmt.instruction == ".IF_16BIT" )
-            {
-                mode = mode_normal;
-                handled = true;         
-            }
             else if( stmt.instruction == ".IF_X86" )
             {
                 mode = mode_pass_thru;
@@ -559,7 +540,7 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
                 break;
             case comment_only_indented:
                 line_original = "\t;" + stmt.comment;
-                line_original = detabify(line_original, generate_switch==generate_x86 );
+                line_original = detabify(line_original, true );
                 util::putline( asm_out, line_original );
                 break;
         }
@@ -588,7 +569,7 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
 
         // Generate code
         {
-            std::string str_location = (generate_switch==generate_z80 ? "$" : util::sprintf( "0%xh", track_location ) );
+            std::string str_location = util::sprintf( "0%xh", track_location );
             std::string asm_line_out;
             if( stmt.equate != "" )
             {
@@ -778,7 +759,7 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
                     }
                 }
             }
-            asm_line_out = detabify(asm_line_out, generate_switch==generate_x86 );
+            asm_line_out = detabify(asm_line_out, true );
             util::putline( asm_out, asm_line_out );
         }
     }
@@ -1172,8 +1153,6 @@ bool translate_x86( const std::string &line, const std::string &instruction, con
     bool handled = false;
     for( it1 = range.first; !handled && it1 != range.second; ++it1 )
     {
-        if( 0 == strcmp(it1->first.c_str(),"INC") && util::toupper(parameters[0])=="(HL)" )
-            printf( "debug\n" );
         MnemonicConversion &mc = it1->second;
         const char *format  = mc.x86;
         ParameterPattern pp = mc.pp;
@@ -1340,6 +1319,11 @@ bool translate_x86( const std::string &line, const std::string &instruction, con
                     if( gt2 == am_mem )
                         out2 = (gt1==am_reg16?"word ":"byte ") + out2;
                     x86_out = util::sprintf( format, out1.c_str(), out2.c_str() );
+                    std::string fixups = util::toupper(x86_out);
+                    if( fixups == "MOV\tAL,R" )
+                        x86_out = "Z80_LDAR";
+                    else if( fixups == "XCHG\tDX,BX" )
+                        x86_out = "XCHG\tbx,dx";
                     break;
                 }
                 case dst_src_8_more:
@@ -1430,7 +1414,7 @@ bool translate_x86( const std::string &line, const std::string &instruction, con
                     std::string parm = util::toupper(parameters[0]);
                     std::string out;
                     if( parm == "AF" )
-                        x86_out = "POP\teax\n\tSAFH";
+                        x86_out = "POP\teax\n\tSAHF";
                     else if( is_reg16(parm,out) )
                         x86_out = util::sprintf( "POP\te%s", out.c_str() );
                     else
