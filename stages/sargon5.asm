@@ -35,7 +35,6 @@ BPAWN   =       BLACK+PAWN
         .IF_X86
 _DATA   SEGMENT
 PUBLIC  _sargon_base_address
-PUBLIC  _sargon_move_gen_counter
 _sargon_base_address:
         .ENDIF
         .LOC 100h
@@ -407,7 +406,6 @@ shadow_ax  dw   0
 shadow_bx  dw   0
 shadow_cx  dw   0
 shadow_dx  dw   0
-_sargon_move_gen_counter dq 0
 _DATA    ENDS
         .ENDIF
 
@@ -483,16 +481,18 @@ Z80_RRD  MACRO                          ;a=kx (hl)=yz -> a=kz (hl)=xy
          ENDM
 
 Z80_LDAR MACRO                          ;to get random number
+LOCAL    ldar_1
+LOCAL    ldar_2
          pushf                          ;maybe there's entropy in stack junk
          push    ebx
          mov     ebx,esp
          mov     ax,0
-         xor     al,byte ptr [ebx]
+ldar_1:  xor     al,byte ptr [ebx]
          dec     ebx
-         jz      $+6
+         jz      ldar_2
          dec     ah
-         jnz     $-7
-         pop     ebx
+         jnz     ldar_1
+ldar_2:  pop     ebx
          popf
          ENDM
 
@@ -519,11 +519,11 @@ Z80_CPIR MACRO
 ;Mnemonics to jump if flag set (parity even);
 ;8080: JPE dest
 ;Z80:  JMP PE,dest
-;X86:  JP  dest
+;X86:  JPE dest
 ;Mnemonics to jump if flag clear (parity odd);
 ;8080: JPO dest
 ;Z80:  JMP PO,dest
-;X86:  JNP dest
+;X86:  JPO dest
 ;AH format after LAHF = SF:ZF:0:AF:0:PF:1:CF (so bit 6=ZF, bit 2=PF)
 
 LOCAL    cpir_1
@@ -992,9 +992,6 @@ ADMOVE: LDED    MLNXT           ; Addr of next loc in move list
         ANA     A               ; Clear carry flag
         DSBC    D               ; Calculate difference
         JRC     AM10            ; Jump if out of space
-        .IF_X86
-        inc     _sargon_move_gen_counter
-        .ENDIF
         LHLD    MLLST           ; Addr of prev. list area
         SDED    MLLST           ; Save next as previous
         MOV     M,E             ; Store link address
