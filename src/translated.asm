@@ -28,11 +28,9 @@ BPAWN   EQU     BLACK+PAWN
 
 ;***********************************************************
 ; TABLES SECTION
-;**********************************************************
+;***********************************************************
 _DATA   SEGMENT
 PUBLIC  _sargon_base_address
-PUBLIC  _sargon_move_gen_counter
-
 _sargon_base_address:
 ;       ORG     100h
         DB      256     DUP (?)                 ;Padding bytes to ORG location
@@ -425,7 +423,8 @@ BMOVES  EQU     0334h
 ;
 ; MLVAL   --  The field in the move entry which contains the
 ;             score assigned to the move.
-;**********************************************************
+;
+;***********************************************************
 
 
 ;*** TEMP TODO BEGIN
@@ -454,7 +453,6 @@ shadow_ax  dw   0
 shadow_bx  dw   0
 shadow_cx  dw   0
 shadow_dx  dw   0
-_sargon_move_gen_counter dq 0
 _DATA    ENDS
 
 ;**********************************************************
@@ -527,16 +525,18 @@ Z80_RRD  MACRO                          ;a=kx (hl)=yz -> a=kz (hl)=xy
          ENDM
 
 Z80_LDAR MACRO                          ;to get random number
+LOCAL    ldar_1
+LOCAL    ldar_2
          pushf                          ;maybe there's entropy in stack junk
          push    ebx
          mov     ebx,esp
          mov     ax,0
-         xor     al,byte ptr [ebx]
+ldar_1:  xor     al,byte ptr [ebx]
          dec     ebx
-         jz      $+6
+         jz      ldar_2
          dec     ah
-         jnz     $-7
-         pop     ebx
+         jnz     ldar_1
+ldar_2:  pop     ebx
          popf
          ENDM
 
@@ -563,11 +563,11 @@ Z80_CPIR MACRO
 ;Mnemonics to jump if flag set (parity even);
 ;8080: JPE dest
 ;Z80:  JMP PE,dest
-;X86:  JP  dest
+;X86:  JPE dest
 ;Mnemonics to jump if flag clear (parity odd);
 ;8080: JPO dest
 ;Z80:  JMP PO,dest
-;X86:  JNP dest
+;X86:  JPO dest
 ;AH format after LAHF = SF:ZF:0:AF:0:PF:1:CF (so bit 6=ZF, bit 2=PF)
 
 LOCAL    cpir_1
@@ -1084,7 +1084,6 @@ ADMOVE: MOV     dx,word ptr [ebp+MLNXT]         ; Addr of next loc in move list
         AND     al,al                           ; Clear carry flag
         SBB     bx,dx                           ; Calculate difference
         JC      AM10                            ; Jump if out of space
-        inc     dword ptr _sargon_move_gen_counter
         MOV     bx,word ptr [ebp+MLLST]         ; Addr of prev. list area
         MOV     word ptr [ebp+MLLST],dx         ; Save next as previous
         MOV     byte ptr [ebp+ebx],dl           ; Store link address
@@ -1478,7 +1477,7 @@ PC3:    Z80_EXAF                                ; Restore search parameters
         JPE     PC1                             ; Jump if search not complete
         RET                                     ; Return
 PC5:    POP     eax                             ; Abnormal exit
-        sahf
+        SAHF
         POP     edx                             ; Restore regs.
         POP     ecx
         RET                                     ; Return to ATTACK
@@ -1501,7 +1500,7 @@ PC5:    POP     eax                             ; Abnormal exit
 PINFND: XOR     al,al                           ; Zero pin count
         MOV     byte ptr [ebp+NPINS],al
         MOV     dx,POSK                         ; Addr of King/Queen pos list
-PF1:    MOV     al,[ebp+edx]                    ; Get position of royal piece
+PF1:    MOV     al,byte ptr [ebp+edx]           ; Get position of royal piece
         AND     al,al                           ; Is it on board ?
         JZ      PF26                            ; No- jump
         CMP     al,-1                           ; At end of list ?
@@ -1831,7 +1830,6 @@ PT23:   MOV     bx,P1                           ; Get piece
         JZ      rel012                          ; Jump if white
         NEG     al                              ; Negate for black
 rel012: MOV     bx,MTRL                         ; Get addrs of material total
-        ;CALLBACK "SUM"
         ADD     al,byte ptr [ebp+ebx]           ; Add new value
         MOV     byte ptr [ebp+ebx],al           ; Store
 PT25:   MOV     al,byte ptr [ebp+M3]            ; Get current board position
@@ -1865,20 +1863,15 @@ rel014: SUB     al,ch                           ; Subtract points lost
         NEG     al                              ; Negate for black
 rel015: MOV     bx,MTRL                         ; Net material on board
         ADD     al,byte ptr [ebp+ebx]           ; Add exchange adjustments
-        ;CALLBACK "MATERIAL"
         MOV     bx,MV0                          ; Material at ply 0
         SUB     al,byte ptr [ebp+ebx]           ; Subtract from current
-        ;CALLBACK "MATERIAL - PLY0"
         MOV     ch,al                           ; Save
         MOV     al,30                           ; Load material limit
         CALL    LIMIT                           ; Limit to plus or minus value
-        ;CALLBACK "MATERIAL LIMITED"
         MOV     dl,al                           ; Save limited value
         MOV     al,byte ptr [ebp+BRDC]          ; Get board control points
-        ;CALLBACK "MOBILITY"
         MOV     bx,BC0                          ; Board control at ply zero
         SUB     al,byte ptr [ebp+ebx]           ; Get difference
-        ;CALLBACK "MOBILITY - PLY0"
         MOV     ch,al                           ; Save
         MOV     al,byte ptr [ebp+PTSCK]         ; Moving piece lost flag
         AND     al,al                           ; Is it zero ?
@@ -1886,7 +1879,6 @@ rel015: MOV     bx,MTRL                         ; Net material on board
         MOV     ch,0                            ; Zero board control points
 rel026: MOV     al,6                            ; Load board control limit
         CALL    LIMIT                           ; Limit to plus or minus value
-        ;CALLBACK "MOBILITY LIMITED"
         MOV     dh,al                           ; Save limited value
         MOV     al,dl                           ; Get material points
         ADD     al,al                           ; Multiply by 4
@@ -2485,7 +2477,7 @@ rel019: MOV     bx,word ptr [ebp+SCRIX]         ; Load score table index
 ; ARGUMENTS:  --  None
 ;***********************************************************
 BOOK:   POP     eax                             ; Abort return to FNDMOV
-        sahf
+        SAHF
         MOV     bx,SCORE+1                      ; Zero out score
         MOV     byte ptr [ebp+ebx],0            ; Zero out score table
         MOV     bx,BMOVES-2                     ; Init best move ptr to book
@@ -2578,13 +2570,13 @@ CP0C:   CALL    MOVE                            ; Produce move on board array
         JMP     CP1C                            ; Jump
 CP10:   TEST    ch,2                            ; King side castle ?
         JZ      rel020                          ; No - jump
-        PRTBLK  O.O,5                           ; Output "O-O"
+        PRTBLK  O_O,5           ; Output "O-O"
         JMP     CP1C                            ; Jump
 rel020: TEST    ch,4                            ; Queen side castle ?
         JZ      rel021                          ; No - jump
-        PRTBLK  O.O.O,5                         ; Output "O-O-O"
+        PRTBLK  O_O_O,5         ; Output "O-O-O"
         JMP     CP1C                            ; Jump
-rel021: PRTBLK  P.PEP,5                         ; Output "PxPep" - En passant
+rel021: PRTBLK  P_PEP,5         ; Output "PxPep" - En passant
 CP1C:   MOV     al,byte ptr [ebp+COLOR]         ; Should computer call check ?
         MOV     ch,al
         XOR     al,80H                          ; Toggle color
@@ -2849,7 +2841,7 @@ rel025: SAR     al,1
 ;                 above.
 ;***********************************************************
 EXECMV: PUSH    esi                             ; Save registers
-        lahf
+        LAHF
         PUSH    eax
         MOV     si,word ptr [ebp+MLPTRJ]        ; Index into move list
         MOV     cl,byte ptr [ebp+esi+MLFRP]     ; Move list "from" position
@@ -2887,7 +2879,7 @@ EX0C:   LAHF                                    ; Set 0-0-0 flag
         SAHF
 EX10:   CALL    MAKEMV                          ; Make 2nd move on board
 EX14:   POP     eax                             ; Restore registers
-        sahf
+        SAHF
         POP     esi
         RET                                     ; Return
 
