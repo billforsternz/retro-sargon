@@ -4,9 +4,6 @@ extern "C" {
     // First byte of Sargon data
     extern unsigned char sargon_base_address;
 
-    // Count generated moves
-    extern int sargon_move_gen_counter;
-
     // Calls to sargon() can set and read back registers
     struct z80_registers
     {
