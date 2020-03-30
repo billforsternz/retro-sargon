@@ -44,9 +44,20 @@ int main( int argc, const char *argv[] )
     const char *test_args[] =
     {
         "Release/project-convert-sargon-to-x86.exe",
+        "-generate_x86",
+        "../stages/sargon5.asm",
+        "../stages/sargon-x86-COMPARE.asm"
+    };
+    argc = sizeof(test_args) / sizeof(test_args[0]);
+    argv = test_args;
+#endif
+#if 0
+    const char *test_args[] =
+    {
+        "Release/project-convert-sargon-to-x86.exe",
         "-generate_z80",
         "../stages/sargon5.asm",
-        "out.asm"
+        "../stages/sargon-z80-plus-x86-COMPARE.asm"
     };
     argc = sizeof(test_args) / sizeof(test_args[0]);
     argv = test_args;
@@ -411,9 +422,6 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
     util::putline( h_out, "" );
     util::putline( h_out, "    // First byte of Sargon data"  );
     util::putline( h_out, "    extern unsigned char sargon_base_address;" );
-    util::putline( h_out, "" );
-    util::putline( h_out, "    // // Count generated moves"  );
-    util::putline( h_out, "    extern int sargon_move_gen_counter;" );
     util::putline( h_out, "" );
     util::putline( h_out, "    // Calls to sargon() can set and read back registers" );
     util::putline( h_out, "    struct z80_registers" );
