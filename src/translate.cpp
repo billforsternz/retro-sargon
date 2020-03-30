@@ -780,7 +780,7 @@ bool translate_x86( const std::string &line, const std::string &instruction, con
             std::string parm = parameters[0];
             std::string out;
             if( parm == "PSW" )
-                x86_out = "lahf\n\tPUSH\teax";
+                x86_out = "LAHF\n\tPUSH\teax";
             else if( is_reg16(parm,out) )
                 x86_out = util::sprintf( "PUSH\te%s", out.c_str() );
             else
@@ -795,7 +795,7 @@ bool translate_x86( const std::string &line, const std::string &instruction, con
             std::string parm = parameters[0];
             std::string out;
             if( parm == "PSW" )
-                x86_out = "POP\teax\n\tsahf";
+                x86_out = "POP\teax\n\tSAHF";
             else if( is_reg16(parm,out) )
                 x86_out = util::sprintf( "POP\te%s", out.c_str() );
             else
@@ -1231,7 +1231,7 @@ void translate_init()
     xlat["LDA"] = { "MOV\tal,%s", "LD\ta,%s", "LD\tal,%s", mem8 };
 
     // LDAX reg16 -> MOV al,[reg16]
-    xlat["LDAX"] = { "MOV\tal,[ebp+e%s]", "LD\ta,(%s)", "LD\tal,(%s)", reg16 };
+    xlat["LDAX"] = { "MOV\tal,byte ptr [ebp+e%s]", "LD\ta,(%s)", "LD\tal,(%s)", reg16 };
 
     // LHLD mem16 -> MOV ebx,[mem16]
     xlat["LHLD"] = { "MOV\tbx,%s", "LD\thl,%s", "LD\tbx,%s", mem16 };
