@@ -40,12 +40,12 @@ generate_t generate_switch = generate_x86;
 
 int main( int argc, const char *argv[] )
 {
-#if 0
+#if 1
     const char *test_args[] =
     {
         "Release/project-convert-sargon-to-x86.exe",
         "-generate_z80_only",
-        "../stages/sargon5.asm",
+        "../stages/sargon-8080-and-x86.asm",
         "../stages/sargon-z80.asm"
     };
     argc = sizeof(test_args) / sizeof(test_args[0]);
@@ -56,19 +56,19 @@ int main( int argc, const char *argv[] )
     {
         "Release/project-convert-sargon-to-x86.exe",
         "-generate_x86",
-        "../stages/sargon5.asm",
-        "../stages/sargon-x86-COMPARE.asm"
+        "../stages/sargon-8080-and-x86.asm",
+        "../stages/sargon-x86.asm"
     };
     argc = sizeof(test_args) / sizeof(test_args[0]);
     argv = test_args;
 #endif
-#if 1
+#if 0
     const char *test_args[] =
     {
         "Release/project-convert-sargon-to-x86.exe",
         "-generate_z80",
-        "../stages/sargon5.asm",
-        "../stages/sargon-z80-plus-x86-COMPARE.asm"
+        "../stages/sargon-8080-and-x86.asm",
+        "../stages/sargon-z80-and-x86.asm"
     };
     argc = sizeof(test_args) / sizeof(test_args[0]);
     argv = test_args;

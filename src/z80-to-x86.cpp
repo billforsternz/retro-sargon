@@ -38,8 +38,8 @@ int main( int argc, const char *argv[] )
     const char *test_args[] =
     {
         "Release/z80-to-x86.exe",
-        "../stages/sargon-z80-plus-x86.asm",
-        "../stages/sargon-x86.asm"
+        "../stages/sargon-z80-and-x86.asm",
+        "../stages/sargon-x86-COMPARE.asm"
     };
     argc = sizeof(test_args) / sizeof(test_args[0]);
     argv = test_args;
@@ -496,21 +496,14 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
             else if( stmt.instruction == ".ELSE" )
             {
                 if( mode == mode_suspended )
-                    mode = mode_pass_thru;
-                else if( mode == mode_pass_thru )
-                    mode = mode_suspended;
-                else if( mode == mode_normal )
-                    mode = mode_suspended;
+                    mode = mode_normal;
                 else
                     printf( "Error, unexpected .ELSE\n" );
                 handled = true;         
             }
             else if( stmt.instruction == ".ENDIF" )
             {
-                if( mode == mode_suspended ||  mode == mode_pass_thru )
-                    mode = mode_normal;
-                else
-                    printf( "Error, unexpected .ENDIF\n" );
+                mode = mode_normal;
                 handled = true;         
             }
         }
