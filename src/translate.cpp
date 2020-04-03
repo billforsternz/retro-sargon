@@ -1306,6 +1306,7 @@ void translate_init()
     // Directives
     //
     xlat[".BLKB"] = { "DB\t%s DUP (?)", "DS\t%s", NULL, echo };
+    xlat[".BLKW"] = { "DW\t%s DUP (?)", "DS\t2*(%s)", NULL, echo };
     xlat[".BYTE"] = { "DB\t%s", "DB\t%s", NULL, echo };
     xlat[".WORD"] = { "DD\t%s", "DW\t%s", NULL, echo };
     xlat[".LOC"]  = { ";ORG\t%s", "ORG\t%s", NULL, echo };

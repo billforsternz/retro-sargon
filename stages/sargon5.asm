@@ -37,8 +37,14 @@ _DATA   SEGMENT
 PUBLIC  _sargon_base_address
 _sargon_base_address:
         .ENDIF
-        .LOC 100h
-TBASE =         .
+        .IF_Z80
+START:
+        .LOC    START+80H
+TBASE   EQU     START+100H
+        .ELSE
+        .LOC    100h
+TBASE   =       .
+        .ENDIF
 ;TBASE must be page aligned, but not page 0, because an
 ;extensively used trick is to test whether the hi byte of
 ;a pointer == 0 and to consider this as a equivalent to
@@ -193,8 +199,10 @@ PLYIX:  .WORD   0,0,0,0,0,0,0,0,0,0
 ;***********************************************************
 ; STACK   --  Contains the stack for the program.
 ;***********************************************************
-;        .LOC    START+2FFH
-;STACK:
+        .IF_Z80
+        .LOC    START+2FFH
+STACK:
+        .ENDIF
 ;For this C Callable Sargon, we just use the standard C Stack
 ;Significantly, Sargon doesn't do any stack based trickery
 ;just calls, returns, pushes and pops - so it shouldn't be a
@@ -384,12 +392,6 @@ BMOVES: .BYTE   35,55,10H
 ;
 ;***********************************************************
 
-
-;*** TEMP TODO BEGIN
-MVEMSG:   .WORD 0
-MVEMSG_2: .WORD 0
-LINECT: .BYTE   0       ; Current line number
-;**** TEMP TODO END
 
         .LOC    400h
 MLIST:  .BLKB   60000
@@ -639,6 +641,11 @@ reg_2:   pop    ebp
          pop    eax
          ret
          .ENDIF
+
+          .IF_Z80
+CALLBACK  MACRO TXT
+          ENDM
+          .ENDIF
 
 ;**********************************************************
 ; BOARD SETUP ROUTINE
@@ -2570,7 +2577,7 @@ CP0C:   CALL    MOVE            ; Produce move on board array
         JRNZ    CP10            ; Yes - jump
         MOV     D,E             ; "To" position of the move
         CALL    BITASN          ; Convert to Ascii
-        SHLD    MVEMSG_2        ;todo MVEMSG+3        ; Put in move message
+        SHLD    MVEMSG+3        ; Put in move message
         MOV     D,C             ; "From" position of the move
         CALL    BITASN          ; Convert to Ascii
         SHLD    MVEMSG          ; Put in move message

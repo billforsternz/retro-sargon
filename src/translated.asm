@@ -703,7 +703,7 @@ back01: MOV     byte ptr [ebp+ebx],-1
         INC     bx
         SAHF
         LAHF
-        DEC ch
+        DEC     ch
         JNZ     back01
         SAHF
         MOV     ch,8
@@ -724,7 +724,7 @@ IB2:    MOV     al,byte ptr [ebp+esi-8]         ; Fill non-border squares
         INC     si
         SAHF
         LAHF
-        DEC ch
+        DEC     ch
         JNZ     IB2
         SAHF
         MOV     si,POSK                         ; Init King/Queen position list
@@ -837,7 +837,7 @@ MP15:   LAHF                                    ; Increment direction index
         INC     di
         SAHF
         LAHF                                    ; Decr. count-jump if non-zerc
-        DEC ch
+        DEC     ch
         JNZ     MP5
         SAHF
         MOV     al,byte ptr [ebp+T1]            ; Piece type
@@ -1282,7 +1282,7 @@ AT12:   LAHF                                    ; Increment direction index
         INC     di
         SAHF
         LAHF                                    ; Done ? No - jump
-        DEC ch
+        DEC     ch
         JNZ     AT5
         SAHF
         XOR     al,al                           ; No attackers
@@ -1565,7 +1565,7 @@ back02: MOV     byte ptr [ebp+ebx],al
         INC     bx
         SAHF
         LAHF
-        DEC ch
+        DEC     ch
         JNZ     back02
         SAHF
         MOV     al,7                            ; Set attack flag
@@ -1595,7 +1595,7 @@ PF25:   LAHF                                    ; Increment direction index
         INC     di
         SAHF
         LAHF                                    ; Done ? No - Jump
-        DEC ch
+        DEC     ch
         JNZ     PF27
         SAHF
 PF26:   LAHF                                    ; Incr King/Queen pos index
@@ -1781,7 +1781,7 @@ back04: MOV     byte ptr [ebp+ebx],al
         INC     bx
         SAHF
         LAHF
-        DEC ch
+        DEC     ch
         JNZ     back04
         SAHF
         CALL    ATTACK                          ; Build attack list for square
@@ -2250,7 +2250,7 @@ back05: MOV     byte ptr [ebp+ebx],al
         INC     bx
         SAHF
         LAHF
-        DEC ch
+        DEC     ch
         JNZ     back05
         SAHF
         MOV     byte ptr [ebp+BC0],al           ; Zero ply 0 board control
@@ -2566,7 +2566,7 @@ CP0C:   CALL    MOVE                            ; Produce move on board array
         MOV     dh,cl                           ; "From" position of the move
         CALL    BITASN                          ; Convert to Ascii
         MOV     word ptr [ebp+MVEMSG],bx        ; Put in move message
-        PRTBLK  MVEMSG,5                        ; Output text of move
+        PRTBLK  MVEMSG,5        ; Output text of move
         JMP     CP1C                            ; Jump
 CP10:   TEST    ch,2                            ; King side castle ?
         JZ      rel020                          ; No - jump
@@ -2586,13 +2586,13 @@ CP1C:   MOV     al,byte ptr [ebp+COLOR]         ; Should computer call check ?
         MOV     al,ch                           ; Restore color
         MOV     byte ptr [ebp+COLOR],al
         JZ      CP24                            ; No - return
-        CARRET                                  ; New line
+        CARRET                  ; New line
         MOV     al,byte ptr [ebp+SCORE+1]       ; Check for player mated
         CMP     al,0FFH                         ; Forced mate ?
         JZ      skip31                          ; No - Tab to computer column
         CALL    TBCPMV
 skip31:
-        PRTBLK  CKMSG,5                         ; Output "check"
+        PRTBLK  CKMSG,5         ; Output "check"
         MOV     bx,LINECT                       ; Address of screen line count
         INC     byte ptr [ebp+ebx]              ; Increment for message
 CP24:   MOV     al,byte ptr [ebp+SCORE+1]       ; Check again for mates
@@ -2745,7 +2745,7 @@ back06: MOV     byte ptr [ebp+ebx],0
         INC     bx
         SAHF
         LAHF
-        DEC ch
+        DEC     ch
         JNZ     back06
         SAHF
         MOV     al,21                           ; First board position
@@ -2793,7 +2793,7 @@ DD04:   SHL     dh,1
         JMP     rel024
 rel027: ADD     al,dl
 rel024: LAHF
-        DEC ch
+        DEC     ch
         JNZ     DD04
         SAHF
         POP     ecx
@@ -2813,7 +2813,7 @@ ML04:   TEST    dh,1
 rel025: SAR     al,1
         RCR     dh,1
         LAHF
-        DEC ch
+        DEC     ch
         JNZ     ML04
         SAHF
         POP     ecx

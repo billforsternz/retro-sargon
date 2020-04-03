@@ -37,6 +37,33 @@ void on_exit_diagnostics() {}
 // main()
 int main( int argc, const char *argv[] )
 {
+#if 1
+    const char *test_args[] =
+    {
+        "Release/sargon-tests.exe",
+        "pmg",
+        "-1"
+    };
+    argc = sizeof(test_args) / sizeof(test_args[0]);
+    argv = test_args;
+#endif
+    const char *usage =
+    "Sargon test suite\n"
+    "Usage:\n"
+    "sargon-tests tests|doc [-1|-2|-3] [-v]\n"
+    "\n"
+    "tests = combine 'p' for position tests, 'g' for whole game tests, 'm' for minimax tests\n"
+    "     OR 'doc' run minimax models and print results in the form of documentation\n"
+    "\n"
+    "-1|-2|-3 = fast, middling or comprehensive suite of tests respectively\n"
+    "\n"
+    "-v is verbose\n"
+    "\n"
+    "Examples:\n"
+    " sargon-tests pg -3 -v\n"
+    "    Run a comprehensive, verbose set of position and whole game tests\n"
+    " sargon-tests doc\n"        
+    "    Run the minimax models and print out the results as documentation\n";
     bool ok = false, minimax_doc=false, quiet=true;
     std::string test_types;
     int comprehensive = 1;
@@ -67,30 +94,9 @@ int main( int argc, const char *argv[] )
             break;
         }
     }
-
-#ifdef _DEBUG
-    test_types = "m";
-    ok = true;
-#endif
     if( !ok )
     {
-        printf( "Sargon test suite\n"
-                "Usage:\n"
-                "sargon-tests tests|doc [-1|-2|-3] [-v]\n"
-                "\n"
-                "tests = combine 'p' for position tests, 'g' for whole game tests, 'm' for minimax tests\n"
-                "     OR 'doc' run minimax models and print results in the form of documentation\n"
-                "\n"
-                "-1|-2|-3 = fast, middling or comprehensive suite of tests respectively\n"
-                "\n"
-                "-v is verbose\n"
-                "\n"
-                "Examples:\n"
-                " sargon-tests pg -3 -v\n"
-                "    Run a comprhensive, verbose set of position and whole game tests\n"
-                " sargon-tests doc\n"        
-                "    Run the minimax models and print out the results as documentation\n"
-        );
+        printf( usage );
         return -1;
     }
 

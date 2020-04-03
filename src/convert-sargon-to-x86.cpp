@@ -35,12 +35,23 @@ enum original_t { original_keep, original_comment_out, original_discard };
 original_t original_switch = original_discard;
 
 // Generated equivalent code can optionally be generated, in various flavours
-enum generate_t { generate_x86, generate_z80, generate_hybrid, generate_none };
+enum generate_t { generate_x86, generate_z80, generate_z80_only, generate_hybrid, generate_none };
 generate_t generate_switch = generate_x86;
 
 int main( int argc, const char *argv[] )
 {
-#if 1
+#if 0
+    const char *test_args[] =
+    {
+        "Release/project-convert-sargon-to-x86.exe",
+        "-generate_z80_only",
+        "../stages/sargon5.asm",
+        "../stages/sargon-z80.asm"
+    };
+    argc = sizeof(test_args) / sizeof(test_args[0]);
+    argv = test_args;
+#endif
+#if 0
     const char *test_args[] =
     {
         "Release/project-convert-sargon-to-x86.exe",
@@ -51,7 +62,7 @@ int main( int argc, const char *argv[] )
     argc = sizeof(test_args) / sizeof(test_args[0]);
     argv = test_args;
 #endif
-#if 0
+#if 1
     const char *test_args[] =
     {
         "Release/project-convert-sargon-to-x86.exe",
@@ -75,7 +86,8 @@ int main( int argc, const char *argv[] )
     "After optional transformation, the original line can be kept, discarded or commented out\n"
     " so -original_keep or -original_comment_out or -original_discard, default is -original_discard\n"
     "Generated equivalent code can optionally be generated, in various flavours\n"
-    " so -generate_x86 or -generate_z80 or -generate_hybrid or -generate_none, default is -generate_x86\n"
+    " so -generate_x86 or -generate_z80  or -generate_z80_only or -generate_hybrid or -generate_none,\n"
+    " default is -generate_x86. Option -generate_z80_only also strips out .IF_X86 code.\n"
     "Note that all three output files will be generated, if the optional output filenames aren't\n"
     "provided, names will be auto generated from the main output filename";
     int argi = 1;
@@ -105,6 +117,8 @@ int main( int argc, const char *argv[] )
                 generate_switch = generate_x86;
             else if( arg == "-generate_z80" )
                 generate_switch = generate_z80;
+            else if( arg == "-generate_z80_only" )
+                generate_switch = generate_z80_only;
             else if( arg == "-generate_hybrid" )
                 generate_switch = generate_hybrid;
             else if( arg == "-generate_none" )
@@ -458,12 +472,15 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
     bool callback_enabled = true;
 
     // .IF controls let us switch between three modes (currently)
-    enum { mode_normal, mode_x86, mode_z80 } mode = mode_normal;
-        // mode_normal, converting 8080 to x86 (or z80 if generate_z80)
-        // mode_x86, added x86 code to be passed through
+    enum { mode_normal, mode_x86, mode_z80, mode_not_z80 } mode = mode_normal;
+        // mode_normal, converting 8080 to x86 or z80
+        // mode_x86, added x86 code to be passed through (unless generate_z80_only)
         // mode_z80, z80 only code
-        //   if generate_z80 convert 8080 -> z80
+        //   if generate_z80/generate_z80_only/generate_hybrid convert 8080 -> z80
         //   if generate_x86 remove it
+        // mode_not_z80, alternative to z80 code
+        //   if generate_z80_only remove it
+        //   else same as mode_normal
 
     unsigned int track_location = 0;
     for(;;)
@@ -510,7 +527,8 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
         }
 
         // Line by line reporting
-        if( !done && mode==mode_normal )
+        bool is_mode_normal = (mode==mode_normal || (generate_switch!=generate_z80_only && mode==mode_not_z80) );
+        if( !done && is_mode_normal )
         {
             if( stmt.label != "" )
             {
@@ -550,7 +568,7 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
                 first = false;
             }
         }
-        if( !done && mode==mode_normal )
+        if( !done && is_mode_normal )
             util::putline(report_out,line_out);
 
         // My invented directives
@@ -579,19 +597,17 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
             }
             else if( stmt.instruction == ".ELSE" )
             {
-                if( mode == mode_z80 )
-                    mode = mode_x86;
-                else if( mode == mode_x86 )
-                    mode = mode_z80;
-                else if( mode == mode_normal )
-                    mode = mode_z80;
+                if( mode==mode_x86 )
+                    mode = mode_normal;
+                else if( mode==mode_z80 )
+                    mode = mode_not_z80;
                 else
                     printf( "Error, unexpected .ELSE\n" );
                 handled = true;         
             }
             else if( stmt.instruction == ".ENDIF" )
             {
-                if( mode == mode_z80 ||  mode == mode_x86 )
+                if( mode==mode_x86 || mode==mode_z80 || mode==mode_not_z80 )
                     mode = mode_normal;
                 else
                     printf( "Error, unexpected .ENDIF\n" );
@@ -607,14 +623,22 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
             continue;
         }
 
-        // In .IF_Z80 mode, discard unless generate_switch == generate_z80
+        // In .IF_Z80 mode, discard unless generating z80 code
         if( mode == mode_z80 )
         {
-            if( generate_switch != generate_z80 )
+            bool gen_z80 = (generate_switch==generate_z80 || generate_switch==generate_hybrid || generate_switch==generate_z80_only);
+            if( !gen_z80 )
                 continue;
         }
 
-        // Pass through new X86 code
+        // In not .IF_Z80 mode, discard if generating z80 code only
+        if( mode == mode_not_z80 )
+        {
+            if( generate_switch==generate_z80_only )
+                continue;
+        }
+
+        // Pass through new X86 code unless generate_switch == generate_z80_only
         if( mode==mode_x86 )
         {
 
@@ -652,7 +676,8 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
                 line_out = "callback_enabled EQU 1";
             else if( line_original=="callback_enabled EQU 1" && !callback_enabled )
                 line_out = "callback_enabled EQU 0";
-            util::putline( asm_out, line_out );
+            if( generate_switch != generate_z80_only )
+                util::putline( asm_out, line_out );
             continue;
         }
 
@@ -722,7 +747,8 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
         // Optionally generate code
         if( generate_switch != generate_none )
         {
-            std::string str_location = (generate_switch==generate_z80 ? "$" : util::sprintf( "0%xh", track_location ) );
+            bool gen_z80 = (generate_switch==generate_z80 || generate_switch==generate_hybrid || generate_switch==generate_z80_only);
+            std::string str_location = (gen_z80 ? "$" : util::sprintf( "0%xh", track_location ) );
             std::string asm_line_out;
             if( stmt.equate != "" )
             {
@@ -763,14 +789,15 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
                 std::string out;
                 bool generated = false;
                 bool show_original = false;
-                if( generate_switch == generate_z80 )
+                bool gen_z80 = (generate_switch==generate_z80 || generate_switch==generate_hybrid || generate_switch==generate_z80_only);
+                if( gen_z80 )
                 {
                     generated = translate_z80( line_original, stmt.instruction, stmt.parameters, generate_switch==generate_hybrid, out );
                     show_original = !generated;
                 }
                 else
                 {
-                    if( data_mode && (stmt.instruction == ".LOC" || stmt.instruction == ".BLKB"  ||
+                    if( data_mode && (stmt.instruction == ".LOC" || stmt.instruction == ".BLKB"  || stmt.instruction == ".BLKW"  ||
                                       stmt.instruction == ".BYTE" || stmt.instruction == ".WORD")
                       )
                     {
@@ -858,6 +885,17 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
                                     show_original = true;
                                 }
                                 track_location += nbr;
+                            }
+                            else if( stmt.instruction == ".BLKW" )
+                            {
+                                asm_line_out += util::sprintf( "\tDW\t%s\tDUP (?)", parameter_list.c_str() );
+                                unsigned int nbr = atoi( stmt.parameters[0].c_str() );
+                                if( nbr == 0 )
+                                {
+                                    printf( "Error, .BLKW parameter is zero or unparseable. Line: [%s]\n", line_original.c_str() );
+                                    show_original = true;
+                                }
+                                track_location += (2*nbr);
                             }
                             else if( stmt.instruction == ".BYTE" )
                             {
