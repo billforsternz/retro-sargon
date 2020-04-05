@@ -103,7 +103,7 @@ int main( int argc, const char *argv[] )
     std::string fout( argv[argi+1] );
     std::string asm_interface_fout = argv[argi+2];
     std::string report_fout = argc>=5 ? argv[argi+3] : fout + "-report.txt";
-    printf( "convert(%s,%s,%s,%s)\n", fin.c_str(), fout.c_str(), report_fout.c_str(), asm_interface_fout.c_str() );
+    //printf( "convert(%s,%s,%s,%s)\n", fin.c_str(), fout.c_str(), report_fout.c_str(), asm_interface_fout.c_str() );
     convert(fin,fout,report_fout,asm_interface_fout);
     return 0;
 }
@@ -421,6 +421,7 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
     util::putline( h_out, "    // Data offsets for peeking and poking" );
     bool api_constants_detected = false;
     std::set<std::string> labels;
+    std::set<std::string> macros;
     std::map< std::string, std::vector<std::string> > equates;
     std::map< std::string, std::set<std::vector<std::string>> > instructions;
     bool data_mode = true;
@@ -512,6 +513,10 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
         }
         if( !done && mode==mode_normal )
             util::putline(report_out,line_out);
+
+        // Handle macro definition
+        if( stmt.label != "" && util::toupper(stmt.instruction)=="MACRO" )
+            macros.insert(util::toupper(stmt.label));
 
         // My invented directives
         bool handled=false;
@@ -674,6 +679,9 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
                 std::string out;
                 bool generated = false;
                 bool show_original = false;
+                bool callback_macro = util::toupper(stmt.instruction)=="CALLBACK";
+
+                // Handle data directives
                 if( data_mode && (stmt.instruction == "ORG" || stmt.instruction == "DS"  ||
                                     stmt.instruction == "DB" || stmt.instruction == "DW")
                     )
@@ -780,6 +788,30 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
                         }
                     }
                 }
+
+                // Handle macro expansion
+                else if( callback_macro || macros.find(util::toupper(stmt.instruction)) != macros.end() )
+                {
+                    if( stmt.label == "" )
+                        asm_line_out = "\t";
+                    else
+                        asm_line_out = stmt.label + ":\t";
+                    asm_line_out += stmt.instruction;
+                    bool first_parm = true;
+                    for( std::string parm: stmt.parameters )
+                    {
+                        asm_line_out += first_parm ? (callback_macro?" ":"\t") : ",";
+                        asm_line_out += parm;
+                        first_parm = false;
+                    }
+                    if( stmt.comment != "" )
+                    {
+                        asm_line_out += "\t;";
+                        asm_line_out += stmt.comment;
+                    }
+                }
+
+                // Else do code translation
                 else
                 {
                     generated = translate_x86( line_original, stmt.instruction, stmt.parameters, labels, out );

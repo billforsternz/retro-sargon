@@ -169,7 +169,6 @@ int main( int argc, const char *argv[] )
     std::string fout( argv[argi+1] );
     std::string asm_interface_fout = argc>=4 ? argv[argi+2] : fout + "-asm-interface.h";
     std::string report_fout = argc>=5 ? argv[argi+3] : fout + "-report.txt";
-    printf( "convert(%s,%s,%s,%s)\n", fin.c_str(), fout.c_str(), report_fout.c_str(), asm_interface_fout.c_str() );
     convert(relax_switch,fin,fout,report_fout,asm_interface_fout);
     return 0;
 }
@@ -489,6 +488,7 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
     util::putline( h_out, "    // Data offsets for peeking and poking" );
     bool api_constants_detected = false;
     std::set<std::string> labels;
+    std::set<std::string> macros;
     std::map< std::string, std::vector<std::string> > equates;
     std::map< std::string, std::set<std::vector<std::string>> > instructions;
     bool data_mode = true;
@@ -598,6 +598,10 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
         }
         if( !done && is_mode_normal )
             util::putline(report_out,line_out);
+
+        // Handle macro definition
+        if( stmt.label != "" && util::toupper(stmt.instruction)=="MACRO" )
+            macros.insert(util::toupper(stmt.label));
 
         // My invented directives
         bool handled=false;
@@ -731,6 +735,41 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
         if( stmt.typ!=normal && stmt.typ!=equate )
             continue;
 
+        // Handle macro expansion
+        bool callback_macro = util::toupper(stmt.instruction)=="CALLBACK";
+        if( callback_macro || macros.find(util::toupper(stmt.instruction)) != macros.end() )
+        {
+            std::string asm_line_out;
+            if( stmt.label == "" )
+                asm_line_out = "\t";
+            else
+                asm_line_out = stmt.label + ":\t";
+            if( callback_macro && generate_switch==generate_z80_only )
+                ;  // Don't express CALLBACK macro if Z80 only
+            else
+            {
+                asm_line_out += stmt.instruction;
+                bool first_parm = true;
+                for( std::string parm: stmt.parameters )
+                {
+                    asm_line_out += first_parm ? (callback_macro?" ":"\t") : ",";
+                    asm_line_out += parm;
+                    first_parm = false;
+                }
+            }
+            if( stmt.comment != "" )
+            {
+                asm_line_out += "\t;";
+                asm_line_out += stmt.comment;
+            }
+            asm_line_out = detabify(asm_line_out, generate_switch==generate_x86 );
+            if( callback_macro && generate_switch==generate_z80_only && stmt.label=="" && stmt.comment=="" )
+                ;   // don't express a completely empty line
+            else
+                util::putline( asm_out, asm_line_out );
+            continue;
+        }
+
         // Optionally transform source lines to Z80 mnemonics
         if( transform_switch!=transform_none )
         {
@@ -740,10 +779,13 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
                 bool transformed = translate_z80( line_original, stmt.instruction, stmt.parameters, transform_switch==transform_hybrid, out );
                 if( transformed )
                 {
+                    bool add_colon = (util::toupper(stmt.instruction) != "MACRO");
+                    if( !add_colon )
+                        printf("debug\n");
                     if( stmt.label == "" )
                         line_original = "\t";
                     else
-                        line_original = stmt.label + ":\t";
+                        line_original = stmt.label + (add_colon ? ":\t" : "\t");
                     line_original += out;
                     if( stmt.comment != "" )
                     {
@@ -954,11 +996,12 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
                 }
                 if( generated )
                 {
+                    bool add_colon = !data_mode && (util::toupper(stmt.instruction) != "MACRO");
                     asm_line_out = stmt.label;
                     if( stmt.label == "" )
                         asm_line_out = "\t";
                     else
-                        asm_line_out += (data_mode?"\t":":\t");
+                        asm_line_out += (add_colon ? ":\t" : "\t");
                     if( original_switch == original_comment_out )
                         asm_line_out += out;    // don't worry about comment
                     else

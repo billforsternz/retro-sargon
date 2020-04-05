@@ -16,6 +16,7 @@
 enum ParameterPattern
 {
     echo,
+    echo_allow_none,
     imm8,
     jump_addr_around,
     jump_around,
@@ -343,7 +344,7 @@ bool translate_z80( const std::string &line, const std::string &instruction, con
         first = false;
         parameters_listed += s;
     }
-    if( pp!=none && pp!=jump_around && parameters.size()<1 )
+    if( pp!=none && pp!=echo_allow_none && pp!=jump_around && parameters.size()<1 )
     {
         printf( "Error: Expect at least one parameter, instruction=[%s], line=[%s]\n", instruction.c_str(), line.c_str() );
         return false;
@@ -362,9 +363,11 @@ bool translate_z80( const std::string &line, const std::string &instruction, con
             break;
         }
         case jump_addr_around:   // z80 doesn't need to jump around
+        case echo_allow_none:
         case echo:
         {
             z80_out = util::sprintf( format, parameters_listed.c_str() );
+            util::rtrim(z80_out);   // for echo_allow_none
             break;
         }
         case imm8:
@@ -644,9 +647,11 @@ bool translate_x86( const std::string &line, const std::string &instruction, con
             x86_out = std::string(format);
             break;
         }
+        case echo_allow_none:
         case echo:
         {
             x86_out = util::sprintf( format, parameters_listed.c_str() );
+            util::rtrim(x86_out);   // for echo_allow_none
             break;
         }
         case imm8:
@@ -1292,15 +1297,11 @@ void translate_init()
     // CPIR (CCIR in quirky assembler) -> macro/call
     xlat["CCIR"] = { "Z80_CPIR", "CPIR", NULL, none };
 
+    // LDIR -> macro/call
+    xlat["LDIR"] = { "Z80_LDIR", "LDIR", NULL, none };
+
     // RST
     xlat["RST"] = { "Z80_RST",  "RST\t%s", "RST\t%s", rst_z80 };
-
-    //
-    // Macros
-    //
-    xlat["CARRET"] = { "CARRET", "CARRET", NULL, none };
-    xlat["PRTBLK"] = { "PRTBLK\t%s", "PRTBLK\t%s", NULL, echo };
-    //xlat["CALLBACK"] = { "CALLBACK\t%s", "CALLBACK\t%s", NULL, echo };
 
     //
     // Directives
@@ -1310,6 +1311,15 @@ void translate_init()
     xlat[".BYTE"] = { "DB\t%s", "DB\t%s", NULL, echo };
     xlat[".WORD"] = { "DD\t%s", "DW\t%s", NULL, echo };
     xlat[".LOC"]  = { ";ORG\t%s", "ORG\t%s", NULL, echo };
+
+    // Just pass on through
+    xlat["MACRO"] = { "MACRO\t%s", "MACRO\t%s", NULL, echo_allow_none }; 
+    xlat["ENDM"]  = { "ENDM",      "ENDM",      NULL, none }; 
+    xlat["DB"]    = { "DB\t%s",    "DB\t%s",    NULL, echo }; 
+    xlat["DW"]    = { "DW\t%s",    "DW\t%s",    NULL, echo }; 
+    xlat["DS"]    = { "DS\t%s",    "DS\t%s",    NULL, echo }; 
+    xlat["ORG"]   = { "ORG\t%s",   "ORG\t%s",   NULL, echo }; 
+    xlat[".ASCII"]= { "DB\t%s",    "DB\t%s",    NULL, echo }; 
  }
 
  // Optionally replace the LAHF/SAHF versions - don't really need to preserve flags in these

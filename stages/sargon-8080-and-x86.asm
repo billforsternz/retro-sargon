@@ -346,11 +346,14 @@ BMOVES: .BYTE   35,55,10H
         .BYTE   34,54,10H
         .BYTE   85,65,10H
         .BYTE   84,64,10H
+        .IF_Z80
+        .ELSE
 LINECT  .BYTE   0               ;not needed in X86 port (but avoids assembler error)
 MVEMSG  .BYTE   0,0,0,0,0       ;not needed in X86 port (but avoids assembler error)
                                 ;(in Z80 Sargon user interface was algebraic move in ascii
                                 ;needs to be five bytes long)
-
+        .ENDIF
+        
 ;***********************************************************
 ; MOVE LIST SECTION
 ;
@@ -645,11 +648,6 @@ reg_2:   pop    ebp
          pop    eax
          ret
          .ENDIF
-
-          .IF_Z80
-CALLBACK  MACRO TXT
-          ENDM
-          .ENDIF
 
 ;**********************************************************
 ; BOARD SETUP ROUTINE
@@ -2366,35 +2364,35 @@ LINECT: .BYTE   0       ; Current line number
 ;*******************************************************
 ;*** OUTPUT <CR><LF> ***
 CARRET  MACRO
-        RST    38h
+        RST    7
         .BYTE  92H,1AH
         .WORD  0
         ENDM
 
 ;*** CLEAR SCREEN ***
 CLRSCR  MACRO
-        RST    38h
+        RST    7
         .BYTE  0B2H,1AH
         .WORD  BLANKR,1
         ENDM
 
 ;*** PRINT ANY LINE (NAME, LENGTH) ***
 PRTLIN  MACRO NAME,LNGTH
-        RST    38h
+        RST    7
         .BYTE  0B2H,1AH
         .WORD  NAME,LNGTH
         ENDM
 
 ;*** PRINT ANY BLOCK (NAME, LENGTH) ***
 PRTBLK  MACRO NAME,LNGTH
-        RST    38h
+        RST    7
         .BYTE  0B3H,1AH
         .WORD  NAME,LNGTH
         ENDM
 
 ;*** EXIT TO MONITOR ***
 EXIT    MACRO
-        RST    38h
+        RST    7
         .BYTE  01FH
         ENDM
 
