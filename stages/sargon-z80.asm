@@ -6,7 +6,7 @@
 ; and coded by Dan and Kathe Spracklen.  Copyright 1978. All
 ; rights reserved.  No part of this publication may be
 ; reproduced without the prior written permission.
-;**********************************************************
+;***********************************************************
 
 
 ;***********************************************************
@@ -29,17 +29,6 @@ BPAWN   EQU     BLACK+PAWN
 START   EQU     $
         ORG     START+80H
 TBASE   EQU     START+100H
-;TBASE must be page aligned, but not page 0, because an
-;extensively used trick is to test whether the hi byte of
-;a pointer == 0 and to consider this as a equivalent to
-;testing whether the whole pointer == 0 (works as long as
-;pointers never point to page 0). Also there is an apparent
-;bug in Sargon, such that MLPTRJ is left at 0 for the root
-;node and the MLVAL for that root node is therefore written
-;to memory at offset 5 from 0 (so in page 0). It's a bit
-;wasteful to waste a whole 256 byte page for this, but it
-;is compatible with the goal of making as few changes as
-;possible to the inner heart of Sargon.
 ;**********************************************************
 ; DIRECT  --  Direction Table.  Used to determine the dir-
 ;             ection of movement of each piece.
@@ -166,9 +155,8 @@ POSQ    DB      14,94
 ; SCORE   --  Score Array. Used during Alpha-Beta pruning to
 ;             hold the scores at each ply. It includes two
 ;             "dummy" entries for ply -1 and ply 0.
-;**********************************************************
-        ORG     200h
-SCORE   DW      0,0,0,0,0,0,0,0,0,0,0 ;extended up to 10 ply
+;***********************************************************
+SCORE   DW      0,0,0,0,0,0
 
 ;***********************************************************
 ; PLYIX   --  Ply Table. Contains pairs of pointers, a pair
@@ -185,10 +173,6 @@ PLYIX   DW      0,0,0,0,0,0,0,0,0,0
 ;***********************************************************
         ORG     START+2FFH
 STACK   EQU     $
-;For this C Callable Sargon, we just use the standard C Stack
-;Significantly, Sargon doesn't do any stack based trickery
-;just calls, returns, pushes and pops - so it shouldn't be a
-;problem that we are doing these 32 bits at a time instead of 16
 
 ;***********************************************************
 ; TABLE INDICES SECTION
@@ -225,7 +209,7 @@ STACK   EQU     $
 ;             list.
 ;
 ;***********************************************************
-        ORG     300h
+        ORG     START+0
 M1      DW      TBASE
 M2      DW      TBASE
 M3      DW      TBASE
@@ -373,11 +357,9 @@ BMOVES  DB      35,55,10H
 ;             score assigned to the move.
 ;
 ;***********************************************************
-
-
-        ORG     400h
-MLIST   DS      60000
-MLEND   DW      0
+        ORG     START+300H
+MLIST   DS      2048
+MLEND   EQU     MLIST+2040
 MLPTR   EQU     0
 MLFRP   EQU     2
 MLTOP   EQU     3
@@ -2031,21 +2013,18 @@ KERNEL  EQU     $-BLBASE
         DB      $A3,$85,$A7,$9A,$BF,$9F ; King Kernel
         DB      $A8,$BF,$89,$A2,$8F,$86 ; Toppled King Kernel
 
-
-
-
 ;*******************************************************
 ; STANDARD MESSAGES
 ;*******************************************************
         ORG     START+1800H
-GRTTNG: DB      "WELCOME TO CHESS! CARE FOR A GAME?"
-ANAMSG: DB      "WOULD YOU LIKE TO ANALYZE A POSITION?"
-CLRMSG: DB      "DO YOU WANT TO PLAY WHITE(w) OR BLACK(b)?"
-TITLE1: DB      "SARGON"
-TITLE2: DB      "PLAYER"
-SPACE:  DB      "          "    ; For output of blank area
-MVENUM: DB      "01 "
-TITLE3: DB      "  "
+GRTTNG  DB      "WELCOME TO CHESS! CARE FOR A GAME?"
+ANAMSG  DB      "WOULD YOU LIKE TO ANALYZE A POSITION?"
+CLRMSG  DB      "DO YOU WANT TO PLAY WHITE(w) OR BLACK(b)?"
+TITLE1  DB      "SARGON"
+TITLE2  DB      "PLAYER"
+SPACE   DB      "          "    ; For output of blank area
+MVENUM  DB      "01 "
+TITLE3  DB      "  "
         DB      '[',$83,']'     ; Part of TITLE 3 - Underlines
         DB      '[',$83,']'
         DB      '[',$83,']'
@@ -2060,34 +2039,34 @@ TITLE3: DB      "  "
         DB      '[',$83,']'
         DB      '[',$83,']'
         DB      " "
-MVEMSG: DB      "a1-a1"
-O_O:    DB      "0-0  "
-O_O_O:  DB      "0-0-0"
-CKMSG:  DB      "CHECK"
-MTMSG:  DB      "MATE IN "
-MTPL:   DB      "2"
-PCS:    DB      "KQRBNP"        ; Valid piece characters
-UWIN:   DB      "YOU WIN"
-IWIN:   DB      "I WIN"
-AGAIN:  DB      "CARE FOR ANOTHER GAME?"
-CRTNES: DB      "IS THIS RIGHT?"
-PLYDEP: DB      "SELECT LOOK AHEAD (1-6)"
-TITLE4: DB      "                "
-WSMOVE: DB      "WHOSE MOVE IS IT?"
-BLANKR: DB      '[',$1C,']'     ; Control-\
-P_PEP:  DB      "PxPep"
-INVAL1: DB      "INVALID MOVE"
-INVAL2: DB      "TRY AGAIN"
+MVEMSG  DB      "a1-a1"
+O_O     DB      "0-0  "
+O_O_O   DB      "0-0-0"
+CKMSG   DB      "CHECK"
+MTMSG   DB      "MATE IN "
+MTPL    DB      "2"
+PCS     DB      "KQRBNP"        ; Valid piece characters
+UWIN    DB      "YOU WIN"
+IWIN    DB      "I WIN"
+AGAIN   DB      "CARE FOR ANOTHER GAME?"
+CRTNES  DB      "IS THIS RIGHT?"
+PLYDEP  DB      "SELECT LOOK AHEAD (1-6)"
+TITLE4  DB      "                "
+WSMOVE  DB      "WHOSE MOVE IS IT?"
+BLANKR  DB      '[',$1C,']'     ; Control-\
+P_PEP   DB      "PxPep"
+INVAL1  DB      "INVALID MOVE"
+INVAL2  DB      "TRY AGAIN"
 
 ;*******************************************************
 ; VARIABLES
 ;*******************************************************
-BRDPOS: DS      1               ; Index into the board array
-ANBDPS: DS      1               ; Additional index required for ANALYS
-INDXER: DW      BLBASE          ; Index into graphics data base
-NORMAD: DS      2*(1)           ; The address of the upper left hand
+BRDPOS  DS      1               ; Index into the board array
+ANBDPS  DS      1               ; Additional index required for ANALYS
+INDXER  DW      BLBASE          ; Index into graphics data base
+NORMAD  DS      2*(1)           ; The address of the upper left hand
                                 ; corner of the square on the board
-LINECT: DB      0               ; Current line number
+LINECT  DB      0               ; Current line number
 
 ;*******************************************************
 ; MACRO DEFINITIONS

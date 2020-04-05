@@ -6,7 +6,7 @@
 ; and coded by Dan and Kathe Spracklen.  Copyright 1978. All
 ; rights reserved.  No part of this publication may be
 ; reproduced without the prior written permission.
-;**********************************************************
+;***********************************************************
 
         .686P
         .XMM
@@ -177,7 +177,7 @@ POSQ    EQU     01d0h
 ; SCORE   --  Score Array. Used during Alpha-Beta pruning to
 ;             hold the scores at each ply. It includes two
 ;             "dummy" entries for ply -1 and ply 0.
-;**********************************************************
+;***********************************************************
 ;       ORG     200h
         DB      45      DUP (?)                 ;Padding bytes to ORG location
 SCORE   EQU     0200h                           ;extended up to 10 ply
@@ -429,8 +429,6 @@ MVEMSG  EQU     0341h                           ;not needed in X86 port (but avo
 ;             score assigned to the move.
 ;
 ;***********************************************************
-
-
 ;       ORG     400h
         DB      186     DUP (?)                 ;Padding bytes to ORG location
 MLIST   EQU     0400h

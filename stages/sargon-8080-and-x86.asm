@@ -6,7 +6,7 @@
 ; and coded by Dan and Kathe Spracklen.  Copyright 1978. All
 ; rights reserved.  No part of this publication may be
 ; reproduced without the prior written permission.
-;**********************************************************
+;***********************************************************
 
         .IF_X86
         .686P
@@ -44,7 +44,6 @@ TBASE   EQU     START+100H
         .ELSE
         .LOC    100h
 TBASE   =       .
-        .ENDIF
 ;TBASE must be page aligned, but not page 0, because an
 ;extensively used trick is to test whether the hi byte of
 ;a pointer == 0 and to consider this as a equivalent to
@@ -56,6 +55,7 @@ TBASE   =       .
 ;wasteful to waste a whole 256 byte page for this, but it
 ;is compatible with the goal of making as few changes as
 ;possible to the inner heart of Sargon.
+        .ENDIF
 ;**********************************************************
 ; DIRECT  --  Direction Table.  Used to determine the dir-
 ;             ection of movement of each piece.
@@ -182,10 +182,14 @@ POSQ:   .BYTE   14,94
 ; SCORE   --  Score Array. Used during Alpha-Beta pruning to
 ;             hold the scores at each ply. It includes two
 ;             "dummy" entries for ply -1 and ply 0.
-;**********************************************************
+;***********************************************************
+        .IF_Z80
+SCORE:  .WORD   0,0,0,0,0,0
+        .ELSE
         .LOC    200h
 SCORE:  .WORD   0,0,0,0,0,0,0,0,0,0,0   ;extended up to 10 ply
-
+        .ENDIF
+        
 ;***********************************************************
 ; PLYIX   --  Ply Table. Contains pairs of pointers, a pair
 ;             for each ply. The first pointer points to the
@@ -202,11 +206,12 @@ PLYIX:  .WORD   0,0,0,0,0,0,0,0,0,0
         .IF_Z80
         .LOC    START+2FFH
 STACK:
-        .ENDIF
+        .ELSE
 ;For this C Callable Sargon, we just use the standard C Stack
 ;Significantly, Sargon doesn't do any stack based trickery
 ;just calls, returns, pushes and pops - so it shouldn't be a
 ;problem that we are doing these 32 bits at a time instead of 16
+        .ENDIF
 
 ;***********************************************************
 ; TABLE INDICES SECTION
@@ -243,7 +248,11 @@ STACK:
 ;             list.
 ;
 ;***********************************************************
+        .IF_Z80
+        .LOC    START+0
+        .ELSE
         .LOC    300h
+        .ENDIF
 M1:     .WORD   TBASE
 M2:     .WORD   TBASE
 M3:     .WORD   TBASE
@@ -398,11 +407,15 @@ MVEMSG  .BYTE   0,0,0,0,0       ;not needed in X86 port (but avoids assembler er
 ;             score assigned to the move.
 ;
 ;***********************************************************
-
-
+        .IF_Z80
+        .LOC    START+300H
+MLIST:  .BLKB   2048
+MLEND   =       MLIST+2040
+        .ELSE
         .LOC    400h
 MLIST:  .BLKB   60000
 MLEND:  .WORD   0      
+        .ENDIF
 MLPTR   =       0
 MLFRP   =       2
 MLTOP   =       3
@@ -2244,6 +2257,7 @@ BM9:    INR     M               ; (P-Q4)
         RET                     ; Return to CPTRMV
 
         .IF_Z80
+        .DATA
 ;*******************************************************
 ; GRAPHICS DATA BASE
 ;*******************************************************
@@ -2295,9 +2309,6 @@ KERNEL  EQU     $-BLBASE
         DB      $A8,$9B,$B9,$B6,$AF,$A7 ; Queen Kernel
         DB      $A3,$85,$A7,$9A,$BF,$9F ; King Kernel
         DB      $A8,$BF,$89,$A2,$8F,$86 ; Toppled King Kernel
-        
-        
-        
 
 ;*******************************************************
 ; STANDARD MESSAGES
@@ -2353,7 +2364,8 @@ INDXER: .WORD   BLBASE  ; Index into graphics data base
 NORMAD: .BLKW   1       ; The address of the upper left hand
                         ; corner of the square on the board
 LINECT: .BYTE   0       ; Current line number
-
+        .CODE
+        
 ;*******************************************************
 ; MACRO DEFINITIONS
 ;*******************************************************
