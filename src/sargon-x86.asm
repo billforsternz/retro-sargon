@@ -197,8 +197,6 @@ PLYIX   EQU     0216h
 ;***********************************************************
 ; STACK   --  Contains the stack for the program.
 ;***********************************************************
-;        .LOC    START+2FFH
-;STACK:
 ;For this C Callable Sargon, we just use the standard C Stack
 ;Significantly, Sargon doesn't do any stack based trickery
 ;just calls, returns, pushes and pops - so it shouldn't be a
@@ -380,6 +378,12 @@ BMOVES  EQU     0334h
         DB      34,54,10H
         DB      85,65,10H
         DB      84,64,10H
+LINECT  EQU     0340h                           ;not needed in X86 port (but avoids assembler error)
+        DB      0
+MVEMSG  EQU     0341h                           ;not needed in X86 port (but avoids assembler error)
+        DB      0,0,0,0,0
+                                                ;(in Z80 Sargon user interface was algebraic move in ascii
+                                                ;needs to be five bytes long)
 
 ;***********************************************************
 ; MOVE LIST SECTION
@@ -427,17 +431,8 @@ BMOVES  EQU     0334h
 ;***********************************************************
 
 
-;*** TEMP TODO BEGIN
-MVEMSG  EQU     0340h
-        DW      0
-MVEMSG_2        EQU     0342h
-        DW      0
-LINECT  EQU     0344h                           ; Current line number
-        DB      0
-;**** TEMP TODO END
-
 ;       ORG     400h
-        DB      187     DUP (?)                 ;Padding bytes to ORG location
+        DB      186     DUP (?)                 ;Padding bytes to ORG location
 MLIST   EQU     0400h
         DB      60000   DUP (?)
 MLEND   EQU     0ee60h
@@ -682,6 +677,7 @@ reg_2:   pop    ebp
          pop    ebx
          pop    eax
          ret
+
 
 ;**********************************************************
 ; BOARD SETUP ROUTINE
@@ -2562,21 +2558,21 @@ CP0C:   CALL    MOVE                            ; Produce move on board array
         JNZ     CP10                            ; Yes - jump
         MOV     dh,dl                           ; "To" position of the move
         CALL    BITASN                          ; Convert to Ascii
-        MOV     word ptr [ebp+MVEMSG_2],bx      ;todo MVEMSG+3        ; Put in move message
+        MOV     word ptr [ebp+MVEMSG+3],bx      ; Put in move message
         MOV     dh,cl                           ; "From" position of the move
         CALL    BITASN                          ; Convert to Ascii
         MOV     word ptr [ebp+MVEMSG],bx        ; Put in move message
-        PRTBLK  MVEMSG,5        ; Output text of move
+        PRTBLK  MVEMSG,5                        ; Output text of move
         JMP     CP1C                            ; Jump
 CP10:   TEST    ch,2                            ; King side castle ?
         JZ      rel020                          ; No - jump
-        PRTBLK  O_O,5           ; Output "O-O"
+        PRTBLK  O_O,5                           ; Output "O-O"
         JMP     CP1C                            ; Jump
 rel020: TEST    ch,4                            ; Queen side castle ?
         JZ      rel021                          ; No - jump
-        PRTBLK  O_O_O,5         ; Output "O-O-O"
+        PRTBLK  O_O_O,5                         ; Output "O-O-O"
         JMP     CP1C                            ; Jump
-rel021: PRTBLK  P_PEP,5         ; Output "PxPep" - En passant
+rel021: PRTBLK  P_PEP,5                         ; Output "PxPep" - En passant
 CP1C:   MOV     al,byte ptr [ebp+COLOR]         ; Should computer call check ?
         MOV     ch,al
         XOR     al,80H                          ; Toggle color
@@ -2586,13 +2582,13 @@ CP1C:   MOV     al,byte ptr [ebp+COLOR]         ; Should computer call check ?
         MOV     al,ch                           ; Restore color
         MOV     byte ptr [ebp+COLOR],al
         JZ      CP24                            ; No - return
-        CARRET                  ; New line
+        CARRET                                  ; New line
         MOV     al,byte ptr [ebp+SCORE+1]       ; Check for player mated
         CMP     al,0FFH                         ; Forced mate ?
         JZ      skip31                          ; No - Tab to computer column
         CALL    TBCPMV
 skip31:
-        PRTBLK  CKMSG,5         ; Output "check"
+        PRTBLK  CKMSG,5                         ; Output "check"
         MOV     bx,LINECT                       ; Address of screen line count
         INC     byte ptr [ebp+ebx]              ; Increment for message
 CP24:   MOV     al,byte ptr [ebp+SCORE+1]       ; Check again for mates

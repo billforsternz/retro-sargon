@@ -346,6 +346,10 @@ BMOVES: .BYTE   35,55,10H
         .BYTE   34,54,10H
         .BYTE   85,65,10H
         .BYTE   84,64,10H
+LINECT  .BYTE   0               ;not needed in X86 port (but avoids assembler error)
+MVEMSG  .BYTE   0,0,0,0,0       ;not needed in X86 port (but avoids assembler error)
+                                ;(in Z80 Sargon user interface was algebraic move in ascii
+                                ;needs to be five bytes long)
 
 ;***********************************************************
 ; MOVE LIST SECTION
@@ -395,7 +399,7 @@ BMOVES: .BYTE   35,55,10H
 
         .LOC    400h
 MLIST:  .BLKB   60000
-MLEND:  .WORD   0
+MLEND:  .WORD   0      
 MLPTR   =       0
 MLFRP   =       2
 MLTOP   =       3

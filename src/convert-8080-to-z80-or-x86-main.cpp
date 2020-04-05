@@ -21,7 +21,7 @@
 #include <set>
 #include <algorithm>
 #include "util.h"
-#include "translate.h"
+#include "convert-8080-to-z80-or-x86.h"
 
 void convert( bool relax_switch, std::string fin, std::string asm_fout,  std::string report_fout, std::string asm_interface_fout );
 std::string detabify( const std::string &s, bool push_comment_to_right=false );
@@ -40,7 +40,19 @@ generate_t generate_switch = generate_x86;
 
 int main( int argc, const char *argv[] )
 {
-#if 1
+#ifdef _DEBUG
+    const char *test_args[] =
+    {
+        "Release/project-convert-sargon-to-x86.exe",
+        "-generate_x86",
+        "../stages/sargon-8080-and-x86.asm",
+        "../stages/sargon-x86.asm",
+        "../stages/sargon-asm-interface.h"
+    };
+    argc = sizeof(test_args) / sizeof(test_args[0]);
+    argv = test_args;
+#endif
+#if 0 //def _DEBUG
     const char *test_args[] =
     {
         "Release/project-convert-sargon-to-x86.exe",
@@ -51,18 +63,7 @@ int main( int argc, const char *argv[] )
     argc = sizeof(test_args) / sizeof(test_args[0]);
     argv = test_args;
 #endif
-#if 0
-    const char *test_args[] =
-    {
-        "Release/project-convert-sargon-to-x86.exe",
-        "-generate_x86",
-        "../stages/sargon-8080-and-x86.asm",
-        "../stages/sargon-x86.asm"
-    };
-    argc = sizeof(test_args) / sizeof(test_args[0]);
-    argv = test_args;
-#endif
-#if 0
+#if 0 //def _DEBUG
     const char *test_args[] =
     {
         "Release/project-convert-sargon-to-x86.exe",
@@ -74,22 +75,41 @@ int main( int argc, const char *argv[] )
     argv = test_args;
 #endif
     const char *usage=
-    "Read, understand, convert sargon source code\n"
+    "An 8080 to x86 or Z80 converter/translator. Originally created to read,\n"
+    "understand, and convert Sargon source code (which was Z80 code written using an\n"
+    "8080 assembler with Z80 extensions). For other projects I expect some work will\n"
+    "inevitably be required, C++ source code is freely available on\n"
+    "github.com/billforsternz.\n"
+    "\n"
     "Usage:\n"
-    " convert [switches] sargon.asm sargon-out.asm [report.txt] [asm-interface.h]\n"
+    " convert [switches] sargon.asm sargon-out.asm asm-interface.h [report.txt]\n"
+    "\n"
     "Switches:\n"
-    " -relax Relax strict Z80->X86 flag compatibility. Applying this flag eliminates LAHF/SAHF pairs around\n"
-    "        some X86 instructions. Reduces compatibility (burden of proof passes to programmer) but improves\n"
-    "        performance. For Sargon, manual checking suggests it's okay to use this flag.\n"
-    "Each source line can optionally be transformed to Z80 mnemonics (or hybrid Z80 plus X86 registers mnemonics)\n"
-    " so -transform_none or -transform_z80 or -transform_hybrid, default is -transform_none\n"
-    "After optional transformation, the original line can be kept, discarded or commented out\n"
-    " so -original_keep or -original_comment_out or -original_discard, default is -original_discard\n"
+    "\n"
+    "Each source line can optionally be transformed to Z80 mnemonics (or hybrid Z80\n"
+    "plus X86 registers mnemonics)\n"
+    " so -transform_none or -transform_z80 or -transform_hybrid,\n"
+    " default is -transform_none\n"
+    "\n"
+    "After optional transformation, the original line can be kept, discarded or\n"
+    "commented out\n"
+    " so -original_keep or -original_comment_out or -original_discard,\n"
+    " default is -original_discard\n"
+    " \n"
     "Generated equivalent code can optionally be generated, in various flavours\n"
-    " so -generate_x86 or -generate_z80  or -generate_z80_only or -generate_hybrid or -generate_none,\n"
-    " default is -generate_x86. Option -generate_z80_only also strips out .IF_X86 code.\n"
-    "Note that all three output files will be generated, if the optional output filenames aren't\n"
-    "provided, names will be auto generated from the main output filename";
+    " so -generate_x86 or -generate_z80  or -generate_z80_only or -generate_hybrid\n"
+    " or -generate_none, default is -generate_x86. Option -generate_z80_only also\n"
+    " strips out .IF_X86 code.\n"
+    "\n"
+    "Also\n"
+    " -relax Relax strict Z80->X86 flag compatibility. Applying this flag eliminates\n"
+    "        LAHF/SAHF pairs around some X86 instructions. Reduces compatibility\n"
+    "        (burden of proof passes to programmer) but improves performance. For\n"
+    "        Sargon, manual checking suggests it's okay to use this flag.\n"
+    "\n"
+    "Note that all three output files will be generated, if the optional output\n"
+    "filenames aren't provided, names will be auto generated from the main output\n"
+    "filename.\n";
     int argi = 1;
     bool relax_switch=false;
     while( argc >= 2)
@@ -139,10 +159,16 @@ int main( int argc, const char *argv[] )
         printf( "%s\n", usage );
         return -1;
     }
+    if( generate_switch == generate_x86 && argc==3 )
+    {
+        printf( "%s\n", usage );
+        printf( "\nIMPORTANT: asm-interface.h is actually required and not optional if -generate_x86\n" );
+        return -1;
+    }
     std::string fin ( argv[argi] );
     std::string fout( argv[argi+1] );
-    std::string report_fout = argc>=4 ? argv[argi+2] : fout + "-report.txt";
-    std::string asm_interface_fout = argc>=5 ? argv[argi+3] : fout + "-asm-interface.h";
+    std::string asm_interface_fout = argc>=4 ? argv[argi+2] : fout + "-asm-interface.h";
+    std::string report_fout = argc>=5 ? argv[argi+3] : fout + "-report.txt";
     printf( "convert(%s,%s,%s,%s)\n", fin.c_str(), fout.c_str(), report_fout.c_str(), asm_interface_fout.c_str() );
     convert(relax_switch,fin,fout,report_fout,asm_interface_fout);
     return 0;
@@ -432,6 +458,8 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
     }
 
     util::putline( h_out, "// Automatically generated file - C interface to Sargon assembly language" );
+    util::putline( h_out, "#ifndef SARGON_ASM_INTERFACE_H_INCLUDED" );
+    util::putline( h_out, "#define SARGON_ASM_INTERFACE_H_INCLUDED" );
     util::putline( h_out, "extern \"C\" {" );
     util::putline( h_out, "" );
     util::putline( h_out, "    // First byte of Sargon data"  );
@@ -963,6 +991,7 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
         }
     }
     util::putline( h_out, "};" );
+    util::putline( h_out, "#endif //SARGON_ASM_INTERFACE_H_INCLUDED" );
 
     // Summary report
     util::putline(report_out,"\nLABELS\n");

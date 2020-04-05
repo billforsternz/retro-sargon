@@ -475,10 +475,6 @@ static void cmd_go_infinite()
     end_of_points_callbacks = 0;
     while( !aborted && plymax<=20 )
     {
-        pokeb(MVEMSG,   0 );
-        pokeb(MVEMSG+1, 0 );
-        pokeb(MVEMSG+2, 0 );
-        pokeb(MVEMSG+3, 0 );
         pokeb(PLYMAX, plymax++);
         pokeb(MLPTRJ,0);
         pokeb(MLPTRJ+1,0);

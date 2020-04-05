@@ -11,7 +11,7 @@
 #include <set>
 #include <algorithm>
 #include "util.h"
-#include "translate.h"
+#include "convert-8080-to-z80-or-x86.h"
 
 enum ParameterPattern
 {
@@ -1173,7 +1173,7 @@ void translate_init()
 
 
     // DJNZ addr -> LAHF; DEC ch; JNZ addr; SAHF; ## flags affected at addr (sadly not much to be done)
-    xlat["DJNZ"] = { "LAHF\n\tDEC ch\n\tJNZ\t%s\n\tSAHF", "DJNZ\t%s", NULL, echo };
+    xlat["DJNZ"] = { "LAHF\n\tDEC\tch\n\tJNZ\t%s\n\tSAHF", "DJNZ\t%s", NULL, echo };
 
     // JC addr -> JC addr
     xlat["JC"] = { "JC\t%s", "JP\tC,%s", NULL, echo };

@@ -37,11 +37,11 @@ void on_exit_diagnostics() {}
 // main()
 int main( int argc, const char *argv[] )
 {
-#if 1
+#ifdef _DEBUG
     const char *test_args[] =
     {
         "Release/sargon-tests.exe",
-        "pmg",
+        "p",
         "-1"
     };
     argc = sizeof(test_args) / sizeof(test_args[0]);

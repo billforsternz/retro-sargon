@@ -1,4 +1,6 @@
 // Automatically generated file - C interface to Sargon assembly language
+#ifndef SARGON_ASM_INTERFACE_H_INCLUDED
+#define SARGON_ASM_INTERFACE_H_INCLUDED
 extern "C" {
 
     // First byte of Sargon data
@@ -26,7 +28,6 @@ extern "C" {
                    uint32_t eflags );
 
     // Data offsets for peeking and poking
-    const int TBASE = 0x0100;
     const int BOARDA = 0x0134;
     const int ATKLST = 0x01ac;
     const int PLISTA = 0x01ba;
@@ -71,9 +72,8 @@ extern "C" {
     const int MV0 = 0x0332;
     const int PTSCK = 0x0333;
     const int BMOVES = 0x0334;
-    const int MVEMSG = 0x0340;
-    const int MVEMSG_2 = 0x0342;
-    const int LINECT = 0x0344;
+    const int LINECT = 0x0340;
+    const int MVEMSG = 0x0341;
     const int MLIST = 0x0400;
     const int MLEND = 0xee60;
 
@@ -85,3 +85,4 @@ extern "C" {
     const int api_ASNTBI = 5;
     const int api_EXECMV = 6;
 };
+#endif //SARGON_ASM_INTERFACE_H_INCLUDED

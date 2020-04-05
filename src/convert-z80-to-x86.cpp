@@ -34,28 +34,41 @@ original_t original_switch = original_discard;
 
 int main( int argc, const char *argv[] )
 {
-#if 1
+#ifdef _DEBUG
     const char *test_args[] =
     {
         "Release/z80-to-x86.exe",
         "../stages/sargon-z80-and-x86.asm",
-        "../stages/sargon-x86-COMPARE.asm"
+        "../stages/sargon-x86-COMPARE.asm",
+        "../stages/sargon-interface-asm-COMPARE.h"
     };
     argc = sizeof(test_args) / sizeof(test_args[0]);
     argv = test_args;
 #endif
     const char *usage=
-    "Read, understand, convert sargon source code\n"
+    "An Z80 to x86 converter. Originally created to work in conjuction with sister\n"
+    "project convert-8080-to-z80-or-x86. This program was intended to generate the\n"
+    "same x86 code as the sister program would create directly from 8080 source. Both\n"
+    "programs were created when porting the 1978 version of the Sargon chess program.\n"
+    "For other projects I expect some work will inevitably be required, C++ source\n"
+    "code is freely available on github.com/billforsternz.\n"
+    "\n"
     "Usage:\n"
-    " z80-to-x86 [switches] z80-code-in.asm x86-code-out.asm [report.txt] [asm-interface.h]\n"
+    " z80-to-x86 [switches] z80-code-in.asm x86-code-out.asm asm-interface.h\n"
+    "                      [report.txt]\n"
     "Switches:\n"
-    " -relax Relax strict Z80->X86 flag compatibility. Applying this flag eliminates LAHF/SAHF pairs around\n"
-    "        some X86 instructions. Reduces compatibility (burden of proof passes to programmer) but improves\n"
-    "        performance. For Sargon, manual checking suggests it's okay to use this flag.\n"
+    " -relax Relax strict Z80->X86 flag compatibility. Applying this flag eliminates\n"
+    "        LAHF/SAHF pairs around some X86 instructions. Reduces compatibility\n"
+    "        (burden of proof passes to programmer) but improves performance. For\n"
+    "        Sargon, manual checking suggests it's okay to use this flag.\n"
+    "\n"
     "The original line can be kept, discarded or commented out\n"
-    " so -original_keep or -original_comment_out or -original_discard, default is -original_discard\n"
-    "Note that all three output files will be generated, if the optional output filenames aren't\n"
-    "provided, names will be auto generated from the main output filename";
+    " so -original_keep or -original_comment_out or -original_discard,\n"
+    " default is -original_discard\n"
+    "\n"
+    "Note that all three output files will be generated, if the optional output\n"
+    "filename isn't provided, a name will be auto generated from the main output\n"
+    "filename.\n";
     int argi = 1;
     while( argc >= 2)
     {
@@ -80,7 +93,7 @@ int main( int argc, const char *argv[] )
         argc--;
         argi++;
     }
-    bool ok = (argc==3 || argc==4 || argc==5);
+    bool ok = (argc==4 || argc==5);
     if( !ok )
     {
         printf( "%s\n", usage );
@@ -88,8 +101,8 @@ int main( int argc, const char *argv[] )
     }
     std::string fin ( argv[argi] );
     std::string fout( argv[argi+1] );
-    std::string report_fout = argc>=4 ? argv[argi+2] : fout + "-report.txt";
-    std::string asm_interface_fout = argc>=5 ? argv[argi+3] : fout + "-asm-interface.h";
+    std::string asm_interface_fout = argv[argi+2];
+    std::string report_fout = argc>=5 ? argv[argi+3] : fout + "-report.txt";
     printf( "convert(%s,%s,%s,%s)\n", fin.c_str(), fout.c_str(), report_fout.c_str(), asm_interface_fout.c_str() );
     convert(fin,fout,report_fout,asm_interface_fout);
     return 0;
@@ -376,6 +389,37 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
         printf( "Error; Cannot open file %s for writing\n", asm_interface_fout.c_str() );
         return;
     }
+    util::putline( h_out, "// Automatically generated file - C interface to Sargon assembly language" );
+    util::putline( h_out, "#ifndef SARGON_ASM_INTERFACE_H_INCLUDED" );
+    util::putline( h_out, "#define SARGON_ASM_INTERFACE_H_INCLUDED" );
+    util::putline( h_out, "extern \"C\" {" );
+    util::putline( h_out, "" );
+    util::putline( h_out, "    // First byte of Sargon data"  );
+    util::putline( h_out, "    extern unsigned char sargon_base_address;" );
+    util::putline( h_out, "" );
+    util::putline( h_out, "    // Calls to sargon() can set and read back registers" );
+    util::putline( h_out, "    struct z80_registers" );
+    util::putline( h_out, "    {" );
+    util::putline( h_out, "        uint16_t af;    // x86 = lo al, hi flags" );
+    util::putline( h_out, "        uint16_t hl;    // x86 = bx" );
+    util::putline( h_out, "        uint16_t bc;    // x86 = cx" );
+    util::putline( h_out, "        uint16_t de;    // x86 = dx" );
+    util::putline( h_out, "        uint16_t ix;    // x86 = si" );
+    util::putline( h_out, "        uint16_t iy;    // x86 = di" );
+    util::putline( h_out, "    };" );
+    util::putline( h_out, "" );
+    util::putline( h_out, "    // Call Sargon from C, call selected functions, optionally can set input" );
+    util::putline( h_out, "    //  registers (and/or inspect returned registers)" );
+    util::putline( h_out, "    void sargon( int api_command_code, z80_registers *registers=NULL );" );
+    util::putline( h_out, "" );
+    util::putline( h_out, "    // Sargon calls C, parameters serves double duty - saved registers on the" );
+    util::putline( h_out, "    //  stack, can optionally be inspected by C program" );
+    util::putline( h_out, "    void callback( uint32_t edi, uint32_t esi, uint32_t ebp, uint32_t esp," );
+    util::putline( h_out, "                   uint32_t ebx, uint32_t edx, uint32_t ecx, uint32_t eax," );
+    util::putline( h_out, "                   uint32_t eflags );" );
+    util::putline( h_out, "" );
+    util::putline( h_out, "    // Data offsets for peeking and poking" );
+    bool api_constants_detected = false;
     std::set<std::string> labels;
     std::map< std::string, std::vector<std::string> > equates;
     std::map< std::string, std::set<std::vector<std::string>> > instructions;
@@ -511,6 +555,33 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
         // Pass through new X86 code
         if( mode==mode_pass_thru && !handled )
         {
+            // special handling of lines like "api_n_X:"
+            //  generate C code "const int api_X = n;"
+            size_t len = line_original.length();
+            size_t idx = 0;
+            if( len>=8 && line_original.substr(0,4)=="api_" )
+            {
+                if( line_original[len-1]==':' && '0'<=line_original[4] && line_original[4]<='9' )
+                {
+                    if( line_original[5] == '_' )
+                        idx = 6;
+                    else if( '0'<=line_original[5] && line_original[5]<='9' && line_original[6] == '_' )
+                        idx = 7;
+                }
+            }
+            if( idx > 0 )
+            {
+                std::string name = line_original.substr(idx,len-idx-1); // eg "api_1_Y:" len=8, idx=6 -> "Y"
+                std::string nbr  = line_original.substr(4,idx==6?1:2);  // eg "api_23_Y:" idx=7 -> "23"
+                std::string h_line_out = util::sprintf( "    const int api_%s = %s;", name.c_str(), nbr.c_str() );
+                if( !api_constants_detected )
+                {
+                    api_constants_detected = true;
+                    util::putline( h_out, "" );
+                    util::putline( h_out, "    // API constants" );
+                }
+                util::putline( h_out, h_line_out );
+            }
             util::putline( asm_out, line_original );
             continue;
         }
@@ -756,6 +827,8 @@ void convert( std::string fin, std::string fout, std::string report_fout, std::s
             util::putline( asm_out, asm_line_out );
         }
     }
+    util::putline( h_out, "};" );
+    util::putline( h_out, "#endif //SARGON_ASM_INTERFACE_H_INCLUDED" );
 
     // Summary report
     util::putline(report_out,"\nLABELS\n");
