@@ -34,8 +34,12 @@ BPAWN   =       BLACK+PAWN
 ;***********************************************************
         .IF_X86
 _DATA   SEGMENT
+shadow_ax  dw   0       ;For Z80 EX af,af' emulation
+shadow_bx  dw   0       ;For Z80 EXX emulation
+shadow_cx  dw   0
+shadow_dx  dw   0
 PUBLIC  _sargon_base_address
-_sargon_base_address:
+_sargon_base_address:   ;Base of 64K of Z80 data we are emulating
         .ENDIF
         .IF_Z80
 START:
@@ -360,7 +364,7 @@ BMOVES: .BYTE   35,55,10H
 LINECT  .BYTE   0               ;not needed in X86 port (but avoids assembler error)
 MVEMSG  .BYTE   0,0,0,0,0       ;not needed in X86 port (but avoids assembler error)
                                 ;(in Z80 Sargon user interface was algebraic move in ascii
-                                ;needs to be five bytes long)
+                                ; here we just need to allocate the same 5 bytes)
         .ENDIF
         
 ;***********************************************************
@@ -414,7 +418,7 @@ MLEND   =       MLIST+2040
         .ELSE
         .LOC    400h
 MLIST:  .BLKB   60000
-MLEND:  .WORD   0      
+MLEND:  .BLKB   1
         .ENDIF
 MLPTR   =       0
 MLFRP   =       2
@@ -424,10 +428,6 @@ MLVAL   =       5
 
 ;***********************************************************
         .IF_X86
-shadow_ax  dw   0
-shadow_bx  dw   0
-shadow_cx  dw   0
-shadow_dx  dw   0
 _DATA    ENDS
         .ENDIF
 

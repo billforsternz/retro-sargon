@@ -30,8 +30,12 @@ BPAWN   EQU     BLACK+PAWN
 ; TABLES SECTION
 ;***********************************************************
 _DATA   SEGMENT
+shadow_ax  dw   0       ;For Z80 EX af,af' emulation
+shadow_bx  dw   0       ;For Z80 EXX emulation
+shadow_cx  dw   0
+shadow_dx  dw   0
 PUBLIC  _sargon_base_address
-_sargon_base_address:
+_sargon_base_address:   ;Base of 64K of Z80 data we are emulating
 ;       ORG     100h
         DB      256     DUP (?)                 ;Padding bytes to ORG location
 TBASE   EQU     0100h
@@ -383,7 +387,7 @@ LINECT  EQU     0340h                           ;not needed in X86 port (but avo
 MVEMSG  EQU     0341h                           ;not needed in X86 port (but avoids assembler error)
         DB      0,0,0,0,0
                                                 ;(in Z80 Sargon user interface was algebraic move in ascii
-                                                ;needs to be five bytes long)
+                                                ; here we just need to allocate the same 5 bytes)
 
 ;***********************************************************
 ; MOVE LIST SECTION
@@ -434,7 +438,7 @@ MVEMSG  EQU     0341h                           ;not needed in X86 port (but avo
 MLIST   EQU     0400h
         DB      60000   DUP (?)
 MLEND   EQU     0ee60h
-        DW      0
+        DB      1       DUP (?)
 MLPTR   EQU     0
 MLFRP   EQU     2
 MLTOP   EQU     3
@@ -442,10 +446,6 @@ MLFLG   EQU     4
 MLVAL   EQU     5
 
 ;***********************************************************
-shadow_ax  dw   0
-shadow_bx  dw   0
-shadow_cx  dw   0
-shadow_dx  dw   0
 _DATA    ENDS
 
 ;**********************************************************
