@@ -82,7 +82,7 @@ int main( int argc, const char *argv[] )
     "github.com/billforsternz.\n"
     "\n"
     "Usage:\n"
-    " convert [switches] sargon.asm sargon-out.asm asm-interface.h [report.txt]\n"
+    " convert [switches] sargon.asm sargon-out.asm [asm-interface.h] [report.txt]\n"
     "\n"
     "Switches:\n"
     "\n"
@@ -745,7 +745,7 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
             else
                 asm_line_out = stmt.label + ":\t";
             if( callback_macro && generate_switch==generate_z80_only )
-                ;  // Don't express CALLBACK macro if Z80 only
+                util::rtrim(asm_line_out);  // Don't express CALLBACK macro if Z80 only
             else
             {
                 asm_line_out += stmt.instruction;

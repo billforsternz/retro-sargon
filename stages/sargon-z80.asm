@@ -1840,7 +1840,7 @@ FM35:   CALL    PINFND          ; Compile pin list
 FM36:   LD      hl,MATEF        ; Set mate flag
         SET     0,(hl)
         LD      hl,(SCRIX)      ; Load score table pointer
-FM37:   
+FM37:
         CP      a,(hl)          ; Compare to score 2 ply above
         JR      C,FM40          ; Jump if less
         JR      Z,FM40          ; Jump if equal
