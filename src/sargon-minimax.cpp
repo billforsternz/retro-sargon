@@ -33,96 +33,94 @@ static std::string overwrite_at_offset( const std::string &s, size_t offset, con
 // Control callback() behaviour
 static bool callback_minimax_mods_active;
 
-/*
-
-The big idea
-============
-
-This is an attempt to peer into Sargon and see how it works. Hopefully it will
-also be a useful exercise for anyone starting out in computer chess programming
-to see a working model of Minimax and Alpha-Beta algorithms and "see" how those
-algorithms work.
-
-The idea of a "model" is very important. The exponentially exploding complexity
-of analysis of a real chess position can overwhelm human attempts to understand
-it in detail. So we build a small model instead. Small enought to be easily
-understood, large enough to capture all the important concepts.
-
-Our model is a 2x2x2 system. That is in the root position, White to play has
-two moves only. In each position reached, Black to play then has two possible
-moves. Finally in each of those positions White to play again has just two
-possible moves. Counting the root position, only 15 positions are encountered.
-
-We use short "key" notation to describe the positions in our models. "A" and
-and "B" are the keys for the positions reached after White's first move. Then
-"AG" and "AH" are the positions reached after Black responds with each of
-their options after "A". Similarly "BG" and "BH" are the positions after
-Black responds to "B". Then "AGA", "AGB" etc. Basically at each turn White's
-moves are A and B, Black's are G and H.
-
-To make Sargon co-operate with this idea we tell it to analyse the following
-simple position to depth 3 ply;
-
-White king on a1 pawns a4,b3. Black king on h8 pawns g6,h6.
-
-Even this position is more complicated than our simple model, because both
-sides have five legal moves rather than two. So we use the Callback facility
-to interfere with Sargon's move generator - suppressing all king moves.
-Now there are just two moves each at each ply, conveniently for our notation
-single square 'a' and 'b' pawn pushes for White and 'g' and 'h' pushes for
-Black. The reason the White 'a' pawn is the only one on the fourth rank is
-just a pesky detail - it ensures Sargon always generates A moves ahead of
-B moves, on the third ply as well as the first.
-
-Of course from a chess perspective nothing is going to be decided in this
-position after just 3 ply, pawn promotion will be well over the horizon. So
-just as we suppressed Sargon's king moves, we will go ahead and interfere with
-Sargon's scoring function using the callback facility, to pretend that the
-positions reached have very different scores. While we are at it, we will
-pretend that the starting position and the lines of play are quite different
-to the actual simple pawn ending, and we'll make up positions and moves that
-match the pretend scores. Sargon doesn't need to know!
-
-The cool thing about this with this simple model approach in hand we will be
-able to watch Sargon accurately calculate (for example) Philidor's smothered
-mate;
-
-We pretend that the initial position is
-
-FEN "1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1",
-
-.rr....k
-....n.pp
-.......N
-........
-........
-........
-Q....PPP
-......K.
-
-Our pretend lines and scores are as follows, format is: {key, line, score}
-
-{ "A"  , "1.Qg8+",             0.0   },
-{ "AG" , "1.Qg8+ Nxg8",        0.0   },
-{ "AGA", "1.Qg8+ Nxg8 2.Nf7#", 12.0  },   // White gives mate
-{ "AGB", "1.Qg8+ Nxg8 2.Nxg8", -10.0 },   // Black has huge material plus
-{ "AH" , "1.Qg8+ Rxg8",        0.0   },
-{ "AHA", "1.Qg8+ Rxg8 2.Nf7#", 12.0  },   // White gives mate
-{ "AHB", "1.Qg8+ Rxg8 2.Nxg8", -8.0  },   // Black has large material plus
-{ "B"  , "1.Qa1",              0.0   },
-{ "BG" , "1.Qa1 Rc6",          0.0   },
-{ "BGA", "1.Qa1 Rc6 2.Nf7+",   0.0   },   // equal(ish)
-{ "BGB", "1.Qa1 Rc6 2.Ng4",    0.0   },   // equal(ish)
-{ "BH" , "1.Qa1 Ng8",          0.0   },
-{ "BHA", "1.Qa1 Ng8 2.Nf7#",   12.0  },   // White gives mate
-{ "BHB", "1.Qa1 Ng8 2.Ng4",    0.0   }    // equal(ish)
-
-I hope this all makes sense. We'll see exactly this model run later, and
-watch Sargon accurately calculate the PV (Principal Variation) as;
-
-PV = 1.Qg8+ Nxg8 2.Nf7#
-
-*/
+// Get this program to document itself. Start with this intro which outlines the
+//  basic ideas of this exercise
+//
+static const std::string intro =
+"This is an attempt to peer into Sargon and see how it works. Hopefully it will\n"
+"also be a useful exercise for anyone starting out in computer chess programming\n"
+"to see a working model of Minimax and Alpha-Beta algorithms and \"see\" how those\n"
+"algorithms work.\n"
+"\n"
+"The idea of a \"model\" is very important. The exponentially exploding complexity\n"
+"of analysis of a real chess position can overwhelm human attempts to understand\n"
+"it in detail. So we build a small model instead. Small enought to be easily\n"
+"understood, large enough to capture all the important concepts.\n"
+"\n"
+"Our model is a 2x2x2 system. That is in the root position, White to play has\n"
+"two moves only. In each position reached, Black to play then has two possible\n"
+"moves. Finally in each of those positions White to play again has just two\n"
+"possible moves. Counting the root position, only 15 positions are encountered.\n"
+"\n"
+"We use short \"key\" notation to describe the positions in our models. \"A\" and\n"
+"and \"B\" are the keys for the positions reached after White's first move. Then\n"
+"\"AG\" and \"AH\" are the positions reached after Black responds with each of\n"
+"their options after \"A\". Similarly \"BG\" and \"BH\" are the positions after\n"
+"Black responds to \"B\". Then \"AGA\", \"AGB\" etc. Basically at each turn White's\n"
+"moves are A and B, Black's are G and H.\n"
+"\n"
+"To make Sargon co-operate with this idea we tell it to analyse the following\n"
+"simple position to depth 3 ply;\n"
+"\n"
+"White king on a1 pawns a4,b3. Black king on h8 pawns g6,h6.\n"
+"\n"
+"Even this position is more complicated than our simple model, because both\n"
+"sides have five legal moves rather than two. So we use the Callback facility\n"
+"to interfere with Sargon's move generator - suppressing all king moves.\n"
+"Now there are just two moves each at each ply, conveniently for our notation\n"
+"single square 'a' and 'b' pawn pushes for White and 'g' and 'h' pushes for\n"
+"Black. The reason the White 'a' pawn is the only one on the fourth rank is\n"
+"just a pesky detail - it ensures Sargon always generates A moves ahead of\n"
+"B moves, on the third ply as well as the first.\n"
+"\n"
+"Of course from a chess perspective nothing is going to be decided in this\n"
+"position after just 3 ply, pawn promotion will be well over the horizon. So\n"
+"just as we suppressed Sargon's king moves, we will go ahead and interfere with\n"
+"Sargon's scoring function using the callback facility, to pretend that the\n"
+"positions reached have very different scores. While we are at it, we will\n"
+"pretend that the starting position and the lines of play are quite different\n"
+"to the actual simple pawn ending, and we'll make up positions and moves that\n"
+"match the pretend scores. Sargon doesn't need to know!\n"
+"\n"
+"The cool thing about this with this simple model approach in hand we will be\n"
+"able to watch Sargon accurately calculate (for example) Philidor's smothered\n"
+"mate;\n"
+"\n"
+"We pretend that the initial position is\n"
+"\n"
+"FEN \"1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1\",\n"
+"\n"
+".rr....k\n"
+"....n.pp\n"
+".......N\n"
+"........\n"
+"........\n"
+"........\n"
+"Q....PPP\n"
+"......K.\n"
+"\n"
+"Our pretend lines and scores are as follows, format is: {key, line, score}\n"
+"\n"
+"{ \"A\"  , \"1.Qg8+\",             0.0   },\n"
+"{ \"AG\" , \"1.Qg8+ Nxg8\",        0.0   },\n"
+"{ \"AGA\", \"1.Qg8+ Nxg8 2.Nf7#\", 12.0  },   // White gives mate\n"
+"{ \"AGB\", \"1.Qg8+ Nxg8 2.Nxg8\", -10.0 },   // Black has huge material plus\n"
+"{ \"AH\" , \"1.Qg8+ Rxg8\",        0.0   },\n"
+"{ \"AHA\", \"1.Qg8+ Rxg8 2.Nf7#\", 12.0  },   // White gives mate\n"
+"{ \"AHB\", \"1.Qg8+ Rxg8 2.Nxg8\", -8.0  },   // Black has large material plus\n"
+"{ \"B\"  , \"1.Qa1\",              0.0   },\n"
+"{ \"BG\" , \"1.Qa1 Rc6\",          0.0   },\n"
+"{ \"BGA\", \"1.Qa1 Rc6 2.Nf7+\",   0.0   },   // equal(ish)\n"
+"{ \"BGB\", \"1.Qa1 Rc6 2.Ng4\",    0.0   },   // equal(ish)\n"
+"{ \"BH\" , \"1.Qa1 Ng8\",          0.0   },\n"
+"{ \"BHA\", \"1.Qa1 Ng8 2.Nf7#\",   12.0  },   // White gives mate\n"
+"{ \"BHB\", \"1.Qa1 Ng8 2.Ng4\",    0.0   }    // equal(ish)\n"
+"\n"
+"I hope this all makes sense. We'll see exactly this model run later, and\n"
+"watch Sargon accurately calculate the PV (Principal Variation) as;\n"
+"\n"
+"PV = 1.Qg8+ Nxg8 2.Nf7#\n"
+"\n";
 
 static std::vector<std::string> big_picture =
 {
@@ -149,7 +147,7 @@ static std::vector<std::string> big_picture =
 "       \\    |    / |           \\    |    / |           \\    |    / |",
 "        \\   |   BG |            \\   | 9 BG |            \\   |10 BG |",
 "         \\  |  /|\\ |             \\  |  /|\\ |             \\  |  /|\\ |",
-"          \\ | / |  BG             \\ | / | BGB 12          \\ | / | BGB 9",
+"          \\ | / | BGB             \\ | / | BGB 12          \\ | / | BGB 9",
 "           \\|/  |                  \\|/  |                  \\|/  |",
 "            B   |                 2 B   |                14 B   |",
 "             \\  |                    \\  |                    \\  |",
@@ -810,6 +808,9 @@ static Example *running_example;
 // Use a simple example to explore/probe the minimax algorithm and verify it
 void sargon_minimax_main()
 {
+    // Print the introduction
+    printf( "%s\n", intro.c_str() );
+
     // Print big picture graphics
     for( std::string s: big_picture )
         printf( "%s\n", s.c_str() );
