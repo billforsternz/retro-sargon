@@ -1348,6 +1348,6 @@ void translate_init()
     xlat["RES"] = { "AND\t%s,%s", "RES\t%s,%s", NULL, clr_n_reg8 };
 
     // DJNZ addr -> LAHF; DEC ch; JNZ addr; SAHF; ## flags affected at addr (sadly not much to be done)
-    xlat["DJNZ"] = { "DEC ch\n\tJNZ\t%s", "DJNZ\t%s", NULL, echo };
+    xlat["DJNZ"] = { "DEC\tch\n\tJNZ\t%s", "DJNZ\t%s", NULL, echo };
 }
 
