@@ -21,12 +21,14 @@
 
  */
 
-#include "Portability.h"
-#include "DebugPrintf.h"
 #include <stddef.h>
 #include <string>
 #include <vector>
-/****************************************************************************
+
+// Simple definitions to aid platform portability (only remains of former Portability.h)
+int strcmp_ignore( const char *s, const char *t ); // return 0 if case insensitive match
+
+ /****************************************************************************
  * Chessdefs.h Chess classes - Common definitions
  *  Author:  Bill Forster
  *  License: MIT license. Full text of license is in associated file LICENSE
