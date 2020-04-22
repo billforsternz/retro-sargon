@@ -68,8 +68,13 @@ enum Square
     SQUARE_INVALID
 };
 
-inline char get_file( Square sq )  { return static_cast<char> (  (static_cast<int>(sq)&0x07) + 'a' ); }           // eg c5->'c'
-inline char get_rank( Square sq )  { return static_cast<char> (  '8' - ((static_cast<int>(sq)>>3) & 0x07) ); }    // eg c5->'5'
+// thc::Square utilities
+inline char get_file( Square sq )
+    { return static_cast<char> (  (static_cast<int>(sq)&0x07) + 'a' ); }           // eg c5->'c'
+inline char get_rank( Square sq )
+    { return static_cast<char> (  '8' - ((static_cast<int>(sq)>>3) & 0x07) ); }    // eg c5->'5'
+inline Square make_square( char file, char rank )
+    { return static_cast<Square> ( ('8'-(rank))*8 + ((file)-'a') );  }            // eg ('c','5') -> c5
 
 // Special (i.e. not ordinary) move types
 enum SPECIAL
