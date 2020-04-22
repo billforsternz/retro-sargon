@@ -210,6 +210,7 @@ void sargon_export_position( thc::ChessPosition &cp )
         {
             unsigned char b = *src--;
             char c = ' ';
+            bool moved = (b&8 ? true : false);
             b &= 0x87;
             switch( b )
             {
@@ -226,11 +227,74 @@ void sargon_export_position( thc::ChessPosition &cp )
                 case 0x05:   c = 'Q';   break;
                 case 0x06:   c = 'K';   break;
             }
+            if( c!=' ' && moved )
+                c |= 0x80;  // temporarily mark pieces that have moved
             *dst-- = c;
         }
     }
+
+    // Start attending to all the details other than just which pieces are on each square
     cp.white = (peekb(COLOR) == 0x00);
     cp.full_move_count = peekb(MOVENO);
+
+    // Before clearing the temporary 'have moved' marks, check for castling legality
+    //  (note moved Kings and Rooks won't be 'K', 'R' etc because of the marks)
+    cp.wking  = (cp.squares[thc::e1]=='K' && cp.squares[thc::h1]=='R');
+    cp.wqueen = (cp.squares[thc::e1]=='K' && cp.squares[thc::a1]=='R');
+    cp.bking  = (cp.squares[thc::e8]=='k' && cp.squares[thc::h8]=='r');
+    cp.bqueen = (cp.squares[thc::e8]=='k' && cp.squares[thc::a8]=='r');
+
+    // Clear the temporary marks and establish location of kings
+    for( int i=0; i<64; i++ )
+    {
+        char c = cp.squares[i];
+        c &= 0x7f;
+        cp.squares[i] = c;
+        if( c == 'K' )
+            cp.wking_square = static_cast<thc::Square>(i);
+        else if( c == 'k' )
+            cp.bking_square = static_cast<thc::Square>(i);
+    }
+
+    // This is a bit insane, but why not. Let's figure out the enpassant target square
+    //  if there is one. By default of course it's thc::SQUARE_INVALID
+    unsigned int last_move_ptr = peekw(MLPTRJ);
+    if( last_move_ptr )
+    {
+        int from = peekb(last_move_ptr + 2);
+        int to   = peekb(last_move_ptr + 3);
+        thc::Square sq_from, sq_to;
+        bool ok = sargon_export_square(from,sq_from);
+        if( ok )
+        {
+            ok = sargon_export_square(to,sq_to);
+            if( ok )
+            {
+                if( cp.white )
+                {
+                    // If the last move was a double square black pawn advance
+                    if( thc::get_rank(sq_from) == '7' &&
+                        thc::get_rank(sq_to) == '5' &&
+                        thc::get_file(sq_from) == thc::get_file(sq_to) &&
+                        cp.squares[sq_to] == 'p' )
+                    {
+                        cp.enpassant_target = thc::make_square( thc::get_file(sq_from), '6' );
+                    }
+                }
+                else
+                {
+                    // If the last move was a double square white pawn advance
+                    if( thc::get_rank(sq_from) == '2' &&
+                        thc::get_rank(sq_to) == '4' &&
+                        thc::get_file(sq_from) == thc::get_file(sq_to) &&
+                        cp.squares[sq_to] == 'P' )
+                    {                                      
+                        cp.enpassant_target = thc::make_square( thc::get_file(sq_from), '3' );
+                    }
+                }
+            }
+        }
+    }
 }
 
 // Write chess position into Sargon
@@ -336,6 +400,14 @@ void sargon_import_position( const thc::ChessPosition &cp, bool avoid_book )
             sargon_play_move( mv );
         }
     }
+
+    // It's all very well to calculate a decent fake full_move_count, but if the originating
+    //  ChessPosition had a non-default one (not == 1), may as well trust it, after all it can't result
+    //  in a book move since that only happens if MOVENO == 1. Remember Sargon actually adjusts
+    //  its play in the opening judging the opening phase with a MOVENO threshold, so it's
+    //  worth getting it right if possible
+    if( cp.full_move_count > 1 )
+        pokeb(MOVENO,cp.full_move_count);
 }
 
 // Write chess position into Sargon (inner-most part)
@@ -435,6 +507,7 @@ static void sargon_import_position_inner( const thc::ChessPosition &cp )
         }
     }
     memcpy( poke(BOARDA), board_position, sizeof(board_position) );
+    sargon(api_ROYALT);
 }
 
 const unsigned char *peek(int offset)
