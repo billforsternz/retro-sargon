@@ -36,7 +36,10 @@ static bool callback_minimax_mods_active;
 // Get this program to document itself. Start with this intro which outlines the
 //  basic ideas of this exercise
 //
-static const std::string intro =
+static const std::string introduction_txt =
+"A Window into Sargon\n"
+"====================\n"
+"\n"
 "This is an attempt to peer into Sargon and see how it works. Hopefully it will\n"
 "also be a useful exercise for anyone starting out in computer chess programming\n"
 "to see a working model of Minimax and Alpha-Beta algorithms and \"see\" how those\n"
@@ -122,42 +125,193 @@ static const std::string intro =
 "PV = 1.Qg8+ Nxg8 2.Nf7#\n"
 "\n";
 
-static std::vector<std::string> big_picture =
-{
-"    Tree Structure          Creation Order            Minimax Order",
-"    ==============          ==============            =============",
-"",
-"                  AGA                     AGA 5                   AGA 1",
-"                 / |                     / |                     / |",
-"                AG |                  3 AG |                  3 AG |",
-"               /|\\ |                   /|\\ |                   /|\\ |",
-"              / | AGB                 / | AGB 6               / | AGB 2",
-"             /  |                    /  |                    /  |",
-"            A   |                 1 A   |                 7 A   |",
-"           /|\\  |                  /|\\  |                  /|\\  |",
-"          / | \\ | AHA             / | \\ | AHA 7           / | \\ | AHA 4",
-"         /  |  \\|/ |             /  |  \\|/ |             /  |  \\|/ |",
-"        /   |   AH |            /   | 4 AH |            /   | 6 AH |",
-"       /    |    \\ |           /    |    \\ |           /    |    \\ |",
-"      /     |     AHB         /     |     AHB 8       /     |     AHB 5",
-"     /      |                /      |                /      |",
-"  (root)    |             (root)    |             (root)    |",
-"     \\      |                \\      |                \\      |",
-"      \\     |     BGA         \\     |     BGA 11      \\     |     BGA 8",
-"       \\    |    / |           \\    |    / |           \\    |    / |",
-"        \\   |   BG |            \\   | 9 BG |            \\   |10 BG |",
-"         \\  |  /|\\ |             \\  |  /|\\ |             \\  |  /|\\ |",
-"          \\ | / | BGB             \\ | / | BGB 12          \\ | / | BGB 9",
-"           \\|/  |                  \\|/  |                  \\|/  |",
-"            B   |                 2 B   |                14 B   |",
-"             \\  |                    \\  |                    \\  |",
-"              \\ | BHA                 \\ | BHA 13              \\ | BHA 11",
-"               \\|/ |                   \\|/ |                   \\|/ |",
-"                BH |                 10 BH |                 13 BH |",
-"                 \\ |                     \\ |                     \\ |",
-"                  BHB                     BHB 14                  BHB 12",
-""
-};
+static std::string big_picture_txt =
+"    Tree Structure          Creation Order            Minimax Order\n"
+"    ==============          ==============            =============\n"
+"\n"
+"                  AGA                     AGA 5                   AGA 1\n"
+"                 / |                     / |                     / |\n"
+"                AG |                  3 AG |                  3 AG |\n"
+"               /|\\ |                   /|\\ |                   /|\\ |\n"
+"              / | AGB                 / | AGB 6               / | AGB 2\n"
+"             /  |                    /  |                    /  |\n"
+"            A   |                 1 A   |                 7 A   |\n"
+"           /|\\  |                  /|\\  |                  /|\\  |\n"
+"          / | \\ | AHA             / | \\ | AHA 7           / | \\ | AHA 4\n"
+"         /  |  \\|/ |             /  |  \\|/ |             /  |  \\|/ |\n"
+"        /   |   AH |            /   | 4 AH |            /   | 6 AH |\n"
+"       /    |    \\ |           /    |    \\ |           /    |    \\ |\n"
+"      /     |     AHB         /     |     AHB 8       /     |     AHB 5\n"
+"     /      |                /      |                /      |\n"
+"  (root)    |             (root)    |             (root)    |\n"
+"     \\      |                \\      |                \\      |\n"
+"      \\     |     BGA         \\     |     BGA 11      \\     |     BGA 8\n"
+"       \\    |    / |           \\    |    / |           \\    |    / |\n"
+"        \\   |   BG |            \\   | 9 BG |            \\   |10 BG |\n"
+"         \\  |  /|\\ |             \\  |  /|\\ |             \\  |  /|\\ |\n"
+"          \\ | / | BGB             \\ | / | BGB 12          \\ | / | BGB 9\n"
+"           \\|/  |                  \\|/  |                  \\|/  |\n"
+"            B   |                 2 B   |                14 B   |\n"
+"             \\  |                    \\  |                    \\  |\n"
+"              \\ | BHA                 \\ | BHA 13              \\ | BHA 11\n"
+"               \\|/ |                   \\|/ |                   \\|/ |\n"
+"                BH |                 10 BH |                 13 BH |\n"
+"                 \\ |                     \\ |                     \\ |\n"
+"                  BHB                     BHB 14                  BHB 12\n"
+"\n";
+
+
+static std::string pv_algorithm_txt =
+"The Algorithm used to Calculate the PV\n"
+"======================================\n"
+"\n"
+"Finally, we consider the algorithm developed to highlight the principal variation (PV)\n"
+"in the models above.\n"
+"\n"
+"AGA\n"
+"AGB\n"
+"AG\n"
+"AHA\n"
+"AHB\n"
+"AH\n"
+"A\n"
+"BGA\n"
+"BGB\n"
+"BG\n"
+"BHA\n"
+"BHB\n"
+"BH\n"
+"B\n"
+"\n"
+"To calculate the PV we need to asterisk* each node\n"
+"which is determined to be the 'best move so far' in one of these lists as\n"
+"the minimax algorithm runs. Sargon itself doesn't explicitly calculate the PV, it just\n"
+"concerns itself with calculating the best move (it was a commercial game,\n"
+"not a modern chess engine). But by understanding its tree structure and\n"
+"minimax algorithm, we can calculate the PV by saving the 'best so far'\n"
+"nodes as Sargon encounters them in an ordered list external to Sargon, and\n"
+"then working backwards once Sargon has finished.\n"
+"\n"
+"In the diagrams, lists of moves available in one position are represented\n"
+"by vertical lines, for example moves in position AG are represented by the\n"
+"vertical line AGA-AGB. We expect minimax to asterisk the first move in each\n"
+"of these vertical lists no matter how bad it might be, since it is just\n"
+"going through the list looking for the highest scoring move. So in this\n"
+"simple 2-2-2 structure we expect at least 7 nodes to *always* be asterisked;\n"
+"\n"
+"AGA *\n"
+"AGB\n"
+"AG *\n"
+"AHA *\n"
+"AHB\n"
+"AH\n"
+"A *\n"
+"BGA *\n"
+"BGB\n"
+"BG *\n"
+"BHA *\n"
+"BHB\n"
+"BH\n"
+"B\n"
+"\n"
+"(Actually Sargon performs an optimisation that reduces the number of\n"
+"asterisked nodes in practice - for example it knows that BGA cannot\n"
+"be part of the PV unless BGA scores better than A*, so it doesn't\n"
+"asterisk it unless it does. But this doesn't affect our reasoning here\n"
+"and can be ignored as an optimization detail).\n"
+"\n"
+"We calculate the PV by marking (or asterisking) the positive 'best move so\n"
+"far' decisions and working backwards. If the minimum\n"
+"7 nodes are asterisked, then the PV is A,AG,AGA. Why? A because B was not\n"
+"better than A (wasn't asterisked), AG because AH wsn't better than AG (wasn't\n"
+"asterisked), AGA because AHA wasn't better than AGA (wasn't asterisked).\n"
+"\n"
+"The PV algorithm is not hard to discern; Work backwards from the end of the\n"
+"list of asterisked nodes. Find the last level one node to be asterisked (it's\n"
+"A* because B wasn't asterisked). Continue to work backwards from that point\n"
+"looking for a level two asterisked node (it's AG* because AH wasn't\n"
+"asterisked). During that search we were only looking for level two asterisked\n"
+"nodes, so we quite rightly skipped over the level three asterisked AHA* node.\n"
+"The AHA* node lost it's chance to be part of the PV when AH did not trump AG\n"
+"and get an asterisk. We're on the home stretch now, continue working\n"
+"backwards from AG* looking for a level three asterisked node, and find it in\n"
+"AGA*. So solution is A,AG,AGA.\n"
+"\n"
+"Diagramming it;\n"
+"\n"
+"AGA *   <---- 3\n"
+"AGB\n"
+"AG *    <---- 2\n"
+"AHA *\n"
+"AHB\n"
+"AH\n"
+"A *     <---- 1\n"
+"BGA *\n"
+"BGB\n"
+"BG *\n"
+"BHA *\n"
+"BHB\n"
+"BH\n"
+"B\n"
+"\n"
+"\n"
+"Summarising the PV algorithm is;\n"
+"\n"
+"Collect a list of nodes representing all positive 'best move so far' decisions\n"
+"Define an initially empty list PV\n"
+"Set N = 1\n"
+"Scan the best so far node list once in reverse order\n"
+"If a scanned node has level equal to N, append it to PV and increment N\n"
+"\n"
+"Another example;\n"
+"\n"
+"AGA *   <---- 3\n"
+"AGB\n"
+"AG *    <---- 2\n"
+"AHA *\n"
+"AHB\n"
+"AH\n"
+"A *     <---- 1\n"
+"BGA *\n"
+"BGB *\n"
+"BG *\n"
+"BHA *\n"
+"BHB *\n"
+"BH *\n"
+"B\n"
+"\n"
+"This also generates PV = A,AG,AGA. Although there is a lot more activity on the\n"
+"B branch of the tree, (BGB trumps BGA, BHB trumps BHA, BH trumps BG) none of this\n"
+"affects the PV because B fails to trump A and so the PV algorithm rightfully skips\n"
+"the whole B branch searching for A* when N=1.\n"
+"\n"
+"One final example, letting the B branch have a go;\n"
+"\n"
+"AGA *\n"
+"AGB\n"
+"AG *\n"
+"AHA *\n"
+"AHB *\n"
+"AH *\n"
+"A *\n"
+"BGA *\n"
+"BGB *   <---- 3\n"
+"BG *    <---- 2\n"
+"BHA *\n"
+"BHB *\n"
+"BH\n"
+"B *     <---- 1\n"
+"\n"
+"This time there's a lot of activity on both branches. In fact almost all the nodes\n"
+"are asterisked. B trumps A. But BH does not trump BG, so it's B,BG. Finally BGB\n"
+"does trump BGA so PV = B,BG,BGB. This time the PV algorithm skips the whole A\n"
+"branch because the algorithm is futilely searching for a level N=4 node as it scans\n"
+"backward through the A items in the list. Of course a simple optimisation could\n"
+"prevent that wasted effort if necessary.\n"
+"\n"
+"Fortunately none of this is effected in the slightest by Alpha-Beta optimisation,\n"
+"which just filters out nodes that were never going to be part of the PV anyway.\n"
+"\n";
 
 
 // Calculate a short string key to represent the moves played
@@ -809,11 +963,10 @@ static Example *running_example;
 void sargon_minimax_main()
 {
     // Print the introduction
-    printf( "%s\n", intro.c_str() );
+    printf( "%s\n", introduction_txt.c_str() );
 
     // Print big picture graphics
-    for( std::string s: big_picture )
-        printf( "%s\n", s.c_str() );
+    printf( "%s\n", big_picture_txt.c_str() );
 
     // Print explanation of the annotation
     printf( "\nIn the examples below the lines are annotated as follows;\n"
