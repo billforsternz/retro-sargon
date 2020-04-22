@@ -150,6 +150,34 @@ int main( int argc, char *argv[] )
 {
     std::string filename_base( argv[0] );
     logfile_name = filename_base + "-log.txt";
+#ifdef _DEBUG
+    depth_option = 5;
+#if 1 // preserve something that definitely fails, before embarking on mods
+    static const char *test_sequence[] =
+    {
+        "uci\n",
+        "isready\n",
+        "position startpos moves c2c4 e7e5 g2g3 b8c6 b1c3 g8f6 g1f3 e5e4 f3h4 f8c5 f1g2 g7g5 d2d4 g5h4 d4c5 h4g3 h2g3 d8e7 c3d5 f6d5 c4d5 c6e5 d5d6 c7d6 c5d6 e7e6 g2e4 f7f5 h1h6 e5g6 e4d5 e6e5 d1d3 e8f8 h6h5 e5d6 h5f5 f8g7 f5f7\n",
+        "go wtime 179297 btime 96328 winc 0 binc 0\n",
+        "position startpos moves c2c4 e7e5 g2g3 b8c6 b1c3 g8f6 g1f3 e5e4 f3h4 f8c5 f1g2 g7g5 d2d4 g5h4 d4c5 h4g3 h2g3 d8e7 c3d5 f6d5 c4d5 c6e5 d5d6 c7d6 c5d6 e7e6 g2e4 f7f5 h1h6 e5g6 e4d5 e6e5 d1d3 e8f8 h6h5 e5d6 h5f5 f8g7 f5f7 g7g8 f7d7\n",
+        "go wtime 179297 btime 84161 winc 0 binc 0\n",
+        "position startpos moves c2c4 e7e5 g2g3 b8c6 b1c3 g8f6 g1f3 e5e4 f3h4 f8c5 f1g2 g7g5 d2d4 g5h4 d4c5 h4g3 h2g3 d8e7 c3d5 f6d5 c4d5 c6e5 d5d6 c7d6 c5d6 e7e6 g2e4 f7f5 h1h6 e5g6 e4d5 e6e5 d1d3 e8f8 h6h5 e5d6 h5f5 f8g7 f5f7 g7g8 f7d7 g8f8 d3f5\n",
+        "go wtime 179177 btime 82213 winc 0 binc 0\n",
+        "ucinewgame\n",
+        "isready\n",
+        "position startpos\n",
+        "go wtime 300000 btime 300000 winc 0 binc 0\n"
+    };
+#endif
+    for( int i=0; i<sizeof(test_sequence)/sizeof(test_sequence[0]); i++ )
+    {
+        std::string s(test_sequence[i]);
+        util::rtrim(s);
+        log( "cmd>%s\n", s.c_str() );
+        process(s);
+    }
+    return 0;
+#endif
     std::thread first(read_stdin);
     std::thread second(write_stdout);
     std::thread third(timer_thread);
@@ -271,14 +299,6 @@ static void read_stdin()
         "stop\n",
         //"quit\n"
     };
-    for( int i=0; i<sizeof(test_sequence)/sizeof(test_sequence[0]); i++ )
-    {
-        std::string s(test_sequence[i]);
-        util::rtrim(s);
-        async_queue.enqueue(s);
-        if( s == "quit" )
-            quit = true;
-    }
 #endif
     while(!quit)
     {
@@ -420,6 +440,7 @@ static std::string cmd_go( const std::vector<std::string> &fields )
 {
     stop_rsp = "";
     the_pv.clear();
+    provisional.clear();
     base_time = elapsed_milliseconds();
     total_callbacks = 0;
     bestmove_callbacks = 0;
@@ -469,6 +490,7 @@ static void cmd_go_infinite()
     int plymax=3;
     bool aborted = false;
     the_pv.clear();
+    provisional.clear();
     base_time = elapsed_milliseconds();
     total_callbacks = 0;
     bestmove_callbacks = 0;
@@ -503,7 +525,7 @@ static void cmd_position( const std::string &whole_cmd_line, const std::vector<s
     bool position_changed = true;
 
     // Get base starting position
-    thc::ChessEngine tmp;
+    thc::ChessRules tmp;
     the_position = tmp;    //init
     bool look_for_moves = false;
     if( fields.size() > 2 && fields[1]=="fen" )
@@ -519,7 +541,7 @@ static void cmd_position( const std::string &whole_cmd_line, const std::vector<s
     }
     else if( fields.size() > 1 && fields[1]=="startpos" )
     {
-        thc::ChessEngine tmp;
+        thc::ChessRules tmp;
         the_position = tmp;    //init
         look_for_moves = true;
     }
@@ -936,6 +958,24 @@ static void BuildPV( PV &pv )
                 if( !legal )
                 {
                     log( "Unexpected illegal move=%s, Position=%s\n", buf, cr.ToDebugStr().c_str() );
+                    log( "Extra info: Starting position leading to unexpected illegal move FEN=%s, position=\n%s\n", the_position.ForsythPublish().c_str(), the_position.ToDebugStr().c_str() );
+                    std::string the_moves = "Moves leading to unexpected illegal move";
+                    for( int j=0; j<=i; j++ )
+                    {
+                        NODE *q = &nodes_pv[j];
+                        thc::Square qsrc, qdst;
+                        sargon_export_square( q->from, qsrc );
+                        sargon_export_square( q->to, qdst );
+                        char buff[5];
+                        buff[0] = thc::get_file(qsrc);
+                        buff[1] = thc::get_rank(qsrc);
+                        buff[2] = thc::get_file(qdst);
+                        buff[3] = thc::get_rank(qdst);
+                        buff[4] = '\0';
+                        the_moves += " ";
+                        the_moves += std::string(buff);
+                    }
+                    log( "Extra info: %s\n", the_moves.c_str() );
                     break;
                 }
                 else
