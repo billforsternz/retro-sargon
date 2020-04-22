@@ -40,7 +40,7 @@ int main( int argc, const char *argv[] )
 #ifdef _DEBUG
     const char *test_args[] =
     {
-        "Release/sargon-tests.exe",
+        "Debug/sargon-tests.exe",
         "p",
         "-1"
     };
@@ -269,7 +269,16 @@ struct TEST
 bool sargon_position_tests( bool quiet, int comprehensive )
 {
     bool ok = true;
-    printf( "* Known position tests\n" );
+
+    // A little test of some of our internal machinery
+    thc::ChessPosition cp, cp2;
+    std::string en_passant_fen1 = "r4rk1/pb1pq1pp/5p2/2ppP3/5P2/2Q5/PPP3PP/2KR1B1R w - c6 0 15";
+    cp.Forsyth( en_passant_fen1.c_str() );   // en passant provides a good workout on import and export
+    sargon_import_position(cp);
+    sargon_export_position(cp2);
+    std::string en_passant_fen2 = cp2.ForsythPublish();
+    if( en_passant_fen2 != en_passant_fen1 )
+        printf( "Unexpected internal event, expected en_passant_fen2=%s  to equal en_passant_fen1=%s\n", en_passant_fen2.c_str(), en_passant_fen1.c_str() );
 
     /*
 
@@ -307,8 +316,23 @@ bool sargon_position_tests( bool quiet, int comprehensive )
 
     static TEST tests[]=
     {
-        // From a game, expect castling
-        //{ "2kr1b1r/1ppq2pp/p1n1bp2/3p4/3Pp2B/2N1P3/PPP1NPPP/R2QK2R w KQ - 2 12", 5, "e1g1" },
+        // This was a real problem - plymax=3/5 generates c7-c5 which is completely illegal - please explain
+        // This was a real problem - plymax=1/4 generates d7-d6 also completely illegal (although at least a legal black move!)
+        // This was a real problem - plymax=2 generates f6-e5 also completely illegal (although at least a legal black move!)
+        { "r4rk1/pb1pq1pp/5p2/2ppP3/5P2/2Q5/PPP3PP/2KR1B1R w - c6 0 15", 2, "c3g3" },
+            // Now fixed. The problem was the en-passant target square. To cope with that
+            //  sargon_import_position() was rewinding one half move and trying to play the
+            //  move c7-c5, but api_ROYLTY hadn't been called, and so Sargon didn't know
+            //  where the Black king was, and it was rejecting c7-c7 as a legal move
+            //  because it thought Black was in check, leaving Sargon's state still with
+            //  Black to move. Solution: Incorporate an api_ROYLTY call into
+            //  sargon_import_position() 
+
+        // A problem position after testing with Arena (but works okay here)
+        { "r1b3kr/pp1R3p/3q2n1/3B4/8/3Q2P1/PP2PP2/R1B1K3 b Q - 0 21", 5, "g8f8" },
+
+        // This preceding position works okay when testing with Arena
+        { "r1b4r/pp1p1Rkp/3q2n1/3B4/8/3Q2P1/PP2PP2/R1B1K3 b Q - 2 20", 5, "g7g8" },
 
         // Initial position, book move
         { "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 5, "d2d4" },
@@ -393,6 +417,7 @@ bool sargon_position_tests( bool quiet, int comprehensive )
         { "2rq1r1k/3npp1p/3p1n1Q/pp1P2N1/8/2P4P/1P4P1/R4R1K w - - 0 1", 7, "f1f6" }
     };
 
+    printf( "* Known position tests\n" );
     int nbr_tests = sizeof(tests)/sizeof(tests[0]);
     int nbr_tests_to_run = nbr_tests;
     if( comprehensive < 3 )
