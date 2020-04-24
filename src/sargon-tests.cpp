@@ -314,8 +314,29 @@ bool sargon_position_tests( bool quiet, int comprehensive )
 
     */
 
+    printf( "* Known position tests\n" );
     static TEST tests[]=
     {
+        // Interesting position, depth 5 why does Sargon think it's so favourable?
+        // Sargon 1978 -5.05 (depth 5) 20...Kd8 21.Bb2 e6 22.Nh2 exf5
+        // 1r2kb1r/2pbpqp1/p1p2p2/2P2P2/2PP2P1/5N2/P3Q3/R1B2RK1 b k - 0 20
+        //   -- leaf position --> 1r1k1b1r/2pb1qp1/p1p2p2/2P2p2/2PP2P1/8/PB2Q2N/R4RK1 w - - 0 23
+        // Used this position to investigate and fix BUG_EXTRA_PLY_RESIZE after which the eval
+        // is the more sensible 0.75. The bug didn't effect minimax etc. the line, Sargon's
+        // internal eval, and the PV was fine, but the eval presented was borked
+        { "1r2kb1r/2pbpqp1/p1p2p2/2P2P2/2PP2P1/5N2/P3Q3/R1B2RK1 b k - 0 20", 5, "e8d8" },
+
+        // Same position reversed, same line different eval
+        // Sargon 1978 1.65 (depth 5) 20.Kd1 Bb7 21.e3 Nh7 22.exf4
+        // r1b2rk1/p3q3/5n2/2pp2p1/2p2p2/P1P2P2/2PBPQP1/1R2KB1R w K - 0 20
+        //  -- leaf position --> r4rk1/pb2q2n/8/2pp2p1/2p2P2/P1P2P2/2PB1QP1/1R1K1B1R b - - 0 22
+        // Similarly used this position to investigate and fix BUG_EXTRA_PLY_RESIZE after
+        // the fix the correct, expected negated eval of -0.75 is reported by the engine.
+        // Keep the two positions because it is a nice check that the calculation returns
+        // the same result, despite the moves being generated in totally different orders
+        // etc.
+        { "r1b2rk1/p3q3/5n2/2pp2p1/2p2p2/P1P2P2/2PBPQP1/1R2KB1R w K - 0 20", 5, "e1d1" },
+
         // This was a real problem - plymax=3/5 generates c7-c5 which is completely illegal - please explain
         // This was a real problem - plymax=1/4 generates d7-d6 also completely illegal (although at least a legal black move!)
         // This was a real problem - plymax=2 generates f6-e5 also completely illegal (although at least a legal black move!)
@@ -323,7 +344,7 @@ bool sargon_position_tests( bool quiet, int comprehensive )
             // Now fixed. The problem was the en-passant target square. To cope with that
             //  sargon_import_position() was rewinding one half move and trying to play the
             //  move c7-c5, but api_ROYLTY hadn't been called, and so Sargon didn't know
-            //  where the Black king was, and it was rejecting c7-c7 as a legal move
+            //  where the Black king was, and it was rejecting c7-c5 as an illegal move
             //  because it thought Black was in check, leaving Sargon's state still with
             //  Black to move. Solution: Incorporate an api_ROYLTY call into
             //  sargon_import_position() 
@@ -417,7 +438,81 @@ bool sargon_position_tests( bool quiet, int comprehensive )
         { "2rq1r1k/3npp1p/3p1n1Q/pp1P2N1/8/2P4P/1P4P1/R4R1K w - - 0 1", 7, "f1f6" }
     };
 
-    printf( "* Known position tests\n" );
+/*
+Test 1 of 2: PLYMAX=5:Position is
+Black to move
+.r.k.b.r
+..pb.qp.
+p.p..p..
+..P..p..
+..PP..P.
+........
+PB..Q..N
+R....RK.
+
+a) MATERIAL=0x00
+a) MATERIAL-PLY0=0x00
+a) MATERIAL LIMITED=0x00
+a) MOBILITY=0x0e
+a) MOBILITY - PLY0=0x04
+a) val=0x80
+ PASS
+
+Test 2 of 2: PLYMAX=5:Position is
+White to move
+r....rk.
+pb..q..n
+........
+..pp..p.
+..p..P..
+P.P..P..
+..PB.QP.
+.R.K.B.R
+
+b) MATERIAL=0x00
+b) MATERIAL-PLY0=0x00
+b) MATERIAL LIMITED=0x00
+b) MOBILITY=0xf2
+b) MOBILITY - PLY0=0xfc
+b) val=0x80
+ PASS
+ */
+
+// A little temporary aid to help us work out eval calculation when working on BUG_EXTRA_PLY_RESIZE
+#if 0
+    for( int i=0; i<2; i++ )
+    {
+        double fvalue = sargon_export_value( 0x80 );
+        int nbr = 5;
+
+        // Sargon's values are negated at alternate levels, transforming minimax to maximax.
+        //  If White to move, maximise conventional values at level 0,2,4
+        //  If Black to move, maximise negated values at level 0,2,4
+        bool odd = ((nbr-1)%2 == 1);
+        bool negate = (i==1 /*WhiteToPlay()*/ ? odd : !odd);
+        double centipawns = (negate ? -100.0 : 100.0) * fvalue;
+
+        char mv0 = peekb(MV0);      // net ply 0 material (pawn=2, knight/bishop=6, rook=10...)
+        mv0 = 0;
+        if( mv0 > 30 )              // Sargon limits this to +-30 (so 15 pawns) to avoid overflow
+            mv0 = 30;
+        if( mv0 < -30 )
+            mv0 = -30;
+        char bc0 = peekb(BC0);      // net ply 0 mobility
+        bc0 = (i==0 ? 4 : -4);
+        if( bc0 > 6 )               // also limited to +-6
+            bc0 = 6;
+        if( bc0 < -6 )
+            bc0 = -6;
+        int ply0 = mv0*4 + bc0;     // Material gets 4 times weight as mobility (4*30 + 6 = 126 doesn't overflow signed char)
+        double centipawns_ply0 = ply0 * 100.0/8.0;   // pawn is 2*4 = 8 -> 100 centipawns 
+
+        // So actual value is ply0 + score relative to ply0
+        int score = static_cast<int>(centipawns_ply0+centipawns);
+        printf( "score=%d, centipawns=%f, centipawns_ply0=%f\n", score, centipawns, centipawns_ply0 );
+    }
+#endif
+
     int nbr_tests = sizeof(tests)/sizeof(tests[0]);
     int nbr_tests_to_run = nbr_tests;
     if( comprehensive < 3 )

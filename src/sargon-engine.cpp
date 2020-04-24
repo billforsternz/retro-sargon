@@ -152,23 +152,15 @@ int main( int argc, char *argv[] )
     logfile_name = filename_base + "-log.txt";
 #ifdef _DEBUG
     depth_option = 5;
-#if 1 // preserve something that definitely fails, before embarking on mods
     static const char *test_sequence[] =
     {
         "uci\n",
         "isready\n",
-        "position startpos moves c2c4 e7e5 g2g3 b8c6 b1c3 g8f6 g1f3 e5e4 f3h4 f8c5 f1g2 g7g5 d2d4 g5h4 d4c5 h4g3 h2g3 d8e7 c3d5 f6d5 c4d5 c6e5 d5d6 c7d6 c5d6 e7e6 g2e4 f7f5 h1h6 e5g6 e4d5 e6e5 d1d3 e8f8 h6h5 e5d6 h5f5 f8g7 f5f7\n",
-        "go wtime 179297 btime 96328 winc 0 binc 0\n",
-        "position startpos moves c2c4 e7e5 g2g3 b8c6 b1c3 g8f6 g1f3 e5e4 f3h4 f8c5 f1g2 g7g5 d2d4 g5h4 d4c5 h4g3 h2g3 d8e7 c3d5 f6d5 c4d5 c6e5 d5d6 c7d6 c5d6 e7e6 g2e4 f7f5 h1h6 e5g6 e4d5 e6e5 d1d3 e8f8 h6h5 e5d6 h5f5 f8g7 f5f7 g7g8 f7d7\n",
-        "go wtime 179297 btime 84161 winc 0 binc 0\n",
-        "position startpos moves c2c4 e7e5 g2g3 b8c6 b1c3 g8f6 g1f3 e5e4 f3h4 f8c5 f1g2 g7g5 d2d4 g5h4 d4c5 h4g3 h2g3 d8e7 c3d5 f6d5 c4d5 c6e5 d5d6 c7d6 c5d6 e7e6 g2e4 f7f5 h1h6 e5g6 e4d5 e6e5 d1d3 e8f8 h6h5 e5d6 h5f5 f8g7 f5f7 g7g8 f7d7 g8f8 d3f5\n",
-        "go wtime 179177 btime 82213 winc 0 binc 0\n",
-        "ucinewgame\n",
-        "isready\n",
-        "position startpos\n",
-        "go wtime 300000 btime 300000 winc 0 binc 0\n"
+        "position fen 1r2kb1r/2pbpqp1/p1p2p2/2P2P2/2PP2P1/5N2/P3Q3/R1B2RK1 b k - 0 20\n",
+        "go\n",
+        "position fen r1b2rk1/p3q3/5n2/2pp2p1/2p2p2/P1P2P2/2PBPQP1/1R2KB1R w K - 0 20\n",
+        "go\n"
     };
-#endif
     for( int i=0; i<sizeof(test_sequence)/sizeof(test_sequence[0]); i++ )
     {
         std::string s(test_sequence[i]);
@@ -738,9 +730,9 @@ static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsign
 {
     log( "Input ms_time=%d, ms_inc=%d\n", ms_time, ms_inc );
     static int plymax_target;
-    const unsigned long LO =50;
-    const unsigned long MED=15;
-    const unsigned long HI =8;
+    const unsigned long LO =100;
+    const unsigned long MED=30;
+    const unsigned long HI =16;
     unsigned long ms_lo  = ms_time / LO;
     unsigned long ms_med = ms_time / MED;
     unsigned long ms_hi  = ms_time / HI;
@@ -936,7 +928,10 @@ static void BuildPV( PV &pv )
             thc::Square sq = (cr.WhiteToPlay() ? cr.wking_square : cr.bking_square);
             bool in_check = cr.AttackedPiece(sq);
             if( !in_check )
+            {
+                nodes_pv.resize(i);  // Called this BUG_EXTRA_PLY_RESIZE in the git commit message
                 break;
+            }
         }
         NODE *p = &nodes_pv[i];
         thc::Square src;
@@ -986,6 +981,10 @@ static void BuildPV( PV &pv )
             }
         }
     }
+
+    // Note that nodes_pv might have been resized by in_check test above, so
+    //  recalculate nbr (fixing BUG_EXTRA_PLY_RESIZE)
+    nbr = nodes_pv.size();
     pv.depth = plymax;
     double fvalue = sargon_export_value( nodes_pv[nbr-1].value );
 
@@ -1047,40 +1046,94 @@ extern "C" {
         if( 0 == strcmp(msg,"MATERIAL") )
         {
             sargon_export_position(cp);
-            log( "Position is %s\n", cp.ToDebugStr().c_str() );
-            log( "MATERIAL=0x%02x\n", al );
+            std::string s = cp.ForsythPublish();
+            s = s.substr(0,51);
+            bool a = (s== "1r1k1b1r/2pb1qp1/p1p2p2/2P2p2/2PP2P1/8/PB2Q2N/R4RK1");
+            bool b = (s== "r4rk1/pb2q2n/8/2pp2p1/2p2P2/P1P2P2/2PB1QP1/1R1K1B1R");
+            if( a || b )
+            {
+                log( "Position is %s\n", cp.ToDebugStr().c_str() );
+                log( "%c) MATERIAL=0x%02x\n", a?'a':'b', al );
+            }
         }
-        else if( 0 == strcmp(msg,"SUM") )
+/*        else if( 0 == strcmp(msg,"SUM") )
         {
             char val = reg_eax & 0xff;
             sargon_export_position(cp);
             log( "Adding material in loop, piece=%d\n", val );
-        }
+        }  */
         else if( 0 == strcmp(msg,"MATERIAL - PLY0") )
         {
-            log( "MATERIAL-PLY0=0x%02x\n", al );
+            sargon_export_position(cp);
+            std::string s = cp.ForsythPublish();
+            s = s.substr(0,51);
+            bool a = (s== "1r1k1b1r/2pb1qp1/p1p2p2/2P2p2/2PP2P1/8/PB2Q2N/R4RK1");
+            bool b = (s== "r4rk1/pb2q2n/8/2pp2p1/2p2P2/P1P2P2/2PB1QP1/1R1K1B1R");
+            if( a || b )
+            {
+                log( "%c) MATERIAL-PLY0=0x%02x\n", a?'a':'b', al );
+            }
         }
         else if( 0 == strcmp(msg,"MATERIAL LIMITED") )
         {
-            log( "MATERIAL LIMITED=0x%02x\n", al );
+            sargon_export_position(cp);
+            std::string s = cp.ForsythPublish();
+            s = s.substr(0,51);
+            bool a = (s== "1r1k1b1r/2pb1qp1/p1p2p2/2P2p2/2PP2P1/8/PB2Q2N/R4RK1");
+            bool b = (s== "r4rk1/pb2q2n/8/2pp2p1/2p2P2/P1P2P2/2PB1QP1/1R1K1B1R");
+            if( a || b )
+            {
+                log( "%c) MATERIAL LIMITED=0x%02x\n", a?'a':'b',al );
+            }
         }
         else if( 0 == strcmp(msg,"MOBILITY") )
         {
-            log( "MOBILITY=0x%02x\n", al );
+            sargon_export_position(cp);
+            std::string s = cp.ForsythPublish();
+            s = s.substr(0,51);
+            bool a = (s== "1r1k1b1r/2pb1qp1/p1p2p2/2P2p2/2PP2P1/8/PB2Q2N/R4RK1");
+            bool b = (s== "r4rk1/pb2q2n/8/2pp2p1/2p2P2/P1P2P2/2PB1QP1/1R1K1B1R");
+            if( a || b )
+            {
+                log( "%c) MOBILITY=0x%02x\n", a?'a':'b',al );
+            }
         }
         else if( 0 == strcmp(msg,"MOBILITY - PLY0") )
         {
-            log( "MOBILITY - PLY0=0x%02x\n", al );
+            sargon_export_position(cp);
+            std::string s = cp.ForsythPublish();
+            s = s.substr(0,51);
+            bool a = (s== "1r1k1b1r/2pb1qp1/p1p2p2/2P2p2/2PP2P1/8/PB2Q2N/R4RK1");
+            bool b = (s== "r4rk1/pb2q2n/8/2pp2p1/2p2P2/P1P2P2/2PB1QP1/1R1K1B1R");
+            if( a || b )
+            {
+                log( "%c) MOBILITY - PLY0=0x%02x\n", a?'a':'b', al );
+            }
         }
         else if( 0 == strcmp(msg,"MOBILITY LIMITED") )
         {
-            log( "MOBILITY LIMITED=0x%02x\n", al );
+            sargon_export_position(cp);
+            std::string s = cp.ForsythPublish();
+            s = s.substr(0,51);
+            bool a = (s== "1r1k1b1r/2pb1qp1/p1p2p2/2P2p2/2PP2P1/8/PB2Q2N/R4RK1");
+            bool b = (s== "r4rk1/pb2q2n/8/2pp2p1/2p2P2/P1P2P2/2PB1QP1/1R1K1B1R");
+            if( a || b )
+            {
+                log( "%c) MOBILITY LIMITED=0x%02x\n", a?'a':'b', al );
+            }
         }
         else if( 0 == strcmp(msg,"end of POINTS()") )
         {
-            log( "val=0x%02x\n", al );
+            sargon_export_position(cp);
+            std::string s = cp.ForsythPublish();
+            s = s.substr(0,51);
+            bool a = (s== "1r1k1b1r/2pb1qp1/p1p2p2/2P2p2/2PP2P1/8/PB2Q2N/R4RK1");
+            bool b = (s== "r4rk1/pb2q2n/8/2pp2p1/2p2P2/P1P2P2/2PB1QP1/1R1K1B1R");
+            if( a || b )
+            {
+                log( "%c) val=0x%02x\n", a?'a':'b', al );
+            }
         }
-        else
 #endif
         if( 0 == strcmp(msg,"end of POINTS()") )
         {
@@ -1109,6 +1162,16 @@ extern "C" {
             nodes.push_back(n);
             if( nodes.size() > max_len_so_far )
                 max_len_so_far = nodes.size();
+            /*
+            sargon_export_position(cp);
+            std::string s = cp.ForsythPublish();
+            s = s.substr(0,52);
+            bool a = (s== "1r1k1b1r/2pb1qp1/p1p1pp2/2P2P2/2PP2P1/8/PB2Q2N/R4RK1");  // compared to above, after unmove()
+            bool b = (s== "r4rk1/pb2q2n/8/2pp2p1/2p2p2/P1P1PP2/2PB1QP1/1R1K1B1R");  // compared to above, after unmove()
+            if( a || b )
+            {
+                log( "%c) Yes! Best move=0x%02x from=%d, to=%d\n", a?'a':'b', value, from, to );
+            }  */
             if( level == 1 )
             {
                 BuildPV( provisional );
