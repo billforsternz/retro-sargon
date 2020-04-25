@@ -151,6 +151,18 @@ int main( int argc, char *argv[] )
     std::string filename_base( argv[0] );
     logfile_name = filename_base + "-log.txt";
 #ifdef _DEBUG
+#if 1
+    depth_option = 5;
+    static const char *test_sequence[] =
+    {
+        "uci\n",
+        "isready\n",
+        "position fen 7k/8/8/8/8/8/8/N6K w - - 0 1\n",   // an extra knight (+3.25 sensible)
+        "go\n",                                          // After fixing units per pawn from 10 to 8, now 4.00 (so something still wrong?) 
+        "position fen 7k/8/8/8/8/8/8/N5Kq w - - 0 1\n",  // an extra knight only after capturing queen (+1.05 ??)
+        "go\n"                                           // After fixing units per pawn from 10 to 8, now 3.00 (good)
+    };
+#else
     depth_option = 5;
     static const char *test_sequence[] =
     {
@@ -161,6 +173,7 @@ int main( int argc, char *argv[] )
         "position fen r1b2rk1/p3q3/5n2/2pp2p1/2p2p2/P1P2P2/2PBPQP1/1R2KB1R w K - 0 20\n",
         "go\n"
     };
+#endif
     for( int i=0; i<sizeof(test_sequence)/sizeof(test_sequence[0]); i++ )
     {
         std::string s(test_sequence[i]);
@@ -1040,20 +1053,22 @@ extern "C" {
         const unsigned char *code = (const unsigned char *)ret_addr;
         const char *msg = (const char *)(code+2);   // ASCIIZ text should come after that
         total_callbacks++;
-#if 0
-        thc::ChessPosition cp;
+#if 1
+        static bool position_of_interest;
         unsigned char al = reg_eax & 0xff;
         if( 0 == strcmp(msg,"MATERIAL") )
         {
+            thc::ChessPosition cp;
             sargon_export_position(cp);
             std::string s = cp.ForsythPublish();
-            s = s.substr(0,51);
-            bool a = (s== "1r1k1b1r/2pb1qp1/p1p2p2/2P2p2/2PP2P1/8/PB2Q2N/R4RK1");
-            bool b = (s== "r4rk1/pb2q2n/8/2pp2p1/2p2P2/P1P2P2/2PB1QP1/1R1K1B1R");
-            if( a || b )
+            size_t offset = s.find(' ');
+            if( offset != std::string::npos )
+                s = s.substr(0,offset);
+            position_of_interest = (s=="5k2/8/8/8/8/1N3K2/8/8");
+            if( position_of_interest )
             {
                 log( "Position is %s\n", cp.ToDebugStr().c_str() );
-                log( "%c) MATERIAL=0x%02x\n", a?'a':'b', al );
+                log( "MATERIAL=0x%02x\n", al );
             }
         }
 /*        else if( 0 == strcmp(msg,"SUM") )
@@ -1064,74 +1079,44 @@ extern "C" {
         }  */
         else if( 0 == strcmp(msg,"MATERIAL - PLY0") )
         {
-            sargon_export_position(cp);
-            std::string s = cp.ForsythPublish();
-            s = s.substr(0,51);
-            bool a = (s== "1r1k1b1r/2pb1qp1/p1p2p2/2P2p2/2PP2P1/8/PB2Q2N/R4RK1");
-            bool b = (s== "r4rk1/pb2q2n/8/2pp2p1/2p2P2/P1P2P2/2PB1QP1/1R1K1B1R");
-            if( a || b )
+            if( position_of_interest )
             {
-                log( "%c) MATERIAL-PLY0=0x%02x\n", a?'a':'b', al );
+                log( "MATERIAL-PLY0=0x%02x\n", al );
             }
         }
         else if( 0 == strcmp(msg,"MATERIAL LIMITED") )
         {
-            sargon_export_position(cp);
-            std::string s = cp.ForsythPublish();
-            s = s.substr(0,51);
-            bool a = (s== "1r1k1b1r/2pb1qp1/p1p2p2/2P2p2/2PP2P1/8/PB2Q2N/R4RK1");
-            bool b = (s== "r4rk1/pb2q2n/8/2pp2p1/2p2P2/P1P2P2/2PB1QP1/1R1K1B1R");
-            if( a || b )
+            if( position_of_interest )
             {
-                log( "%c) MATERIAL LIMITED=0x%02x\n", a?'a':'b',al );
+                log( "MATERIAL LIMITED=0x%02x\n", al );
             }
         }
         else if( 0 == strcmp(msg,"MOBILITY") )
         {
-            sargon_export_position(cp);
-            std::string s = cp.ForsythPublish();
-            s = s.substr(0,51);
-            bool a = (s== "1r1k1b1r/2pb1qp1/p1p2p2/2P2p2/2PP2P1/8/PB2Q2N/R4RK1");
-            bool b = (s== "r4rk1/pb2q2n/8/2pp2p1/2p2P2/P1P2P2/2PB1QP1/1R1K1B1R");
-            if( a || b )
+            if( position_of_interest )
             {
-                log( "%c) MOBILITY=0x%02x\n", a?'a':'b',al );
+                log( "MOBILITY=0x%02x\n", al );
             }
         }
         else if( 0 == strcmp(msg,"MOBILITY - PLY0") )
         {
-            sargon_export_position(cp);
-            std::string s = cp.ForsythPublish();
-            s = s.substr(0,51);
-            bool a = (s== "1r1k1b1r/2pb1qp1/p1p2p2/2P2p2/2PP2P1/8/PB2Q2N/R4RK1");
-            bool b = (s== "r4rk1/pb2q2n/8/2pp2p1/2p2P2/P1P2P2/2PB1QP1/1R1K1B1R");
-            if( a || b )
+            if( position_of_interest )
             {
-                log( "%c) MOBILITY - PLY0=0x%02x\n", a?'a':'b', al );
+                log( "MOBILITY - PLY0=0x%02x\n", al );
             }
         }
         else if( 0 == strcmp(msg,"MOBILITY LIMITED") )
         {
-            sargon_export_position(cp);
-            std::string s = cp.ForsythPublish();
-            s = s.substr(0,51);
-            bool a = (s== "1r1k1b1r/2pb1qp1/p1p2p2/2P2p2/2PP2P1/8/PB2Q2N/R4RK1");
-            bool b = (s== "r4rk1/pb2q2n/8/2pp2p1/2p2P2/P1P2P2/2PB1QP1/1R1K1B1R");
-            if( a || b )
+            if( position_of_interest )
             {
-                log( "%c) MOBILITY LIMITED=0x%02x\n", a?'a':'b', al );
+                log( "MOBILITY LIMITED=0x%02x\n", al );
             }
         }
         else if( 0 == strcmp(msg,"end of POINTS()") )
         {
-            sargon_export_position(cp);
-            std::string s = cp.ForsythPublish();
-            s = s.substr(0,51);
-            bool a = (s== "1r1k1b1r/2pb1qp1/p1p2p2/2P2p2/2PP2P1/8/PB2Q2N/R4RK1");
-            bool b = (s== "r4rk1/pb2q2n/8/2pp2p1/2p2P2/P1P2P2/2PB1QP1/1R1K1B1R");
-            if( a || b )
+            if( position_of_interest )
             {
-                log( "%c) val=0x%02x\n", a?'a':'b', al );
+                log( "val=0x%02x\n", al );
             }
         }
 #endif
@@ -1162,21 +1147,15 @@ extern "C" {
             nodes.push_back(n);
             if( nodes.size() > max_len_so_far )
                 max_len_so_far = nodes.size();
-            /*
-            sargon_export_position(cp);
-            std::string s = cp.ForsythPublish();
-            s = s.substr(0,52);
-            bool a = (s== "1r1k1b1r/2pb1qp1/p1p1pp2/2P2P2/2PP2P1/8/PB2Q2N/R4RK1");  // compared to above, after unmove()
-            bool b = (s== "r4rk1/pb2q2n/8/2pp2p1/2p2p2/P1P1PP2/2PB1QP1/1R1K1B1R");  // compared to above, after unmove()
-            if( a || b )
+            if( position_of_interest )
             {
-                log( "%c) Yes! Best move=0x%02x from=%d, to=%d\n", a?'a':'b', value, from, to );
-            }  */
+                log( "Yes! Best move=0x%02x from=%d, to=%d\n", value, from, to );
+            }   
             if( level == 1 )
             {
                 BuildPV( provisional );
                 nodes.clear();
-            }
+            } 
         }
 
         // Abort RunSargon() if new event in queue (and it has found something)

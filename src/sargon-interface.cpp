@@ -13,44 +13,116 @@
 // Write chess position into Sargon (inner-most part)
 static void sargon_import_position_inner( const thc::ChessPosition &cp );
 
-// Value seems to be 128 = 0.0
-// 128-30 = 3.0
-// 128+30 = -3.0
-// 128-128 = 0 = -12.8
+// Convert Sargon value to pawns
 double sargon_export_value( unsigned int value )
+
+// Basic Sargon evaluation works as follows;
+//
+//   Evaluation = Relative Material + Relative Mobility
+//   Dynamic range is -126 to +126 (to fit in one byte)
+//   Units correspond to 1/8 of a pawn of material or one extra move of mobility
+//   Material difference is limited to +/- 15 pawns (+/- 120 units)
+//   Mobility difference is limited to +/- 6 moves (+/- 6 units)
+//   The limits combine to enforce the -126 to +126 limit
+//
+//   Conventional signed arithmetic maps onto a byte as;
+//     0x80=-128, 0x81=-127 ... 0xff=-1, 0x00=0, 0x01=1 ... 0x7e=126, 0x7f=127
+//
+//   Sargon scoring points instead use the convention;
+//    0xff=-127, 0xfe=-126 ... 0x81=-1, 0x80=0, 0x7f=1 ... 0x01=127, 0x00=128
+//
+//   I am not sure why this is so, it could be just that this method was more
+//   convenient or comfortable for the programmer - using a highly constrained
+//   one byte system adds to the potential confusion, and really whatever helps
+//   you get it done. One obvious possiblility that the Sargon system makes it
+//   very easy to compare one score to another with simple unsigned comparison.
+//
+//   A Dynamic range of -128 to +128, extending the limit on mobility difference
+//   to +/- 8 moves would be nice, except that this is actually 257 steps and
+//   breaks the one byte representation.
+//
+//   A Dynamic range of -127 to +127, extending the limit on mobility difference
+//   to +/- 7 moves doesn't have that fundamental problem. I don't know why the
+//   programmers didn't go that way. Maybe they just wanted to avoid the absolute
+//   bounds at both ends of the range for the sake of simplicity.
+//
+//   There are two levels of score relativity in Sargon's scoring. Both material
+//   and mobility is always measured relatively - material and mobility compared
+//   to the opponent. Additionally, ultimately the score is the difference (or
+//   delta) between this relative score in the start position and in the node
+//   that is being evaluated. For example, if Sargon  calculates that in the
+//   current position White is 5 pawns ahead, and that in the starting
+//   position White is 3 pawns ahead, it will score this position as +2 pawns
+//   (or 16 units)
+//
+//   Interally Sargon uses Pawn=2, Bishop/Knight=6, Rook=10, Queen=18 and
+//   then multiplies by 4 to get units. I don't know why they didn't use the
+//   equivalent and traditional 1/3/3/5/9 system and multiply by 8. One possibility
+//   is that the method used allows a simple change to Rook = 4.5 or Bishop = 3.5
+//   (say)
+//
+
 {
-    double m = -3.0 / 30.0;
-    double c = 12.8;
+//           y |
+//             |           From schoolboy algebra
+//         +16 *           y = m*x + c
+//             | \         m = slope = delta y / delta x = -32/256 = -1/8
+//             |  \        c = y intercept = +16
+//             |   \    
+//           0 +----*----+----
+//             0   128  256  x
+//             |       \
+//             |        \
+//         -16 +         *
+//             |          \  // don't end comment with slash = line continuation!
+    double m = -1.0/8.0;
+    double c = 16.0;
     double y = m * value + c;
+        // check
+        // value = 0  -> +16
+        // value =128 -> -1/8 * 128 + 16 =  0
+        // value =256 ->  1/8 * 256 + 16 = -16
+        // value =88  -> -1/8 * 88  + 16 =  5
+        //       (88 is 40 units or 5 pawns north of 128=midpoint)
+        //              
     return y;
 }
 
-unsigned int sargon_import_value( double value )
+// Convert pawns to Sargon value
+unsigned int sargon_import_value( double pawns )
+//
+//           y |
+//             |           From schoolboy algebra
+//       * 256 +           y = m*x + c
+//        \    |           m = slope = delta y / delta x = -256/32 = -8
+//         \   |           c = y intercept = +128
+//          \  |
+//           \ |
+//            \|
+//         128 *        
+//             |\
+//             | \
+//             |  \
+//             |   \
+//             |    \
+//             |     \
+//     -+------+------*------
+//     -16     0     +16    x
 {
-    if( value < -12.6 )
-        value = -12.6;
-    if( value > 12.6 )
-        value = 12.6;
-    double m = -10.0;
+    if( pawns < -16 )
+        pawns = -16;
+    if( pawns > 16 )
+        pawns = 16;
+    double m = -8.0;
     double c = 128.0;
-    double y = m * value + c;
-    return static_cast<unsigned int>(y);
+    double y = m * pawns + c;
+    int val = static_cast<int>(y);
+    if( val > 128+126 )
+        val = 128+126;
+    if( val < 128-126 )
+        val = 128-126;
+    return static_cast<unsigned int>(val);
 }
-
-
-struct NODE2
-{
-    unsigned int level;
-    unsigned char from;
-    unsigned char to;
-    unsigned char flags;
-    unsigned char value;
-    NODE2() : level(0), from(0), to(0), flags(0), value(0) {}
-    NODE2( unsigned int l, unsigned char f, unsigned char t, unsigned char fs, unsigned char v ) : level(l), from(f), to(t), flags(fs), value(v) {}
-};
-
-static NODE2 pv[10];
-static std::vector< NODE2 > nodes;
 
 // Read a square value out of Sargon
 bool sargon_export_square( unsigned int sargon_square, thc::Square &sq )
@@ -257,7 +329,7 @@ void sargon_export_position( thc::ChessPosition &cp )
     }
 
     // This is a bit insane, but why not. Let's figure out the enpassant target square
-    //  if there is one. By default of course it's thc::SQUARE_INVALID
+    //  if there is one. By default of course Init() has set it to thc::SQUARE_INVALID
     unsigned int last_move_ptr = peekw(MLPTRJ);
     if( last_move_ptr )
     {

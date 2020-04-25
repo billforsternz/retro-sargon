@@ -690,9 +690,9 @@ public:
             {
                 case eval:
                     eval_key = prog.key;
-                    move_score = util::sprintf( "%.1f", sargon_export_value(prog.move_val) );
-                    float_value = (prog.alphabeta_compare_val==0 ? "MAX" : util::sprintf("%.1f",sargon_export_value(prog.alphabeta_compare_val)) ); // Show "MAX" instead of "12.8"
-                    neg_float_value = (prog.minimax_compare_val==0 ? "-MAX" : util::sprintf("%.1f",0.0-sargon_export_value(prog.minimax_compare_val)) ); // Show "-MAX" instead of "-12.8"
+                    move_score = util::sprintf( "%.3f", sargon_export_value(prog.move_val) );
+                    float_value = (prog.alphabeta_compare_val==0 ? "MAX" : util::sprintf("%.3f",sargon_export_value(prog.alphabeta_compare_val)) ); // Show "MAX" instead of "12.8"
+                    neg_float_value = (prog.minimax_compare_val==0 ? "-MAX" : util::sprintf("%.3f",0.0-sargon_export_value(prog.minimax_compare_val)) ); // Show "-MAX" instead of "-16.0"
                     alphabeta_mini_msg = util::sprintf( " [%s,%s] ", float_value.c_str(), neg_float_value.c_str() );
                     key = eval_key;
                     break;
@@ -803,19 +803,19 @@ static Model model1 =
     "There are no Alpha-Beta cutoffs, PV shows white correctly winning queen",
     {
         { "A"     , "1.Nxd3",                0.0  },
-        { "AG"    , "1.Nxd3 Qd6",            0.0  },
-        { "AGA"   , "1.Nxd3 Qd6 2.Ne1",      3.3  },    // White wins a bishop
+        { "AG"    , "1.Nxd3 Qd6",            0.0  },    // ** Note score granularity is 1/8 pawn
+        { "AGA"   , "1.Nxd3 Qd6 2.Ne1",      3.375},    // White wins a bishop
         { "AGB"   , "1.Nxd3 Qd6 2.Qb1",      3.0  },    // White wins a bishop
         { "AH"    , "1.Nxd3 Qg5",            0.0  },
-        { "AHA"   , "1.Nxd3 Qg5 2.Rxc7",     3.1  },    // White wins a bishop
-        { "AHB"   , "1.Nxd3 Qg5 2.Kh2",      3.2  },    // White wins a bishop
+        { "AHA"   , "1.Nxd3 Qg5 2.Rxc7",     3.125},    // White wins a bishop
+        { "AHB"   , "1.Nxd3 Qg5 2.Kh2",      3.25 },    // White wins a bishop
         { "B"     , "1.Ng6+",                0.0  },
         { "BG"    , "1.Ng6+ Kh7",            0.0  },
-        { "BGA"   , "1.Ng6+ Kh7 2.Nxe5",     9.2  },    // White wins a queen
+        { "BGA"   , "1.Ng6+ Kh7 2.Nxe5",     9.25 },    // White wins a queen
         { "BGB"   , "1.Ng6+ Kh7 2.Nxh4",     5.0  },    // White wins a rook
         { "BH"    , "1.Ng6+ Kg8",            0.0  },
         { "BHA"   , "1.Ng6+ Kg8 2.Nxe5",     9.0  },    // White wins a queen
-        { "BHB"   , "1.Ng6+ Kg8 2.Nxh4",     5.2  }     // White wins a rook
+        { "BHB"   , "1.Ng6+ Kg8 2.Nxh4",     5.25 }     // White wins a rook
     }
 };
 
@@ -882,17 +882,17 @@ static Model model4 =
     {
         { "A"     , "1.Nf5+",               0.0  },
         { "AG"    , "1.Nf5+ Kg8",           0.0  },
-        { "AGA"   , "1.Nf5+ Kg8 2.Nxh6+",   5.1  },    // White wins a rook
+        { "AGA"   , "1.Nf5+ Kg8 2.Nxh6+",   5.125},    // White wins a rook
         { "AGB"   , "1.Nf5+ Kg8 2.h3",      0.1  },    // equal(ish)
         { "AH"    , "1.Nf5+ Kh8",           0.0  },
         { "AHA"   , "1.Nf5+ Kh8 2.Rd8#",    12.0 },    // White gives mate
         { "AHB"   , "1.Nf5+ Kh8 2.Nxh6",    5.0  },    // White wins a rook
         { "B"     , "1.Ne6+",               0.0  },
         { "BG"    , "1.Ne6+ Kg8",           0.0  },
-        { "BGA"   , "1.Ne6+ Kg8 2.h3",      0.3  },    // equal(ish)
+        { "BGA"   , "1.Ne6+ Kg8 2.h3",      0.375},    // equal(ish)
         { "BGB"   , "1.Ne6+ Kg8 2.Rd8+",    0.5  },    // equal(ish)
         { "BH"    , "1.Ne6+ Kh8",           0.0  },
-        { "BHA"   , "1.Ne6+ Kh8 2.h3",      0.2  },    // equal(ish)
+        { "BHA"   , "1.Ne6+ Kh8 2.h3",      0.25 },    // equal(ish)
         { "BHB"   , "1.Ne6+ Kh8 2.Rd8#",    12.0 }     // White gives mate
     }
 };
@@ -912,18 +912,18 @@ static Model model5 =
     {
         { "A"     , "1.Nxd3",                0.0  },
         { "AG"    , "1.Nxd3 Qd6",            0.0  },
-        { "AGA"   , "1.Nxd3 Qd6 2.Ne1",      3.3  },    // White wins a bishop
+        { "AGA"   , "1.Nxd3 Qd6 2.Ne1",      3.375},    // White wins a bishop
         { "AGB"   , "1.Nxd3 Qd6 2.Qb1",      3.0  },    // White wins a bishop
         { "AH"    , "1.Nxd3 Qg5",            0.0  },
-        { "AHA"   , "1.Nxd3 Qg5 2.Rxc7",     3.1  },    // White wins a bishop
-        { "AHB"   , "1.Nxd3 Qg5 2.Kh2",      3.2  },    // White wins a bishop
+        { "AHA"   , "1.Nxd3 Qg5 2.Rxc7",     3.125},    // White wins a bishop
+        { "AHB"   , "1.Nxd3 Qg5 2.Kh2",      3.25 },    // White wins a bishop
         { "B"     , "1.Ng6+",                1.0  },
         { "BG"    , "1.Ng6+ Kh7",            0.0  },
-        { "BGA"   , "1.Ng6+ Kh7 2.Nxe5",     9.2  },    // White wins a queen
+        { "BGA"   , "1.Ng6+ Kh7 2.Nxe5",     9.25 },    // White wins a queen
         { "BGB"   , "1.Ng6+ Kh7 2.Nxh4",     5.0  },    // White wins a rook
         { "BH"    , "1.Ng6+ Kg8",            0.0  },
         { "BHA"   , "1.Ng6+ Kg8 2.Nxe5",     9.0  },    // White wins a queen
-        { "BHB"   , "1.Ng6+ Kg8 2.Nxh4",     5.2  }     // White wins a rook
+        { "BHB"   , "1.Ng6+ Kg8 2.Nxh4",     5.25 }     // White wins a rook
     }
 };
 
@@ -1011,69 +1011,69 @@ std::string model1_detailed_log =
 "Position 4, \"1.Nxd3 Qg5\" created in tree\n"
 "Position 5, \"1.Nxd3 Qd6 2.Ne1\" created in tree\n"
 "Eval (ply 3), 1.Nxd3 Qd6 2.Ne1\n"
-"No alpha beta cutoff because move value=3.3 < two lower ply value=MAX\n"
-"Best move because negated move value=-3.3 < one lower ply value=MAX\n"
+"No alpha beta cutoff because move value=3.375 < two lower ply value=MAX\n"
+"Best move because negated move value=-3.375 < one lower ply value=MAX\n"
 "(Confirming best move)\n"
 "Position 6, \"1.Nxd3 Qd6 2.Qb1\" created in tree\n"
 "Eval (ply 3), 1.Nxd3 Qd6 2.Qb1\n"
-"No alpha beta cutoff because move value=3.0 < two lower ply value=MAX\n"
-"Not best move because negated move value=-3.0 >= one lower ply value=-3.3\n"
+"No alpha beta cutoff because move value=3.000 < two lower ply value=MAX\n"
+"Not best move because negated move value=-3.000 >= one lower ply value=-3.375\n"
 "Eval (ply 2), 1.Nxd3 Qd6\n"
-"No alpha beta cutoff because move value=-3.3 < two lower ply value=MAX\n"
-"Best move because negated move value=3.3 < one lower ply value=MAX\n"
+"No alpha beta cutoff because move value=-3.375 < two lower ply value=MAX\n"
+"Best move because negated move value=3.375 < one lower ply value=MAX\n"
 "(Confirming best move)\n"
 "Position 7, \"1.Nxd3 Qg5 2.Rxc7\" created in tree\n"
 "Eval (ply 3), 1.Nxd3 Qg5 2.Rxc7\n"
-"No alpha beta cutoff because move value=3.1 < two lower ply value=3.3\n"
-"Best move because negated move value=-3.1 < one lower ply value=MAX\n"
+"No alpha beta cutoff because move value=3.125 < two lower ply value=3.375\n"
+"Best move because negated move value=-3.125 < one lower ply value=MAX\n"
 "(Confirming best move)\n"
 "Position 8, \"1.Nxd3 Qg5 2.Kh2\" created in tree\n"
 "Eval (ply 3), 1.Nxd3 Qg5 2.Kh2\n"
-"No alpha beta cutoff because move value=3.2 < two lower ply value=3.3\n"
-"Best move because negated move value=-3.2 < one lower ply value=-3.1\n"
+"No alpha beta cutoff because move value=3.250 < two lower ply value=3.375\n"
+"Best move because negated move value=-3.250 < one lower ply value=-3.125\n"
 "(Confirming best move)\n"
 "Eval (ply 2), 1.Nxd3 Qg5\n"
-"No alpha beta cutoff because move value=-3.2 < two lower ply value=MAX\n"
-"Best move because negated move value=3.2 < one lower ply value=3.3\n"
+"No alpha beta cutoff because move value=-3.250 < two lower ply value=MAX\n"
+"Best move because negated move value=3.250 < one lower ply value=3.375\n"
 "(Confirming best move)\n"
 "Eval (ply 1), 1.Nxd3\n"
-"No alpha beta cutoff because move value=3.2 < two lower ply value=MAX\n"
-"Best move because negated move value=-3.2 < one lower ply value=MAX\n"
+"No alpha beta cutoff because move value=3.250 < two lower ply value=MAX\n"
+"Best move because negated move value=-3.250 < one lower ply value=MAX\n"
 "(Confirming best move)\n"
 "Position 9, \"1.Ng6+ Kh7\" created in tree\n"
 "Position 10, \"1.Ng6+ Kg8\" created in tree\n"
 "Position 11, \"1.Ng6+ Kh7 2.Nxe5\" created in tree\n"
 "Eval (ply 3), 1.Ng6+ Kh7 2.Nxe5\n"
-"No alpha beta cutoff because move value=9.2 < two lower ply value=MAX\n"
-"Best move because negated move value=-9.2 < one lower ply value=-3.2\n"
+"No alpha beta cutoff because move value=9.250 < two lower ply value=MAX\n"
+"Best move because negated move value=-9.250 < one lower ply value=-3.250\n"
 "(Confirming best move)\n"
 "Position 12, \"1.Ng6+ Kh7 2.Nxh4\" created in tree\n"
 "Eval (ply 3), 1.Ng6+ Kh7 2.Nxh4\n"
-"No alpha beta cutoff because move value=5.0 < two lower ply value=MAX\n"
-"Not best move because negated move value=-5.0 >= one lower ply value=-9.2\n"
+"No alpha beta cutoff because move value=5.000 < two lower ply value=MAX\n"
+"Not best move because negated move value=-5.000 >= one lower ply value=-9.250\n"
 "Eval (ply 2), 1.Ng6+ Kh7\n"
-"No alpha beta cutoff because move value=-9.2 < two lower ply value=-3.2\n"
-"Best move because negated move value=9.2 < one lower ply value=MAX\n"
+"No alpha beta cutoff because move value=-9.250 < two lower ply value=-3.250\n"
+"Best move because negated move value=9.250 < one lower ply value=MAX\n"
 "(Confirming best move)\n"
 "Position 13, \"1.Ng6+ Kg8 2.Nxe5\" created in tree\n"
 "Eval (ply 3), 1.Ng6+ Kg8 2.Nxe5\n"
-"No alpha beta cutoff because move value=9.0 < two lower ply value=9.2\n"
-"Best move because negated move value=-9.0 < one lower ply value=-3.2\n"
+"No alpha beta cutoff because move value=9.000 < two lower ply value=9.250\n"
+"Best move because negated move value=-9.000 < one lower ply value=-3.250\n"
 "(Confirming best move)\n"
 "Position 14, \"1.Ng6+ Kg8 2.Nxh4\" created in tree\n"
 "Eval (ply 3), 1.Ng6+ Kg8 2.Nxh4\n"
-"No alpha beta cutoff because move value=5.2 < two lower ply value=9.2\n"
-"Not best move because negated move value=-5.2 >= one lower ply value=-9.0\n"
+"No alpha beta cutoff because move value=5.250 < two lower ply value=9.250\n"
+"Not best move because negated move value=-5.250 >= one lower ply value=-9.000\n"
 "Eval (ply 2), 1.Ng6+ Kg8\n"
-"No alpha beta cutoff because move value=-9.0 < two lower ply value=-3.2\n"
-"Best move because negated move value=9.0 < one lower ply value=9.2\n"
+"No alpha beta cutoff because move value=-9.000 < two lower ply value=-3.250\n"
+"Best move because negated move value=9.000 < one lower ply value=9.250\n"
 "(Confirming best move)\n"
 "Eval (ply 1), 1.Ng6+\n"
-"No alpha beta cutoff because move value=9.0 < two lower ply value=MAX\n"
-"Best move because negated move value=-9.0 < one lower ply value=-3.2\n"
+"No alpha beta cutoff because move value=9.000 < two lower ply value=MAX\n"
+"Best move because negated move value=-9.000 < one lower ply value=-3.250\n"
 "(Confirming best move)\n";
 
-static std::string model2_detailed_log =
+std::string model2_detailed_log =
 "Position 0, \"\" created in tree\n"
 "Position 1, \"1.Qg8+\" created in tree\n"
 "Position 2, \"1.Qa1\" created in tree\n"
@@ -1081,36 +1081,36 @@ static std::string model2_detailed_log =
 "Position 4, \"1.Qg8+ Rxg8\" created in tree\n"
 "Position 5, \"1.Qg8+ Nxg8 2.Nf7#\" created in tree\n"
 "Eval (ply 3), 1.Qg8+ Nxg8 2.Nf7#\n"
-"No alpha beta cutoff because move value=12.0 < two lower ply value=MAX\n"
-"Best move because negated move value=-12.0 < one lower ply value=MAX\n"
+"No alpha beta cutoff because move value=12.000 < two lower ply value=MAX\n"
+"Best move because negated move value=-12.000 < one lower ply value=MAX\n"
 "(Confirming best move)\n"
 "Position 6, \"1.Qg8+ Nxg8 2.Nxg8\" created in tree\n"
 "Eval (ply 3), 1.Qg8+ Nxg8 2.Nxg8\n"
-"No alpha beta cutoff because move value=-10.0 < two lower ply value=MAX\n"
-"Not best move because negated move value=10.0 >= one lower ply value=-12.0\n"
+"No alpha beta cutoff because move value=-10.000 < two lower ply value=MAX\n"
+"Not best move because negated move value=10.000 >= one lower ply value=-12.000\n"
 "Eval (ply 2), 1.Qg8+ Nxg8\n"
-"No alpha beta cutoff because move value=-12.0 < two lower ply value=MAX\n"
-"Best move because negated move value=12.0 < one lower ply value=MAX\n"
+"No alpha beta cutoff because move value=-12.000 < two lower ply value=MAX\n"
+"Best move because negated move value=12.000 < one lower ply value=MAX\n"
 "(Confirming best move)\n"
 "Position 7, \"1.Qg8+ Rxg8 2.Nf7#\" created in tree\n"
 "Eval (ply 3), 1.Qg8+ Rxg8 2.Nf7#\n"
-"Alpha beta cutoff because move value=12.0 >= two lower ply value=12.0\n"
+"Alpha beta cutoff because move value=12.000 >= two lower ply value=12.000\n"
 "Eval (ply 1), 1.Qg8+\n"
-"No alpha beta cutoff because move value=12.0 < two lower ply value=MAX\n"
-"Best move because negated move value=-12.0 < one lower ply value=MAX\n"
+"No alpha beta cutoff because move value=12.000 < two lower ply value=MAX\n"
+"Best move because negated move value=-12.000 < one lower ply value=MAX\n"
 "(Confirming best move)\n"
 "Position 9, \"1.Qa1 Rc6\" created in tree\n"
 "Position 10, \"1.Qa1 Ng8\" created in tree\n"
 "Position 11, \"1.Qa1 Rc6 2.Nf7+\" created in tree\n"
 "Eval (ply 3), 1.Qa1 Rc6 2.Nf7+\n"
-"No alpha beta cutoff because move value=0.0 < two lower ply value=MAX\n"
-"Not best move because negated move value=0.0 >= one lower ply value=-12.0\n"
+"No alpha beta cutoff because move value=0.000 < two lower ply value=MAX\n"
+"Not best move because negated move value=0.000 >= one lower ply value=-12.000\n"
 "Position 12, \"1.Qa1 Rc6 2.Ng4\" created in tree\n"
 "Eval (ply 3), 1.Qa1 Rc6 2.Ng4\n"
-"No alpha beta cutoff because move value=0.0 < two lower ply value=MAX\n"
-"Not best move because negated move value=0.0 >= one lower ply value=-12.0\n"
+"No alpha beta cutoff because move value=0.000 < two lower ply value=MAX\n"
+"Not best move because negated move value=0.000 >= one lower ply value=-12.000\n"
 "Eval (ply 2), 1.Qa1 Rc6\n"
-"Alpha beta cutoff because move value=-12.0 >= two lower ply value=-12.0\n";
+"Alpha beta cutoff because move value=-12.000 >= two lower ply value=-12.000\n";
 
 std::string model3_detailed_log =
 "Position 0, \"\" created in tree\n"
@@ -1120,45 +1120,45 @@ std::string model3_detailed_log =
 "Position 4, \"1.Qa1 Ng8\" created in tree\n"
 "Position 5, \"1.Qa1 Rc6 2.Nf7+\" created in tree\n"
 "Eval (ply 3), 1.Qa1 Rc6 2.Nf7+\n"
-"No alpha beta cutoff because move value=0.0 < two lower ply value=MAX\n"
-"Best move because negated move value=0.0 < one lower ply value=MAX\n"
+"No alpha beta cutoff because move value=0.000 < two lower ply value=MAX\n"
+"Best move because negated move value=0.000 < one lower ply value=MAX\n"
 "(Confirming best move)\n"
 "Position 6, \"1.Qa1 Rc6 2.Ng4\" created in tree\n"
 "Eval (ply 3), 1.Qa1 Rc6 2.Ng4\n"
-"No alpha beta cutoff because move value=0.0 < two lower ply value=MAX\n"
-"Not best move because negated move value=0.0 >= one lower ply value=0.0\n"
+"No alpha beta cutoff because move value=0.000 < two lower ply value=MAX\n"
+"Not best move because negated move value=0.000 >= one lower ply value=0.000\n"
 "Eval (ply 2), 1.Qa1 Rc6\n"
-"No alpha beta cutoff because move value=0.0 < two lower ply value=MAX\n"
-"Best move because negated move value=0.0 < one lower ply value=MAX\n"
+"No alpha beta cutoff because move value=0.000 < two lower ply value=MAX\n"
+"Best move because negated move value=0.000 < one lower ply value=MAX\n"
 "(Confirming best move)\n"
 "Position 7, \"1.Qa1 Ng8 2.Nf7#\" created in tree\n"
 "Eval (ply 3), 1.Qa1 Ng8 2.Nf7#\n"
-"Alpha beta cutoff because move value=12.0 >= two lower ply value=0.0\n"
+"Alpha beta cutoff because move value=12.000 >= two lower ply value=0.000\n"
 "Eval (ply 1), 1.Qa1\n"
-"No alpha beta cutoff because move value=0.0 < two lower ply value=MAX\n"
-"Best move because negated move value=0.0 < one lower ply value=MAX\n"
+"No alpha beta cutoff because move value=0.000 < two lower ply value=MAX\n"
+"Best move because negated move value=0.000 < one lower ply value=MAX\n"
 "(Confirming best move)\n"
 "Position 9, \"1.Qg8+ Nxg8\" created in tree\n"
 "Position 10, \"1.Qg8+ Rxg8\" created in tree\n"
 "Position 11, \"1.Qg8+ Nxg8 2.Nf7#\" created in tree\n"
 "Eval (ply 3), 1.Qg8+ Nxg8 2.Nf7#\n"
-"No alpha beta cutoff because move value=12.0 < two lower ply value=MAX\n"
-"Best move because negated move value=-12.0 < one lower ply value=0.0\n"
+"No alpha beta cutoff because move value=12.000 < two lower ply value=MAX\n"
+"Best move because negated move value=-12.000 < one lower ply value=0.000\n"
 "(Confirming best move)\n"
 "Position 12, \"1.Qg8+ Nxg8 2.Nxg8\" created in tree\n"
 "Eval (ply 3), 1.Qg8+ Nxg8 2.Nxg8\n"
-"No alpha beta cutoff because move value=-10.0 < two lower ply value=MAX\n"
-"Not best move because negated move value=10.0 >= one lower ply value=-12.0\n"
+"No alpha beta cutoff because move value=-10.000 < two lower ply value=MAX\n"
+"Not best move because negated move value=10.000 >= one lower ply value=-12.000\n"
 "Eval (ply 2), 1.Qg8+ Nxg8\n"
-"No alpha beta cutoff because move value=-12.0 < two lower ply value=0.0\n"
-"Best move because negated move value=12.0 < one lower ply value=MAX\n"
+"No alpha beta cutoff because move value=-12.000 < two lower ply value=0.000\n"
+"Best move because negated move value=12.000 < one lower ply value=MAX\n"
 "(Confirming best move)\n"
 "Position 13, \"1.Qg8+ Rxg8 2.Nf7#\" created in tree\n"
 "Eval (ply 3), 1.Qg8+ Rxg8 2.Nf7#\n"
-"Alpha beta cutoff because move value=12.0 >= two lower ply value=12.0\n"
+"Alpha beta cutoff because move value=12.000 >= two lower ply value=12.000\n"
 "Eval (ply 1), 1.Qg8+\n"
-"No alpha beta cutoff because move value=12.0 < two lower ply value=MAX\n"
-"Best move because negated move value=-12.0 < one lower ply value=0.0\n"
+"No alpha beta cutoff because move value=12.000 < two lower ply value=MAX\n"
+"Best move because negated move value=-12.000 < one lower ply value=0.000\n"
 "(Confirming best move)\n";
 
 std::string model4_detailed_log =
@@ -1169,36 +1169,36 @@ std::string model4_detailed_log =
 "Position 4, \"1.Nf5+ Kh8\" created in tree\n"
 "Position 5, \"1.Nf5+ Kg8 2.Nxh6+\" created in tree\n"
 "Eval (ply 3), 1.Nf5+ Kg8 2.Nxh6+\n"
-"No alpha beta cutoff because move value=5.1 < two lower ply value=MAX\n"
-"Best move because negated move value=-5.1 < one lower ply value=MAX\n"
+"No alpha beta cutoff because move value=5.125 < two lower ply value=MAX\n"
+"Best move because negated move value=-5.125 < one lower ply value=MAX\n"
 "(Confirming best move)\n"
 "Position 6, \"1.Nf5+ Kg8 2.h3\" created in tree\n"
 "Eval (ply 3), 1.Nf5+ Kg8 2.h3\n"
-"No alpha beta cutoff because move value=0.1 < two lower ply value=MAX\n"
-"Not best move because negated move value=-0.1 >= one lower ply value=-5.1\n"
+"No alpha beta cutoff because move value=0.125 < two lower ply value=MAX\n"
+"Not best move because negated move value=-0.125 >= one lower ply value=-5.125\n"
 "Eval (ply 2), 1.Nf5+ Kg8\n"
-"No alpha beta cutoff because move value=-5.1 < two lower ply value=MAX\n"
-"Best move because negated move value=5.1 < one lower ply value=MAX\n"
+"No alpha beta cutoff because move value=-5.125 < two lower ply value=MAX\n"
+"Best move because negated move value=5.125 < one lower ply value=MAX\n"
 "(Confirming best move)\n"
 "Position 7, \"1.Nf5+ Kh8 2.Rd8#\" created in tree\n"
 "Eval (ply 3), 1.Nf5+ Kh8 2.Rd8#\n"
-"Alpha beta cutoff because move value=12.0 >= two lower ply value=5.1\n"
+"Alpha beta cutoff because move value=12.000 >= two lower ply value=5.125\n"
 "Eval (ply 1), 1.Nf5+\n"
-"No alpha beta cutoff because move value=5.1 < two lower ply value=MAX\n"
-"Best move because negated move value=-5.1 < one lower ply value=MAX\n"
+"No alpha beta cutoff because move value=5.125 < two lower ply value=MAX\n"
+"Best move because negated move value=-5.125 < one lower ply value=MAX\n"
 "(Confirming best move)\n"
 "Position 9, \"1.Ne6+ Kg8\" created in tree\n"
 "Position 10, \"1.Ne6+ Kh8\" created in tree\n"
 "Position 11, \"1.Ne6+ Kg8 2.h3\" created in tree\n"
 "Eval (ply 3), 1.Ne6+ Kg8 2.h3\n"
-"No alpha beta cutoff because move value=0.3 < two lower ply value=MAX\n"
-"Not best move because negated move value=-0.3 >= one lower ply value=-5.1\n"
+"No alpha beta cutoff because move value=0.375 < two lower ply value=MAX\n"
+"Not best move because negated move value=-0.375 >= one lower ply value=-5.125\n"
 "Position 12, \"1.Ne6+ Kg8 2.Rd8+\" created in tree\n"
 "Eval (ply 3), 1.Ne6+ Kg8 2.Rd8+\n"
-"No alpha beta cutoff because move value=0.5 < two lower ply value=MAX\n"
-"Not best move because negated move value=-0.5 >= one lower ply value=-5.1\n"
+"No alpha beta cutoff because move value=0.500 < two lower ply value=MAX\n"
+"Not best move because negated move value=-0.500 >= one lower ply value=-5.125\n"
 "Eval (ply 2), 1.Ne6+ Kg8\n"
-"Alpha beta cutoff because move value=-5.1 >= two lower ply value=-5.1\n";
+"Alpha beta cutoff because move value=-5.125 >= two lower ply value=-5.125\n";
 
 std::string model5_detailed_log =
 "Position 0, \"\" created in tree\n"
@@ -1208,46 +1208,46 @@ std::string model5_detailed_log =
 "Position 10, \"1.Ng6+ Kg8\" created in tree\n"
 "Position 11, \"1.Ng6+ Kh7 2.Nxe5\" created in tree\n"
 "Eval (ply 3), 1.Ng6+ Kh7 2.Nxe5\n"
-"No alpha beta cutoff because move value=9.2 < two lower ply value=MAX\n"
-"Best move because negated move value=-9.2 < one lower ply value=MAX\n"
+"No alpha beta cutoff because move value=9.250 < two lower ply value=MAX\n"
+"Best move because negated move value=-9.250 < one lower ply value=MAX\n"
 "(Confirming best move)\n"
 "Position 12, \"1.Ng6+ Kh7 2.Nxh4\" created in tree\n"
 "Eval (ply 3), 1.Ng6+ Kh7 2.Nxh4\n"
-"No alpha beta cutoff because move value=5.0 < two lower ply value=MAX\n"
-"Not best move because negated move value=-5.0 >= one lower ply value=-9.2\n"
+"No alpha beta cutoff because move value=5.000 < two lower ply value=MAX\n"
+"Not best move because negated move value=-5.000 >= one lower ply value=-9.250\n"
 "Eval (ply 2), 1.Ng6+ Kh7\n"
-"No alpha beta cutoff because move value=-9.2 < two lower ply value=MAX\n"
-"Best move because negated move value=9.2 < one lower ply value=MAX\n"
+"No alpha beta cutoff because move value=-9.250 < two lower ply value=MAX\n"
+"Best move because negated move value=9.250 < one lower ply value=MAX\n"
 "(Confirming best move)\n"
 "Position 13, \"1.Ng6+ Kg8 2.Nxe5\" created in tree\n"
 "Eval (ply 3), 1.Ng6+ Kg8 2.Nxe5\n"
-"No alpha beta cutoff because move value=9.0 < two lower ply value=9.2\n"
-"Best move because negated move value=-9.0 < one lower ply value=MAX\n"
+"No alpha beta cutoff because move value=9.000 < two lower ply value=9.250\n"
+"Best move because negated move value=-9.000 < one lower ply value=MAX\n"
 "(Confirming best move)\n"
 "Position 14, \"1.Ng6+ Kg8 2.Nxh4\" created in tree\n"
 "Eval (ply 3), 1.Ng6+ Kg8 2.Nxh4\n"
-"No alpha beta cutoff because move value=5.2 < two lower ply value=9.2\n"
-"Not best move because negated move value=-5.2 >= one lower ply value=-9.0\n"
+"No alpha beta cutoff because move value=5.250 < two lower ply value=9.250\n"
+"Not best move because negated move value=-5.250 >= one lower ply value=-9.000\n"
 "Eval (ply 2), 1.Ng6+ Kg8\n"
-"No alpha beta cutoff because move value=-9.0 < two lower ply value=MAX\n"
-"Best move because negated move value=9.0 < one lower ply value=9.2\n"
+"No alpha beta cutoff because move value=-9.000 < two lower ply value=MAX\n"
+"Best move because negated move value=9.000 < one lower ply value=9.250\n"
 "(Confirming best move)\n"
 "Eval (ply 1), 1.Ng6+\n"
-"No alpha beta cutoff because move value=9.0 < two lower ply value=MAX\n"
-"Best move because negated move value=-9.0 < one lower ply value=MAX\n"
+"No alpha beta cutoff because move value=9.000 < two lower ply value=MAX\n"
+"Best move because negated move value=-9.000 < one lower ply value=MAX\n"
 "(Confirming best move)\n"
 "Position 3, \"1.Nxd3 Qd6\" created in tree\n"
 "Position 4, \"1.Nxd3 Qg5\" created in tree\n"
 "Position 5, \"1.Nxd3 Qd6 2.Ne1\" created in tree\n"
 "Eval (ply 3), 1.Nxd3 Qd6 2.Ne1\n"
-"No alpha beta cutoff because move value=3.3 < two lower ply value=MAX\n"
-"Not best move because negated move value=-3.3 >= one lower ply value=-9.0\n"
+"No alpha beta cutoff because move value=3.375 < two lower ply value=MAX\n"
+"Not best move because negated move value=-3.375 >= one lower ply value=-9.000\n"
 "Position 6, \"1.Nxd3 Qd6 2.Qb1\" created in tree\n"
 "Eval (ply 3), 1.Nxd3 Qd6 2.Qb1\n"
-"No alpha beta cutoff because move value=3.0 < two lower ply value=MAX\n"
-"Not best move because negated move value=-3.0 >= one lower ply value=-9.0\n"
+"No alpha beta cutoff because move value=3.000 < two lower ply value=MAX\n"
+"Not best move because negated move value=-3.000 >= one lower ply value=-9.000\n"
 "Eval (ply 2), 1.Nxd3 Qd6\n"
-"Alpha beta cutoff because move value=-9.0 >= two lower ply value=-9.0\n";
+"Alpha beta cutoff because move value=-9.000 >= two lower ply value=-9.000\n";
 
 // Regression test
 bool sargon_minimax_regression_test( bool quiet)
@@ -1392,7 +1392,7 @@ extern "C" {
                                       //  float centipawns.
                                       //  So jmp if al <= val means
                                       //     jmp if float(al) >= float(val)
-            std::string float_value = (val==0 ? "MAX" : util::sprintf("%.1f",sargon_export_value(val)) ); // Show "MAX" instead of "12.8"
+            std::string float_value = (val==0 ? "MAX" : util::sprintf("%.3f",sargon_export_value(val)) ); // Show "MAX" instead of "16.0"
             prog.key = key;
             prog.pt  = eval;
             prog.move_val = al;
@@ -1403,7 +1403,7 @@ extern "C" {
             if( jmp )   // jmp matches the Sargon assembly code jump decision. Jump if Alpha-Beta cutoff
             {
                 prog.pt  = alpha_beta_yes;
-                prog.msg = util::sprintf( "Alpha beta cutoff because move value=%.1f >= two lower ply value=%s",
+                prog.msg = util::sprintf( "Alpha beta cutoff because move value=%.3f >= two lower ply value=%s",
                 sargon_export_value(al),
                 float_value.c_str() );
                 prog.diagram_msg = util::sprintf( ">=%s so ALPHA BETA CUTOFF",
@@ -1412,7 +1412,7 @@ extern "C" {
             else
             {
                 prog.pt  = alpha_beta_no;
-                prog.msg = util::sprintf( "No alpha beta cutoff because move value=%.1f < two lower ply value=%s",
+                prog.msg = util::sprintf( "No alpha beta cutoff because move value=%.3f < two lower ply value=%s",
                 sargon_export_value(al),
                 float_value.c_str() );
             }
@@ -1428,12 +1428,12 @@ extern "C" {
                                       //  float centipawns.
                                       //  So jmp if al <= val means
                                       //     jmp if float(al) >= float(val)
-            std::string float_value = (val==0 ? "MAX" : util::sprintf("%.1f",sargon_export_value(val)) ); // Show "MAX" instead of "12.8"
-            std::string neg_float_value = (val==0 ? " -MAX" : util::sprintf("%.1f",0.0-sargon_export_value(val)) ); // Show "-MAX" instead of "-12.8"
+            std::string float_value = (val==0 ? "MAX" : util::sprintf("%.3f",sargon_export_value(val)) ); // Show "MAX" instead of "16.0"
+            std::string neg_float_value = (val==0 ? " -MAX" : util::sprintf("%.3f",0.0-sargon_export_value(val)) ); // Show "-MAX" instead of "-16.0"
             if( jmp )   // jmp matches the Sargon assembly code jump decision. Jump if not best move
             {
                 prog.pt  = bestmove_no;
-                prog.msg = util::sprintf( "Not best move because negated move value=%.1f >= one lower ply value=%s",
+                prog.msg = util::sprintf( "Not best move because negated move value=%.3f >= one lower ply value=%s",
                 sargon_export_value(al),
                 float_value.c_str() );
                 prog.diagram_msg = util::sprintf( "<=%s so discard",
@@ -1442,7 +1442,7 @@ extern "C" {
             else
             {
                 prog.pt  = bestmove_yes;
-                prog.msg = util::sprintf( "Best move because negated move value=%.1f < one lower ply value=%s",
+                prog.msg = util::sprintf( "Best move because negated move value=%.3f < one lower ply value=%s",
                 sargon_export_value(al),
                 float_value.c_str() );
                 prog.diagram_msg = util::sprintf( ">%s so NEW BEST MOVE",
