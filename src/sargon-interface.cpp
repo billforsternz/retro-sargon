@@ -634,4 +634,3 @@ std::string algebraic( unsigned int sq )
     return s;
 }
 
-    

@@ -30,38 +30,11 @@
 #include "thc.h"
 #include "sargon-interface.h"
 #include "sargon-asm-interface.h"
+#include "sargon-pv.h"
 
 //-- preferences
 #define VERSION "1978"
 #define ENGINE_NAME "Sargon"
-
-// A move in Sargon's evaluation graph, in this program a move that is marked as
-//  the best move found so far at a given level
-struct NODE
-{
-    unsigned int level;
-    unsigned char from;
-    unsigned char to;
-    unsigned char flags;
-    unsigned char value;
-    NODE() : level(0), from(0), to(0), flags(0), value(0) {}
-    NODE( unsigned int l, unsigned char f, unsigned char t, unsigned char fs, unsigned char v ) : level(l), from(f), to(t), flags(fs), value(v) {}
-};
-
-// A principal variation
-struct PV
-{
-    std::vector<thc::Move> variation;
-    int value;
-    int depth;
-    void clear() {variation.clear(),value=0,depth=0;}
-    PV () {clear();}
-};
-
-// When a node is indicated as 'BEST' at level one, we can look back through
-//  previously indicated nodes at higher level and construct a PV
-static PV the_pv;
-static PV provisional;
 
 // Measure elapsed time, nodes    
 static unsigned long base_time;
@@ -69,13 +42,15 @@ static unsigned long base_time;
 // Misc
 static int depth_option;    // 0=auto, other values for fixed depth play
 static std::string logfile_name;
-static std::vector< NODE > nodes;
 static unsigned long total_callbacks;
 static unsigned long bestmove_callbacks;
 static unsigned long end_of_points_callbacks;
 
 // The current 'Master' postion
 static thc::ChessRules the_position;
+
+// The current 'Master' PV
+static PV the_pv;
 
 // Command line interface
 static bool process( const std::string &s );
@@ -91,7 +66,6 @@ static void        cmd_position( const std::string &whole_cmd_line, const std::v
 static bool is_new_game();
 static void log( const char *fmt, ... );
 static bool RunSargon();
-static void BuildPV( PV &pv );
 static void ProgressReport();
 static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long ms_inc );
 
@@ -148,6 +122,7 @@ static void TimerSet( int ms );    // Set a timeout event, ms millisecs into the
 // main()
 int main( int argc, char *argv[] )
 {
+    sargon_pv_init( log );
     std::string filename_base( argv[0] );
     logfile_name = filename_base + "-log.txt";
 #ifdef _DEBUG
@@ -157,7 +132,7 @@ int main( int argc, char *argv[] )
     {
         "uci\n",
         "isready\n",
-        "position fen 7k/8/8/8/8/8/8/N6K w - - 0 1\n",   // an extra knight (+3.25 sensible)
+        "position fen 7k/8/8/8/8/8/8/N6K b - - 0 1\n",   // an extra knight (+3.25 sensible)
         "go\n",                                          // After fixing units per pawn from 10 to 8, now 4.00 (so something still wrong?) 
         "position fen 7k/8/8/8/8/8/8/N5Kq w - - 0 1\n",  // an extra knight only after capturing queen (+1.05 ??)
         "go\n"                                           // After fixing units per pawn from 10 to 8, now 3.00 (good)
@@ -197,7 +172,7 @@ int main( int argc, char *argv[] )
     return 0;
 }
 
-static unsigned long base_time_sargon_execution, max_gap_so_far, max_len_so_far, max_variance_so_far;
+static unsigned long base_time_sargon_execution, max_gap_so_far, max_variance_so_far;
 static std::chrono::time_point<std::chrono::steady_clock> base = std::chrono::steady_clock::now();
 static unsigned long bios_base = GetTickCount();
 static unsigned long elapsed_milliseconds()
@@ -294,17 +269,6 @@ static void TimerSet( int ms )
 static void read_stdin()
 {
     bool quit=false;
-#if 0
-    static const char *test_sequence[] =
-    {
-        "uci\n",
-        "isready\n",
-        "position fen rn2k1nr/1p4pp/4bp2/1P2p3/p2pN3/b1qP1NP1/4PPBP/1RBQ1RK1 b kq - 1 13\n",
-        "go infinite\n",
-        "stop\n",
-        //"quit\n"
-    };
-#endif
     while(!quit)
     {
         static char buf[8192];
@@ -337,6 +301,7 @@ static void write_stdout()
 static jmp_buf jmp_buf_env;
 static bool RunSargon()
 {
+    sargon_pv_clear( the_position );
     bool aborted = false;
     int val;
     val = setjmp(jmp_buf_env);
@@ -346,7 +311,7 @@ static bool RunSargon()
     {
         base_time_sargon_execution = elapsed_milliseconds();
         sargon(api_CPTRMV);
-        the_pv = provisional;
+        the_pv = sargon_pv_get(); // only update if CPTRMV completes
     }
     return aborted;
 }
@@ -393,15 +358,14 @@ static bool process( const std::string &s )
          "bestmove callbacks=%lu\n"
          "end of points callbacks=%lu\n"
          "max_variance_so_far=%lu\n"
-         "max length of PV vector=%lu\n"
          "max time between bestmove callbacks=%lu\n",
             cmd.c_str(),
             total_callbacks,
             bestmove_callbacks,
             end_of_points_callbacks,
             max_variance_so_far,
-            max_len_so_far,
             max_gap_so_far );
+    sargon_pv_report_stats();
     return quit;
 }
 
@@ -443,9 +407,8 @@ static void cmd_setoption( const std::vector<std::string> &fields )
 
 static std::string cmd_go( const std::vector<std::string> &fields )
 {
-    stop_rsp = "";
     the_pv.clear();
-    provisional.clear();
+    stop_rsp = "";
     base_time = elapsed_milliseconds();
     total_callbacks = 0;
     bestmove_callbacks = 0;
@@ -491,11 +454,10 @@ static std::string cmd_go( const std::vector<std::string> &fields )
 
 static void cmd_go_infinite()
 {
+    the_pv.clear();
     stop_rsp = "";
     int plymax=3;
     bool aborted = false;
-    the_pv.clear();
-    provisional.clear();
     base_time = elapsed_milliseconds();
     total_callbacks = 0;
     bestmove_callbacks = 0;
@@ -510,7 +472,6 @@ static void cmd_go_infinite()
         log( "Sargon's internal MOVENO set to %d\n", peekb(MOVENO) );
         sargon(api_ROYALT);
         pokeb( KOLOR, the_position.white ? 0 : 0x80 );    // Sargon is side to move
-        nodes.clear();
         aborted = RunSargon();
         if( !aborted )
             ProgressReport();   
@@ -727,15 +688,13 @@ static void ProgressReport()
 
     loop
       if first time through
-        set CUT to 1/15 of total time, establishes target
+        set cutoff timer to MEDIUM time, establishes target
       else
-        set CUT to 1/8 of total time, loop to target
-        if hit target in less that 1/50 total time
+        set cutoff timer to HIGH time, loop to target
+        if hit target in less that LOW time
           increment target and loop again
         if we are cut
           decrement target
-
-    in this call 1/50, 1/15 and 1/8 thresholds LO, MED and HI
 
 */
 
@@ -782,7 +741,6 @@ static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsign
         sargon_import_position(the_position);
         sargon(api_ROYALT);
         pokeb( KOLOR, the_position.white ? 0 : 0x80 );    // Sargon is side to move
-        nodes.clear();
         bool aborted = RunSargon();
         unsigned long now = elapsed_milliseconds();
         unsigned long elapsed = (now-base);
@@ -899,146 +857,6 @@ static void log( const char *fmt, ... )
     va_end(args);
 }
 
-// Use our knowledge for the way Sargon does minimax/alpha-beta to build a PV
-static void BuildPV( PV &pv )
-{
-    pv.variation.clear();
-    std::vector<NODE> nodes_pv;
-    int nbr = nodes.size();
-    int target = 1;
-    int plymax = peekb(PLYMAX);
-    for( int i=nbr-1; i>=0; i-- )
-    {
-        NODE *p = &nodes[i];
-        if( p->level == target )
-        {
-            nodes_pv.push_back( *p );
-            double fvalue = sargon_export_value(p->value);
-            // log( "level=%d, from=%s, to=%s value=%d/%.1f\n", p->level, algebraic(p->from).c_str(), algebraic(p->to).c_str(), p->value, fvalue );
-
-            //if( target == plymax ) // commented out to allow extra depth nodes in case of checks - see below *
-            //    break;
-            target++;
-        }
-    }
-    thc::ChessRules cr = the_position;
-    nbr = nodes_pv.size();
-    bool ok = true;
-    for( int i=0; ok && i<nbr; i++ )
-    {
-        // See above *
-        // Normally we expect plymax nodes. So plymax=3; 3 nodes at level 1,2,3; i=0,1,2.
-        // But Sargon does an extra ply if the king is in check, so allow (but don't insist on)
-        // extra node(s) if terminal node is check.
-        // Example Fen: r1bqk2r/pppp1ppp/2n5/2b4n/4Pp2/2NP1N2/PPPBB1PP/R2QK2R b KQkq - 6 7
-        // PV at plymax=5 is: Sargon 1978 -0.97 (depth 5) 7...Qf6 8.Ng1 Bxg1 9.Rxg1 Qh4+ 10.Kf1
-        // Before the next paragraph of code was added 10.Kf1 didn't show in the line and the
-        // score was -12.80 pawns, the leaf score of Qh4+, which presumably is allowed to be
-        // exaggerated because of the check and alpha-beta optimisation (make sure checks are
-        // evaluated first).
-        if( i >= plymax )
-        {
-            thc::Square sq = (cr.WhiteToPlay() ? cr.wking_square : cr.bking_square);
-            bool in_check = cr.AttackedPiece(sq);
-            if( !in_check )
-            {
-                nodes_pv.resize(i);  // Called this BUG_EXTRA_PLY_RESIZE in the git commit message
-                break;
-            }
-        }
-        NODE *p = &nodes_pv[i];
-        thc::Square src;
-        ok = sargon_export_square( p->from, src );
-        if( ok )
-        {
-            thc::Square dst;
-            ok = sargon_export_square( p->to, dst );
-            if( ok )
-            {
-                char buf[5];
-                buf[0] = thc::get_file(src);
-                buf[1] = thc::get_rank(src);
-                buf[2] = thc::get_file(dst);
-                buf[3] = thc::get_rank(dst);
-                buf[4] = '\0';
-                thc::Move mv;
-                bool legal = mv.TerseIn( &cr, buf );
-                if( !legal )
-                {
-                    log( "Unexpected illegal move=%s, Position=%s\n", buf, cr.ToDebugStr().c_str() );
-                    log( "Extra info: Starting position leading to unexpected illegal move FEN=%s, position=\n%s\n", the_position.ForsythPublish().c_str(), the_position.ToDebugStr().c_str() );
-                    std::string the_moves = "Moves leading to unexpected illegal move";
-                    for( int j=0; j<=i; j++ )
-                    {
-                        NODE *q = &nodes_pv[j];
-                        thc::Square qsrc, qdst;
-                        sargon_export_square( q->from, qsrc );
-                        sargon_export_square( q->to, qdst );
-                        char buff[5];
-                        buff[0] = thc::get_file(qsrc);
-                        buff[1] = thc::get_rank(qsrc);
-                        buff[2] = thc::get_file(qdst);
-                        buff[3] = thc::get_rank(qdst);
-                        buff[4] = '\0';
-                        the_moves += " ";
-                        the_moves += std::string(buff);
-                    }
-                    log( "Extra info: %s\n", the_moves.c_str() );
-                    break;
-                }
-                else
-                {
-                    cr.PlayMove(mv);
-                    pv.variation.push_back(mv);
-                }
-            }
-        }
-    }
-
-    // Note that nodes_pv might have been resized by in_check test above, so
-    //  recalculate nbr (fixing BUG_EXTRA_PLY_RESIZE)
-    nbr = nodes_pv.size();
-    pv.depth = plymax;
-    double fvalue = sargon_export_value( nodes_pv[nbr-1].value );
-
-    // Sargon's values are negated at alternate levels, transforming minimax to maximax.
-    //  If White to move, maximise conventional values at level 0,2,4
-    //  If Black to move, maximise negated values at level 0,2,4
-    bool odd = ((nbr-1)%2 == 1);
-    bool negate = the_position.WhiteToPlay() ? odd : !odd;
-    double centipawns = (negate ? -100.0 : 100.0) * fvalue;
-
-    // Values are calculated as a weighted combination of net material plus net mobility
-    //  plus an adjustment for possible exchanges in the terminal position. The value is
-    //  also *relative* to the ply0 score
-    //  We want to present the *absolute* value in centipawns, so we need to know the
-    //  ply0 score. It is the same weighted combination of net material plus net mobility.
-    //  The actual ply0 score is available, but since it also adds the possible exchanges
-    //  adjustment and we don't want that, calculate the weighted combination of net
-    //  material and net mobility at ply0 instead.
-    char mv0 = peekb(MV0);      // net ply 0 material (pawn=2, knight/bishop=6, rook=10...)
-    if( mv0 > 30 )              // Sargon limits this to +-30 (so 15 pawns) to avoid overflow
-        mv0 = 30;
-    if( mv0 < -30 )
-        mv0 = -30;
-    char bc0 = peekb(BC0);      // net ply 0 mobility
-    if( bc0 > 6 )               // also limited to +-6
-        bc0 = 6;
-    if( bc0 < -6 )
-        bc0 = -6;
-    int ply0 = mv0*4 + bc0;     // Material gets 4 times weight as mobility (4*30 + 6 = 126 doesn't overflow signed char)
-    double centipawns_ply0 = ply0 * 100.0/8.0;   // pawn is 2*4 = 8 -> 100 centipawns 
-
-    // Avoid this apparently simpler alternative, because don't want exchange adjustment at ply 0
-#if 0
-    double fvalue_ply0 = sargon_export_value( peekb(5) ); //Where root node value ends up if MLPTRJ=0, which it does initially
-#endif
-
-    // So actual value is ply0 + score relative to ply0
-    pv.value = static_cast<int>(centipawns_ply0+centipawns);
-    log( "centipawns=%f, centipawns_ply0=%f, plymax=%d\n", centipawns, centipawns_ply0, plymax );
-}
-
 
 extern "C" {
     void callback( uint32_t reg_edi, uint32_t reg_esi, uint32_t reg_ebp, uint32_t reg_esp,
@@ -1132,30 +950,16 @@ extern "C" {
         else if( 0 == strcmp(msg,"Yes! Best move") )
         {
             bestmove_callbacks++;
-         /* unsigned long now = elapsed_milliseconds();
+            unsigned long now = elapsed_milliseconds();
             unsigned long elapsed = now - base_time_sargon_execution;
             base_time_sargon_execution = now;
             if( elapsed > max_gap_so_far )
-                max_gap_so_far = elapsed; */
-            unsigned int p      = peekw(MLPTRJ);
-            unsigned int level  = peekb(NPLY);
-            unsigned char from  = peekb(p+2);
-            unsigned char to    = peekb(p+3);
-            unsigned char flags = peekb(p+4);
-            unsigned char value = peekb(p+5);
-            NODE n(level,from,to,flags,value);
-            nodes.push_back(n);
-            if( nodes.size() > max_len_so_far )
-                max_len_so_far = nodes.size();
-            if( position_of_interest )
-            {
-                log( "Yes! Best move=0x%02x from=%d, to=%d\n", value, from, to );
-            }   
-            if( level == 1 )
-            {
-                BuildPV( provisional );
-                nodes.clear();
-            } 
+                max_gap_so_far = elapsed;
+            //if( position_of_interest )
+            //{
+            //    log( "Yes! Best move=0x%02x from=%d, to=%d\n", value, from, to );
+            //}   
+            sargon_pv_callback_yes_best_move();
         }
 
         // Abort RunSargon() if new event in queue (and it has found something)
