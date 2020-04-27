@@ -64,7 +64,7 @@ static void        cmd_position( const std::string &whole_cmd_line, const std::v
 
 // Misc
 static bool is_new_game();
-static void log( const char *fmt, ... );
+static int log( const char *fmt, ... );
 static bool RunSargon();
 static void ProgressReport();
 static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long ms_inc );
@@ -122,7 +122,6 @@ static void TimerSet( int ms );    // Set a timeout event, ms millisecs into the
 // main()
 int main( int argc, char *argv[] )
 {
-    sargon_pv_init( log );
     std::string filename_base( argv[0] );
     logfile_name = filename_base + "-log.txt";
 #ifdef _DEBUG
@@ -365,7 +364,7 @@ static bool process( const std::string &s )
             end_of_points_callbacks,
             max_variance_so_far,
             max_gap_so_far );
-    sargon_pv_report_stats();
+    log( "%s\n", sargon_pv_report_stats() );
     return quit;
 }
 
@@ -827,7 +826,7 @@ static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsign
 }
 
 // Simple logging facility gives us some debug capability when running under control of a GUI
-static void log( const char *fmt, ... )
+static int log( const char *fmt, ... )
 {
     static std::mutex mtx;
     std::lock_guard<std::mutex> lck(mtx);
@@ -855,6 +854,7 @@ static void log( const char *fmt, ... )
         fclose( file_log );
     }
     va_end(args);
+    return 0;
 }
 
 

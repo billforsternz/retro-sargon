@@ -21,6 +21,7 @@
 #include "thc.h"
 #include "sargon-asm-interface.h"
 #include "sargon-interface.h"
+#include "sargon-pv.h"
 
 // Individual tests
 bool sargon_position_tests( bool quiet, int comprehensive );
@@ -42,7 +43,8 @@ int main( int argc, const char *argv[] )
     {
         "Debug/sargon-tests.exe",
         "p",
-        "-1"
+        "-2",
+        "-v"
     };
     argc = sizeof(test_args) / sizeof(test_args[0]);
     argv = test_args;
@@ -70,7 +72,7 @@ int main( int argc, const char *argv[] )
     for( int i=1; i<argc; i++ )
     {
         std::string s= argv[i];
-        if( !ok && s.find_first_not_of("gpm") == std::string::npos )
+        if( !ok && s.find_first_not_of("gpmv") == std::string::npos )
         {
             test_types = s;
             ok = true;
@@ -264,6 +266,7 @@ struct TEST
     const char *fen;
     int plymax_required;
     const char *solution;   // As terse string
+    const char *pv;         // As natural (SAN) moves space separated
 };
 
 bool sargon_position_tests( bool quiet, int comprehensive )
@@ -317,6 +320,9 @@ bool sargon_position_tests( bool quiet, int comprehensive )
     printf( "* Known position tests\n" );
     static TEST tests[]=
     {
+        { "7k/8/8/8/8/8/8/N6K w - - 0 1", 5, "h1g2",
+          "Kg2 Kg7 Nb3 Kf6 Nc5" },
+
         // Interesting position, depth 5 why does Sargon think it's so favourable?
         // Sargon 1978 -5.05 (depth 5) 20...Kd8 21.Bb2 e6 22.Nh2 exf5
         // 1r2kb1r/2pbpqp1/p1p2p2/2P2P2/2PP2P1/5N2/P3Q3/R1B2RK1 b k - 0 20
@@ -324,7 +330,8 @@ bool sargon_position_tests( bool quiet, int comprehensive )
         // Used this position to investigate and fix BUG_EXTRA_PLY_RESIZE after which the eval
         // is the more sensible 0.75. The bug didn't effect minimax etc. the line, Sargon's
         // internal eval, and the PV was fine, but the eval presented was borked
-        { "1r2kb1r/2pbpqp1/p1p2p2/2P2P2/2PP2P1/5N2/P3Q3/R1B2RK1 b k - 0 20", 5, "e8d8" },
+        { "1r2kb1r/2pbpqp1/p1p2p2/2P2P2/2PP2P1/5N2/P3Q3/R1B2RK1 b k - 0 20", 5, "e8d8",
+          "Kd8 Bb2 e6 Nh2 exf5" },
 
         // Same position reversed, same line different eval
         // Sargon 1978 1.65 (depth 5) 20.Kd1 Bb7 21.e3 Nh7 22.exf4
@@ -335,12 +342,14 @@ bool sargon_position_tests( bool quiet, int comprehensive )
         // Keep the two positions because it is a nice check that the calculation returns
         // the same result, despite the moves being generated in totally different orders
         // etc.
-        { "r1b2rk1/p3q3/5n2/2pp2p1/2p2p2/P1P2P2/2PBPQP1/1R2KB1R w K - 0 20", 5, "e1d1" },
+        { "r1b2rk1/p3q3/5n2/2pp2p1/2p2p2/P1P2P2/2PBPQP1/1R2KB1R w K - 0 20", 5, "e1d1",
+          "Kd1 Bb7 e3 Nh7 exf4" },
 
         // This was a real problem - plymax=3/5 generates c7-c5 which is completely illegal - please explain
         // This was a real problem - plymax=1/4 generates d7-d6 also completely illegal (although at least a legal black move!)
         // This was a real problem - plymax=2 generates f6-e5 also completely illegal (although at least a legal black move!)
-        { "r4rk1/pb1pq1pp/5p2/2ppP3/5P2/2Q5/PPP3PP/2KR1B1R w - c6 0 15", 2, "c3g3" },
+        { "r4rk1/pb1pq1pp/5p2/2ppP3/5P2/2Q5/PPP3PP/2KR1B1R w - c6 0 15", 2, "c3g3",
+          "Qg3 fxe5" },
             // Now fixed. The problem was the en-passant target square. To cope with that
             //  sargon_import_position() was rewinding one half move and trying to play the
             //  move c7-c5, but api_ROYLTY hadn't been called, and so Sargon didn't know
@@ -350,93 +359,119 @@ bool sargon_position_tests( bool quiet, int comprehensive )
             //  sargon_import_position() 
 
         // A problem position after testing with Arena (but works okay here)
-        { "r1b3kr/pp1R3p/3q2n1/3B4/8/3Q2P1/PP2PP2/R1B1K3 b Q - 0 21", 5, "g8f8" },
+        { "r1b3kr/pp1R3p/3q2n1/3B4/8/3Q2P1/PP2PP2/R1B1K3 b Q - 0 21", 5, "g8f8",
+          "Kf8 Qf5+ Qf6 Qxf6+ Ke8" },
 
         // This preceding position works okay when testing with Arena
-        { "r1b4r/pp1p1Rkp/3q2n1/3B4/8/3Q2P1/PP2PP2/R1B1K3 b Q - 2 20", 5, "g7g8" },
+        { "r1b4r/pp1p1Rkp/3q2n1/3B4/8/3Q2P1/PP2PP2/R1B1K3 b Q - 2 20", 5, "g7g8",
+          "Kg8 Rxd7+ Qxd5 Rxd5 Ne7" },
 
         // Initial position, book move
-        { "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 5, "d2d4" },
+        { "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 5, "d2d4",
+          "" },
 
         // Initial position, other random book move
-        { "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 5, "e2e4" },
+        { "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 5, "e2e4",
+          "" },
 
         // Position after 1.d4, Black to play book move
-        { "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1", 5, "d7d5" },
+        { "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1", 5, "d7d5",
+          "" },
                    
         // Position after 1.c4, Black to play book move
-        { "rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq c3 0 1", 5, "e7e5" },
+        { "rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq c3 0 1", 5, "e7e5",
+          "" },
                    
         // Test en-passant, black to move
-        { "7k/8/8/8/Pp6/4K3/8/8 b - a3 0 1", 5, "b4a3" },
+        { "7k/8/8/8/Pp6/4K3/8/8 b - a3 0 1", 5, "b4a3",
+          "bxa3 Kd4 a2 Kc5 a1=Q" },
 
         // CTWBFK Pos 26, page 23 - solution Rc8xc4
-        { "2r1r1k1/p3q1pp/bp1pp3/8/2B5/4P3/PP2QPPP/2R2RK1 b - - 0 1", 5, "c8c4" },
+        { "2r1r1k1/p3q1pp/bp1pp3/8/2B5/4P3/PP2QPPP/2R2RK1 b - - 0 1", 5, "c8c4",
+          "Rxc4 Rxc4 d5 b3 dxc4" },
 
         // Test en-passant
-        { "8/8/3k4/6Pp/8/8/8/K7 w - h6 0 1", 5, "g5h6" },
+        { "8/8/3k4/6Pp/8/8/8/K7 w - h6 0 1", 5, "g5h6",
+          "gxh6 Kc7 h7 Kb6 h8=Q" },
 
         // Point where game test fails, PLYMAX=3 (now fixed, until we tweaked
         //  sargon_import_position_inner() to assume castled kings [if moved] and
         //  making unmoved rooks more likely we got "h1h5")
-        { "r4rk1/pR3p1p/8/5p2/2Bp4/5P2/PPP1KPP1/7R w - - 0 18", 3, "h1h5" },
+        { "r4rk1/pR3p1p/8/5p2/2Bp4/5P2/PPP1KPP1/7R w - - 0 18", 3, "h1h5",
+          "Rh5 Rac8 Kd3" },
                     // reverted from "e2d3" -> "h1h5 with automatic MOVENO calculation
 
         // Point where game test fails, PLYMAX=4 (now fixed, until we tweaked
         //  sargon_import_position_inner() to assume castled kings [if moved] and
         //  making unmoved rooks more likely we got "e1f2")
-        { "q1k2b1r/pp4pp/2n1b3/5p2/2P2B2/3QPP1N/PP4PP/R3K2R w KQ - 1 15", 4, "e1g1" },
+        { "q1k2b1r/pp4pp/2n1b3/5p2/2P2B2/3QPP1N/PP4PP/R3K2R w KQ - 1 15", 4, "e1g1",
+          "O-O Be7 Rfd1 Nb4" },
 
         // Test position #1 above
-        { "r2n2k1/5ppp/b5q1/1P3N2/8/8/3Q1PPP/3R2K1 w - - 0 1", 3, "d2d8" },
-        { "r2n2k1/5ppp/b5q1/1P3N2/8/8/3Q1PPP/3R2K1 w - - 0 1", 2, "f5e7" },
+        { "r2n2k1/5ppp/b5q1/1P3N2/8/8/3Q1PPP/3R2K1 w - - 0 1", 3, "d2d8",
+          "Qxd8+ Rxd8 Rxd8#" },
+        { "r2n2k1/5ppp/b5q1/1P3N2/8/8/3Q1PPP/3R2K1 w - - 0 1", 2, "f5e7",
+          "Ne7+ Kf8" },
 
         // Modified version as discussed above. I used to have a lot of other
         //  slight mods as I tried to figure out what was going wrong before
         //  I got some important things sorted out (most notably the need to
         //  call ROYALT before CPTRMV!)
-        { "r2n2k1/5ppp/6q1/5N2/b7/1P6/3Q1PPP/3R2K1 w - - 0 1", 5, "d2d8" },
-        { "r2n2k1/5ppp/6q1/5N2/b7/1P6/3Q1PPP/3R2K1 w - - 0 1", 4, "f5e7" },   
+        { "r2n2k1/5ppp/6q1/5N2/b7/1P6/3Q1PPP/3R2K1 w - - 0 1", 5, "d2d8",
+          "Qxd8+ Be8 Ne7+ Kf8 Nxg6+ fxg6" },
+        { "r2n2k1/5ppp/6q1/5N2/b7/1P6/3Q1PPP/3R2K1 w - - 0 1", 4, "f5e7",   
+          "Ne7+ Kf8 Nxg6+ fxg6" },
 
         // CTWBFK = "Chess Tactics Workbook For Kids'
         // CTWBFK Pos 30, page 41 - solution Nc3-d5
-        { "2r1nrk1/5pbp/1p2p1p1/8/p2B4/PqNR2P1/1P3P1P/1Q1R2K1 w - - 0 1", 5, "c3d5" },
+        { "2r1nrk1/5pbp/1p2p1p1/8/p2B4/PqNR2P1/1P3P1P/1Q1R2K1 w - - 0 1", 5, "c3d5",
+          "Nd5 Qxd5 Bxg7 Qe4 Bxf8" },
 
         // CTWBFK Pos 34, page 62 - solution Re7-f7+
-        { "5k2/3KR3/4B3/8/3P4/8/8/6q1 w - - 0 1", 5, "e7f7" },
+        { "5k2/3KR3/4B3/8/3P4/8/8/6q1 w - - 0 1", 5, "e7f7",
+          "Rf7+ Kg8 Rf1+ Kh7 Rxg1" },
         
         // CTWBFK Pos 7, page 102 - solution Nc3-d5. For a long time this was a fail
         //  Sargon plays Bd4xb6 instead, so a -2 move instead of a +2 move. Fixed
         //  after adding call to ROYALT() after setting position
-        { "3r2k1/1pq2ppp/pb1pp1b1/8/3B4/2N5/PPP1QPPP/4R1K1 w - - 0 1", 5, "c3d5" },
+        { "3r2k1/1pq2ppp/pb1pp1b1/8/3B4/2N5/PPP1QPPP/4R1K1 w - - 0 1", 5, "c3d5",
+          "Nd5 Qxc2 Qxc2 Bxc2 Nxb6" },
 
         // CTWBFK Pos 29, page 77 - solution Qe3-a3. Quite difficult!
-        { "r4r2/6kp/2pqppp1/p1R5/b2P4/4QN2/1P3PPP/2R3K1 w - - 0 1", 5, "e3a3" },
+        { "r4r2/6kp/2pqppp1/p1R5/b2P4/4QN2/1P3PPP/2R3K1 w - - 0 1", 5, "e3a3",
+          "Qa3 Bb5 Rxb5 Qxa3 Rb7+ Rf7" },
 
         // White has Nd3xc5+ pulling victory from the jaws of defeat, it's seen 
         //  It's seen at PLYMAX=3, not seen at PLYMAX=2. It's a kind of 5 ply
         //  calculation (on the 5th half move White captures the queen which is
         //  the only justification for the sac on the 1st half move) - so maybe
         //  in forcing situations add 2 to convert PLYMAX to calculation depth
-        { "8/8/q2pk3/2p5/8/3N4/8/4K2R w K - 0 1", 3, "d3c5" },
+        { "8/8/q2pk3/2p5/8/3N4/8/4K2R w K - 0 1", 3, "d3c5",
+          "Nxc5+ dxc5 Rh6+ Kd7" },
 
         // Pawn outside the square needs PLYMAX=5 to solve
-        { "3k4/8/8/7P/8/8/1p6/1K6 w - - 0 1", 5, "h5h6" },
+        { "3k4/8/8/7P/8/8/1p6/1K6 w - - 0 1", 5, "h5h6",
+          "h6 Kc7 h7 Kb6 h8=Q" },
 
         // Pawn one further step back needs, as expected PLYMAX=7 to solve
-        { "2k5/8/8/8/7P/8/1p6/1K6 w - - 0 1", 7, "h4h5" },
+        { "2k5/8/8/8/7P/8/1p6/1K6 w - - 0 1", 7, "h4h5",
+          "h5 Kb7 h6 Kc6 h7 Kb7 h8=Q" },
     
         // Why not play N (either) - d5 mate? (played at PLYMAX=3, but not PLYMAX=5)
         //  I think this is a bug, or at least an imperfection in Sargon. I suspect
         //  something to do with decrementing PLYMAX by 2 if mate found. Our "auto"
         //  mode engine wrapper will mask this, by starting at lower PLYMAX
-        { "6B1/2N5/7p/pR4p1/1b2P3/2N1kP2/PPPR2PP/2K5 w - - 0 34", 5, "b5b6" },
-        { "6B1/2N5/7p/pR4p1/1b2P3/2N1kP2/PPPR2PP/2K5 w - - 0 34", 3, "c7d5" },
+        { "6B1/2N5/7p/pR4p1/1b2P3/2N1kP2/PPPR2PP/2K5 w - - 0 34", 5, "b5b6",
+          "Rb6 Bxc3 Nd5#" },
+        { "6B1/2N5/7p/pR4p1/1b2P3/2N1kP2/PPPR2PP/2K5 w - - 0 34", 3, "c7d5",
+          "N7d5#" },
 
         // CTWBFK Pos 11, page 68 - solution Rf1xf6. Involves quiet moves. Sargon
         //  solves this, but needs PLYMAX 7, takes about 5 mins 45 secs
-        { "2rq1r1k/3npp1p/3p1n1Q/pp1P2N1/8/2P4P/1P4P1/R4R1K w - - 0 1", 7, "f1f6" }
+        { "2rq1r1k/3npp1p/3p1n1Q/pp1P2N1/8/2P4P/1P4P1/R4R1K w - - 0 1", 7, "f1f6",
+          "Rxf6 Nxf6 Rf1 Rxc3 bxc3 Qc8 Rxf6" }
     };
+
 
 /*
 Test 1 of 2: PLYMAX=5:Position is
@@ -520,38 +555,48 @@ b) val=0x80
     for( int i=0; i<nbr_tests_to_run; i++ )
     {
         TEST *pt = &tests[i];
-        thc::ChessPosition cp;
-        cp.Forsyth(pt->fen);
+        thc::ChessRules cr;
+        cr.Forsyth(pt->fen);
+        sargon_import_position(cr);
         pokeb(PLYMAX,pt->plymax_required);
-        sargon(api_INITBD);
-        sargon_import_position(cp);
         unsigned char color = peekb(COLOR); // who to move? white = 0x00, black = 0x80
         pokeb(KOLOR,color);                 // set Sargon's colour = side to move
-        sargon(api_ROYALT);
         if( !quiet )
         {
-            sargon_export_position(cp);
-            std::string s = cp.ToDebugStr( "Position after test position set" );
+            std::string s = cr.ToDebugStr( "Test position is" );
             printf( "%s\n", s.c_str() );
+            printf( "Expected PV=%s\n", pt->pv );
         }
         printf( "Test %d of %d: PLYMAX=%d:", i+1, nbr_tests_to_run, pt->plymax_required );
         if( 0 == strcmp(pt->fen,"2rq1r1k/3npp1p/3p1n1Q/pp1P2N1/8/2P4P/1P4P1/R4R1K w - - 0 1") )
             printf( " (sorry this particular test is very slow) :" );
+        sargon_pv_clear(cr);
         sargon(api_CPTRMV);
-        if( !quiet )
+        PV pv = sargon_pv_get();
+        std::vector<thc::Move> &v = pv.variation;
+        std::string s_pv;
+        std::string spacer;
+        for( thc::Move mv: v )
         {
-            sargon_export_position(cp);
-            std::string s = cp.ToDebugStr( "Position after computer move made" );
-            printf( "%s\n", s.c_str() );
+            s_pv += spacer;
+            spacer = " ";
+            s_pv += mv.NaturalOut(&cr);
+            cr.PlayMove(mv);
         }
         std::string sargon_move = sargon_export_move(BESTM);
         bool pass = (sargon_move==std::string(pt->solution));
-        printf( " %s\n", pass ? "PASS" : "FAIL" );
         if( !pass )
+            printf( "FAIL\n Fail reason: Expected move=%s, Calculated move=%s\n", pt->solution, sargon_move.c_str() );
+        else
         {
-            ok = false;
-            printf( "FAIL reason: Expected=%s, Calculated=%s\n", pt->solution, sargon_move.c_str() );
+            pass = (s_pv==std::string(pt->pv));
+            if( !pass )
+                printf( "FAIL\n Fail reason: Expected PV=%s, Calculated PV=%s\n", pt->pv, s_pv.c_str() );
         }
+        if( pass )
+            printf( " PASS\n" );
+        else
+            ok = false;
     }
     return ok;
 }

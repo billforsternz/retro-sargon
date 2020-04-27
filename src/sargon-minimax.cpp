@@ -20,6 +20,7 @@
 #include "thc.h"
 #include "sargon-asm-interface.h"
 #include "sargon-interface.h"
+#include "sargon-pv.h"
 
 // Entry points
 void sargon_minimax_main();
@@ -1332,8 +1333,11 @@ extern "C" {
             return;
         }
         if( !callback_minimax_mods_active )
+        {
+            if( std::string(msg) == "Yes! Best move" )
+                sargon_pv_callback_yes_best_move();
             return;
-
+        }
         // For purposes of minimax tracing experiment, we only want two possible
         //  moves in each position - achieved by suppressing King moves
         if( std::string(msg) == "Suppress King moves" )

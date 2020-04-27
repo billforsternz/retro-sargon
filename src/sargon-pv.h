@@ -34,10 +34,9 @@ struct PV
     PV () {clear();}
 };
 
-void sargon_pv_init( void (*log_function)( const char *fmt, ... ) );
 void sargon_pv_clear( thc::ChessRules &current_position );
 PV sargon_pv_get();
 void sargon_pv_callback_yes_best_move();
-void sargon_pv_report_stats();
+std::string sargon_pv_report_stats();
 
 #endif // SARGON_PV_H_INCLUDED

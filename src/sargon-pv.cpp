@@ -20,12 +20,6 @@ static std::vector< NODE > nodes;
 static unsigned long max_len_so_far;
 static void BuildPV( PV &pv );
 static PV provisional;
-static void (*log_fn)( const char *fmt, ... );
-
-void sargon_pv_init( void (*log_function)( const char *fmt, ... )  )
-{
-    log_fn = log_function;
-}
 
 void sargon_pv_clear( thc::ChessRules &current_position  )
 {
@@ -75,8 +69,6 @@ static void BuildPV( PV &pv )
         {
             nodes_pv.push_back( *p );
             double fvalue = sargon_export_value(p->value);
-            // log_fn( "level=%d, from=%s, to=%s value=%d/%.1f\n", p->level, algebraic(p->from).c_str(), algebraic(p->to).c_str(), p->value, fvalue );
-
             //if( target == plymax ) // commented out to allow extra depth nodes in case of checks - see below *
             //    break;
             target++;
@@ -126,8 +118,10 @@ static void BuildPV( PV &pv )
                 bool legal = mv.TerseIn( &cr, buf );
                 if( !legal )
                 {
-                    log_fn( "Unexpected illegal move=%s, Position=%s\n", buf, cr.ToDebugStr().c_str() );
-                    log_fn( "Extra info: Starting position leading to unexpected illegal move FEN=%s, position=\n%s\n", pv_base_position.ForsythPublish().c_str(), pv_base_position.ToDebugStr().c_str() );
+                    /*
+                    log( "Unexpected illegal move=%s, Position=%s\n", buf, cr.ToDebugStr().c_str() );
+                    log( "Extra info: Starting position leading to unexpected illegal move FEN=%s, position=\n%s\n",
+                        pv_base_position.ForsythPublish().c_str(), pv_base_position.ToDebugStr().c_str() );
                     std::string the_moves = "Moves leading to unexpected illegal move";
                     for( int j=0; j<=i; j++ )
                     {
@@ -144,7 +138,7 @@ static void BuildPV( PV &pv )
                         the_moves += " ";
                         the_moves += std::string(buff);
                     }
-                    log_fn( "Extra info: %s\n", the_moves.c_str() );
+                    log( "Extra info: %s\n", the_moves.c_str() ); */
                     break;
                 }
                 else
@@ -197,10 +191,10 @@ static void BuildPV( PV &pv )
 
     // So actual value is ply0 + score relative to ply0
     pv.value = static_cast<int>(centipawns_ply0+centipawns);
-    log_fn( "centipawns=%f, centipawns_ply0=%f, plymax=%d\n", centipawns, centipawns_ply0, plymax );
+    //printf( "centipawns=%f, centipawns_ply0=%f, plymax=%d\n", centipawns, centipawns_ply0, plymax );
 }
 
-void sargon_pv_report_stats()
+std::string sargon_pv_report_stats()
 {
-    log_fn( "max length of build PV vector=%lu\n", max_len_so_far );
+    return util::sprintf( "max length of build PV vector=%lu\n", max_len_so_far );
 }
