@@ -11,6 +11,23 @@
 #include "sargon-asm-interface.h"
 #include "sargon-pv.h"
 
+// A move in Sargon's evaluation graph, in this program a move that is marked as
+//  the best move found so far at a given level
+struct NODE
+{
+    unsigned int level;
+    unsigned char from;
+    unsigned char to;
+    unsigned char flags;
+    unsigned char value;
+    char adjusted_material;
+    char brdc;
+    NODE() : level(0), from(0), to(0), flags(0), value(0), adjusted_material(0), brdc(0) {}
+    NODE( unsigned int l, unsigned char f, unsigned char t,
+          unsigned char fs, unsigned char v, char a, char b ) :
+                level(l), from(f), to(t), flags(fs), value(v), adjusted_material(a), brdc(b) {}
+};
+
 //
 //  Build Sargon's PV (Principal Variation)
 //
@@ -33,6 +50,15 @@ PV sargon_pv_get()
     return provisional;
 }
 
+extern "C" {
+extern char gbl_adjusted_material;
+};
+//void sargon_pv_callback_material(uint32_t reg_eax)
+//{
+//    char al = static_cast<char>(reg_eax & 0xff);
+//    gbl_adjusted_material = al;
+//}
+
 void sargon_pv_callback_yes_best_move()
 {
     unsigned int p      = peekw(MLPTRJ);
@@ -41,7 +67,11 @@ void sargon_pv_callback_yes_best_move()
     unsigned char to    = peekb(p+3);
     unsigned char flags = peekb(p+4);
     unsigned char value = peekb(p+5);
-    NODE n(level,from,to,flags,value);
+    char adjusted_material = gbl_adjusted_material;
+    char brdc     = static_cast<char>(peekb(BRDC));
+    if( peekb(PTSCK) )
+        brdc = 0;
+    NODE n(level,from,to,flags,value,adjusted_material,brdc);
     nodes.push_back(n);
     if( nodes.size() > max_len_so_far )
         max_len_so_far = nodes.size();
@@ -154,7 +184,8 @@ static void BuildPV( PV &pv )
     //  recalculate nbr (fixing BUG_EXTRA_PLY_RESIZE)
     nbr = nodes_pv.size();
     pv.depth = plymax;
-    double fvalue = sargon_export_value( nodes_pv[nbr-1].value );
+    NODE *nptr = &nodes_pv[nbr-1];
+    double fvalue = sargon_export_value( nptr->value );
 
     // Sargon's values are negated at alternate levels, transforming minimax to maximax.
     //  If White to move, maximise conventional values at level 0,2,4
@@ -190,8 +221,24 @@ static void BuildPV( PV &pv )
 #endif
 
     // So actual value is ply0 + score relative to ply0
-    pv.value = static_cast<int>(centipawns_ply0+centipawns);
-    //printf( "centipawns=%f, centipawns_ply0=%f, plymax=%d\n", centipawns, centipawns_ply0, plymax );
+    pv.value2 = static_cast<int>(centipawns_ply0+centipawns);
+    printf( "End of PV position is %s\n", cr.ToDebugStr().c_str() );
+    printf( "Old value=%d, centipawns=%f, centipawns_ply0=%f, plymax=%d\n", pv.value2, centipawns, centipawns_ply0, plymax );
+
+    // Simplified and improved value calculation
+    int limit_brdc = nptr->brdc;
+    if( limit_brdc > 6 )
+        limit_brdc = 6;
+    else if( limit_brdc < -6 )
+        limit_brdc = -6;
+    int limit_material = nptr->adjusted_material;
+    if( limit_material > 30 )
+        limit_material = 30;
+    else if( limit_material < -30 )
+        limit_material = -30;
+    centipawns = (4*limit_material + limit_brdc) * 100.0/8.0;
+    pv.value = static_cast<int>(centipawns);
+    printf( "New value=%d, centipawns=%f, material=%d brdc=%d\n", pv.value, centipawns, nptr->adjusted_material, nptr->brdc );
 }
 
 std::string sargon_pv_report_stats()
