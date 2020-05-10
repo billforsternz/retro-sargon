@@ -8,6 +8,7 @@
 #define SARGON_INTERFACE_H_INCLUDED
   
 #include <string>
+#include "sargon-pv.h"
 #include "thc.h"
 
 // Read a square value out of Sargon
@@ -33,6 +34,9 @@ unsigned int sargon_import_value( double value );
 
 // Sargon square convention -> string
 std::string algebraic( unsigned int sq );
+
+// Run Sargon move calculation
+void sargon_run_engine( const thc::ChessPosition &cp, int plymax, PV &pv, bool avoid_book );
 
 // Peek and poke at Sargon
 const unsigned char *peek(int offset);

@@ -582,6 +582,19 @@ static void sargon_import_position_inner( const thc::ChessPosition &cp )
     sargon(api_ROYALT);
 }
 
+// Run Sargon move calculation
+void sargon_run_engine( const thc::ChessPosition &cp, int plymax, PV &pv, bool avoid_book )
+{
+    sargon_pv_clear( cp );
+    pokeb(PLYMAX, plymax);
+    pokeb(MLPTRJ,0);
+    pokeb(MLPTRJ+1,0);
+    sargon_import_position(cp,avoid_book);
+    pokeb( KOLOR, cp.WhiteToPlay() ? 0 : 0x80 );    // Sargon is side to move
+    sargon(api_CPTRMV);
+    pv = sargon_pv_get(); // only update if CPTRMV completes (engine uses longjmp to abort if timeout)
+}
+
 const unsigned char *peek(int offset)
 {
     unsigned char *sargon_mem_base = &sargon_base_address;
