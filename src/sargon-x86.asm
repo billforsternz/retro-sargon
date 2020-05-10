@@ -34,9 +34,6 @@ shadow_ax  dw   0       ;For Z80 EX af,af' emulation
 shadow_bx  dw   0       ;For Z80 EXX emulation
 shadow_cx  dw   0
 shadow_dx  dw   0
-PUBLIC  _gbl_adjusted_material
-_gbl_adjusted_material db 0
-           db   0
 PUBLIC  _sargon_base_address
 _sargon_base_address:   ;Base of 64K of Z80 data we are emulating
 ;       ORG     100h
@@ -1769,21 +1766,15 @@ rel014: SUB     al,ch                           ; Subtract points lost
         NEG     al                              ; Negate for black
 rel015: MOV     bx,MTRL                         ; Net material on board
         ADD     al,byte ptr [ebp+ebx]           ; Add exchange adjustments
-        MOV     _gbl_adjusted_material,al
-        CALLBACK "MATERIAL"
         MOV     bx,MV0                          ; Material at ply 0
         SUB     al,byte ptr [ebp+ebx]           ; Subtract from current
-        ;CALLBACK "MATERIAL - PLY0"
         MOV     ch,al                           ; Save
         MOV     al,30                           ; Load material limit
         CALL    LIMIT                           ; Limit to plus or minus value
-        ;CALLBACK "MATERIAL LIMITED"
         MOV     dl,al                           ; Save limited value
         MOV     al,byte ptr [ebp+BRDC]          ; Get board control points
-        ;CALLBACK "MOBILITY"
         MOV     bx,BC0                          ; Board control at ply zero
         SUB     al,byte ptr [ebp+ebx]           ; Get difference
-        ;CALLBACK "MOBILITY - PLY0"
         MOV     ch,al                           ; Save
         MOV     al,byte ptr [ebp+PTSCK]         ; Moving piece lost flag
         AND     al,al                           ; Is it zero ?
