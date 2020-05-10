@@ -65,7 +65,7 @@ static void        cmd_position( const std::string &whole_cmd_line, const std::v
 // Misc
 static bool is_new_game();
 static int log( const char *fmt, ... );
-static bool RunSargon();
+static bool RunSargon( int plymax, bool avoid_book );
 static void ProgressReport();
 static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long ms_inc );
 
@@ -298,9 +298,8 @@ static void write_stdout()
 
 // Run Sargon analysis, until completion or timer abort (see callback() for timer abort)
 static jmp_buf jmp_buf_env;
-static bool RunSargon()
+static bool RunSargon( int plymax, bool avoid_book )
 {
-    sargon_pv_clear( the_position );
     bool aborted = false;
     int val;
     val = setjmp(jmp_buf_env);
@@ -309,8 +308,7 @@ static bool RunSargon()
     else
     {
         base_time_sargon_execution = elapsed_milliseconds();
-        sargon(api_CPTRMV);
-        the_pv = sargon_pv_get(); // only update if CPTRMV completes
+        sargon_run_engine(the_position,plymax,the_pv,avoid_book); // the_pv updated only if not aborted
     }
     return aborted;
 }
@@ -463,15 +461,7 @@ static void cmd_go_infinite()
     end_of_points_callbacks = 0;
     while( !aborted && plymax<=20 )
     {
-        pokeb(PLYMAX, plymax++);
-        pokeb(MLPTRJ,0);
-        pokeb(MLPTRJ+1,0);
-        sargon(api_INITBD);
-        sargon_import_position(the_position,true);  // note avoid_book = true
-        log( "Sargon's internal MOVENO set to %d\n", peekb(MOVENO) );
-        sargon(api_ROYALT);
-        pokeb( KOLOR, the_position.white ? 0 : 0x80 );    // Sargon is side to move
-        aborted = RunSargon();
+        aborted = RunSargon(plymax++,true);  // note avoid_book = true
         if( !aborted )
             ProgressReport();   
     }
@@ -729,18 +719,7 @@ static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsign
     unsigned long base = elapsed_milliseconds();
     for(;;)
     {
-        pokeb(MVEMSG,   0 );
-        pokeb(MVEMSG+1, 0 );
-        pokeb(MVEMSG+2, 0 );
-        pokeb(MVEMSG+3, 0 );
-        pokeb(MLPTRJ,0);
-        pokeb(MLPTRJ+1,0);
-        pokeb(PLYMAX, plymax );
-        sargon(api_INITBD);
-        sargon_import_position(the_position);
-        sargon(api_ROYALT);
-        pokeb( KOLOR, the_position.white ? 0 : 0x80 );    // Sargon is side to move
-        bool aborted = RunSargon();
+        bool aborted = RunSargon(plymax,false);
         unsigned long now = elapsed_milliseconds();
         unsigned long elapsed = (now-base);
         if( aborted  || the_pv.variation.size()==0 )
@@ -871,7 +850,7 @@ extern "C" {
         const unsigned char *code = (const unsigned char *)ret_addr;
         const char *msg = (const char *)(code+2);   // ASCIIZ text should come after that
         total_callbacks++;
-#if 1
+#if 0
         static bool position_of_interest;
         unsigned char al = reg_eax & 0xff;
         if( 0 == strcmp(msg,"MATERIAL") )
@@ -940,13 +919,13 @@ extern "C" {
 #endif
         if( 0 == strcmp(msg,"end of POINTS()") )
         {
-            sargon_pv_callback_end_of_points();
             end_of_points_callbacks++;
             unsigned long now = elapsed_milliseconds();
             unsigned long elapsed = now - base_time_sargon_execution;
             base_time_sargon_execution = now;
             if( elapsed > max_gap_so_far )
                 max_gap_so_far = elapsed;
+            sargon_pv_callback_end_of_points();
         }
         else if( 0 == strcmp(msg,"Yes! Best move") )
         {
