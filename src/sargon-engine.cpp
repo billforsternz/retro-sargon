@@ -940,6 +940,7 @@ extern "C" {
 #endif
         if( 0 == strcmp(msg,"end of POINTS()") )
         {
+            sargon_pv_callback_end_of_points();
             end_of_points_callbacks++;
             unsigned long now = elapsed_milliseconds();
             unsigned long elapsed = now - base_time_sargon_execution;

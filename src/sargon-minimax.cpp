@@ -1349,7 +1349,9 @@ extern "C" {
                 }
             }
 #endif
-            if( std::string(msg) == "Yes! Best move" )
+            if( std::string(msg) == "end of POINTS()" )
+                sargon_pv_callback_end_of_points();
+            else if( std::string(msg) == "Yes! Best move" )
                 sargon_pv_callback_yes_best_move();
             return;
         }
