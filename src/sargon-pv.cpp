@@ -38,7 +38,7 @@ static unsigned long max_len_so_far;
 static void BuildPV( PV &pv );
 static PV provisional;
 
-void sargon_pv_clear( thc::ChessRules &current_position  )
+void sargon_pv_clear( const thc::ChessPosition &current_position )
 {
     pv_base_position = current_position;
     provisional.clear();
