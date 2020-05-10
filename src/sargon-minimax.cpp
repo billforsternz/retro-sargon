@@ -650,15 +650,8 @@ public:
         //  effects node traversal and generates a best move.
         thc::ChessPosition cp;
         cp.Forsyth(pos_probe);
-        pokeb(MLPTRJ,0); //need to set this ptr to 0 to get Root position recognised in callback()
-        pokeb(MLPTRJ+1,0);
-        pokeb(KOLOR,0);
-        pokeb(PLYMAX,3);
-        sargon(api_INITBD);
-        sargon_import_position(cp);
-        sargon(api_ROYALT);
-        pokeb(MOVENO,3);    // Move number is 1 at at start, add 2 to avoid book move
-        sargon(api_CPTRMV);
+        PV pv;
+        sargon_run_engine( cp, 3, pv, true );
         callback_minimax_mods_active = false;
     }
 
