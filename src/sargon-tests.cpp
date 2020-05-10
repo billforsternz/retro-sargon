@@ -29,12 +29,6 @@ bool sargon_whole_game_tests( bool quiet, int comprehensive );
 extern void sargon_minimax_main();
 extern bool sargon_minimax_regression_test( bool quiet);
 
-// Misc diagnostics
-void dbg_ptrs();
-void dbg_position();
-void diagnostics();
-void on_exit_diagnostics() {}
-
 // main()
 int main( int argc, const char *argv[] )
 {
@@ -135,7 +129,6 @@ int main( int argc, const char *argv[] )
         double elapsed = static_cast<double>(ms.count());
         printf( "%s tests passed. Elapsed time = %.3f seconds\n", ok?"All":"Not all", elapsed/1000.0 ); 
     }
-    on_exit_diagnostics();
     return ok ? 0 : -1;
 }
 
@@ -492,10 +485,6 @@ bool sargon_position_tests( bool quiet, int comprehensive )
         TEST *pt = &tests[i];
         thc::ChessRules cr;
         cr.Forsyth(pt->fen);
-        sargon_import_position(cr);
-        pokeb(PLYMAX,pt->plymax_required);
-        unsigned char color = peekb(COLOR); // who to move? white = 0x00, black = 0x80
-        pokeb(KOLOR,color);                 // set Sargon's colour = side to move
         if( !quiet )
         {
             std::string intro = util::sprintf("\nTest position %d is", i+1 );
@@ -506,9 +495,8 @@ bool sargon_position_tests( bool quiet, int comprehensive )
         printf( "Test %d of %d: PLYMAX=%d:", i+1, nbr_tests_to_run, pt->plymax_required );
         if( 0 == strcmp(pt->fen,"2rq1r1k/3npp1p/3p1n1Q/pp1P2N1/8/2P4P/1P4P1/R4R1K w - - 0 1") )
             printf( " (sorry this particular test is very slow) :" );
-        sargon_pv_clear(cr);
-        sargon(api_CPTRMV);
-        PV pv = sargon_pv_get();
+        PV pv;
+        sargon_run_engine( cr, pt->plymax_required, pv, false );
         std::vector<thc::Move> &v = pv.variation;
         std::string s_pv;
         std::string spacer;
@@ -541,115 +529,5 @@ bool sargon_position_tests( bool quiet, int comprehensive )
             ok = false;
     }
     return ok;
-}
-
-// Diagnostics dump of chess position from Sargon
-void dbg_position()
-{
-    const unsigned char *sargon_board = peek(BOARDA);
-    for( int i=0; i<12; i++ )
-    {
-        for( int j=0; j<10; j++ )
-        {
-            unsigned int b = *sargon_board++;
-            printf( "%02x", b );
-            if( j+1 < 10 )
-                printf( " " );
-        }
-        printf( "\n" );
-    }
-}
-
-void dbg_ptrs()
-{
-    printf( "BESTM  = %04x\n", peekw(BESTM) );
-    printf( "MLPTRI = %04x\n", peekw(MLPTRI) );
-    printf( "MLPTRJ = %04x\n", peekw(MLPTRJ) );
-    printf( "MLLST  = %04x\n", peekw(MLLST) );
-    printf( "MLNXT  = %04x\n", peekw(MLNXT) );
-}
-
-void dbg_score()
-{
-    printf( "SCORE[0] = %d / %f\n", peekb(SCORE),   sargon_export_value(peekb(SCORE))   );
-    printf( "SCORE[1] = %d / %f\n", peekb(SCORE+1), sargon_export_value(peekb(SCORE+1)) );
-    printf( "SCORE[2] = %d / %f\n", peekb(SCORE+2), sargon_export_value(peekb(SCORE+2)) );
-    printf( "SCORE[3] = %d / %f\n", peekb(SCORE+3), sargon_export_value(peekb(SCORE+3)) );
-    printf( "SCORE[4] = %d / %f\n", peekb(SCORE+4), sargon_export_value(peekb(SCORE+4)) );
-}
-
-void dbg_plyix()
-{
-    printf( "PLYIX: " );
-    unsigned int p = PLYIX;
-    for( int i=0; i<20; i++ )
-    {
-        unsigned int x =peekw(p);
-        p += 2;
-        if( x )
-            printf( "%04x", x );
-        else
-            printf( "0" );
-        printf( "%s",  i+1<20 ? " " : "\n" );
-    }
-}
-
-void diagnostics()
-{
-    dbg_ptrs();
-    dbg_plyix();
-    dbg_score();
-    const char *s="";
-    unsigned int p=0;
-    for( int k=-1; k<24; k++ )
-    {
-        switch( k )
-        {
-            case -1: p = peekw(BESTM);     s = "BESTM";        break;
-            case 0:  p = peekw(MLPTRI);    s = "MLPTRI";       break;
-            case 1:  p = peekw(MLPTRJ);    s = "MLPTRJ";       break;
-            case 2:  p = peekw(MLLST);     s = "MLLST";        break;
-            case 3:  p = peekw(MLNXT);     s = "MLNXT";        break;
-            case 4:  p = peekw(PLYIX);     s = "PLYIX[0]";     break;
-            case 5:  p = peekw(PLYIX+2 );  s = "PLYIX[2]";     break;
-            case 6:  p = peekw(PLYIX+4 );  s = "PLYIX[4]";     break;
-            case 7:  p = peekw(PLYIX+6 );  s = "PLYIX[6]";     break;
-            case 8:  p = peekw(PLYIX+8 );  s = "PLYIX[8]";     break;
-            case 9:  p = peekw(PLYIX+10);  s = "PLYIX[10]";    break;
-            case 10: p = peekw(PLYIX+12);  s = "PLYIX[12]";    break;
-            case 11: p = peekw(PLYIX+14);  s = "PLYIX[14]";    break;
-            case 12: p = peekw(PLYIX+16);  s = "PLYIX[16]";    break;
-            case 13: p = peekw(PLYIX+18);  s = "PLYIX[18]";    break;
-            case 14: p = peekw(PLYIX+20);  s = "PLYIX[20]";    break;
-            case 15: p = peekw(PLYIX+22);  s = "PLYIX[22]";    break;
-            case 16: p = peekw(PLYIX+24);  s = "PLYIX[24]";    break;
-            case 17: p = peekw(PLYIX+26);  s = "PLYIX[26]";    break;
-            case 18: p = peekw(PLYIX+28);  s = "PLYIX[28]";    break;
-            case 19: p = peekw(PLYIX+30);  s = "PLYIX[30]";    break;
-            case 20: p = peekw(PLYIX+32);  s = "PLYIX[32]";    break;
-            case 21: p = peekw(PLYIX+34);  s = "PLYIX[34]";    break;
-            case 22: p = peekw(PLYIX+36);  s = "PLYIX[36]";    break;
-            case 23: p = peekw(PLYIX+38);  s = "PLYIX[38]";    break;
-        }
-        if( p )
-        {
-            printf( "%9s: ", s );
-            for( int i=0; i<50 && (p); i++ )
-            {
-                unsigned char from  = peekb(p+2);
-                unsigned char to    = peekb(p+3);
-                unsigned char flags = peekb(p+4);
-                unsigned char value = peekb(p+5);
-                double fvalue = sargon_export_value(value);
-                if( i > 0 )
-                    printf( "%9s: ", " " );
-                if( p < 0x400 )
-                    printf( "link=0x%04x\n", peekw(p) );
-                else
-                    printf( "link=0x%04x, from=%s, to=%s flags=0x%02x value=%d/%.1f\n", peekw(p), algebraic(from).c_str(), algebraic(to).c_str(), flags, value, fvalue );
-                p = peekw(p);
-            }
-        }
-    }
 }
 
