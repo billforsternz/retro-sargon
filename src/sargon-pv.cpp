@@ -50,25 +50,141 @@ PV sargon_pv_get()
     return provisional;
 }
 
-extern "C" {
-extern char gbl_adjusted_material;
-};
-//void sargon_pv_callback_material(uint32_t reg_eax)
-//{
-//    char al = static_cast<char>(reg_eax & 0xff);
-//    gbl_adjusted_material = al;
-//}
+/*
+
+  An improved Sargon value/centipawns calculation based on the following
+  code in sargon-x86.asm
+
+PT25A:  MOV     al,byte ptr [ebp+PTSL]          ; Get max points lost
+        AND     al,al                           ; Is it zero ?
+        JZ      rel013                          ; Yes - jump
+        DEC     al                              ; Decrement it
+rel013: MOV     ch,al                           ; Save it
+        MOV     al,byte ptr [ebp+PTSW1]         ; Max,points won
+        AND     al,al                           ; Is it zero ?
+        JZ      rel014                          ; Yes - jump
+        MOV     al,byte ptr [ebp+PTSW2]         ; 2nd max points won
+        AND     al,al                           ; Is it zero ?
+        JZ      rel014                          ; Yes - jump
+        DEC     al                              ; Decrement it
+        SHR     al,1                            ; Divide it by 2
+rel014: SUB     al,ch                           ; Subtract points lost
+        MOV     bx,COLOR                        ; Color of side just moved ???
+        TEST    byte ptr [ebp+ebx],80h          ; Is it white ?
+        JZ      rel015                          ; Yes - jump
+        NEG     al                              ; Negate for black
+rel015: MOV     bx,MTRL                         ; Net material on board
+        ADD     al,byte ptr [ebp+ebx]           ; Add exchange adjustments
+        MOV     _gbl_adjusted_material,al  ;<-- We added this temporarily, now
+                                           ;    removed as we have confirmed we
+                                           ;    can calculate it using the
+                                           ;    callbacks we already have
+
+*/
+
+static unsigned char end_of_points_color;
+void sargon_pv_callback_end_of_points()
+{
+    end_of_points_color = peekb(COLOR);
+}
 
 void sargon_pv_callback_yes_best_move()
 {
+    // Collect the best moves' attributes
     unsigned int p      = peekw(MLPTRJ);
     unsigned int level  = peekb(NPLY);
     unsigned char from  = peekb(p+2);
     unsigned char to    = peekb(p+3);
     unsigned char flags = peekb(p+4);
     unsigned char value = peekb(p+5);
-    char adjusted_material = gbl_adjusted_material;
-    char brdc     = static_cast<char>(peekb(BRDC));
+
+    // In this 'value' is used by Sargon for minimax. It is the value
+    //  we convert to and from centipawns in sargon_import_value()
+    //  and sargon_export_value(). See also the commentary associated
+    //  with sargon_import_value() and sargon_export_value(). This
+    //  value cannot be used directly to report the chess engine's
+    //  score, as it is relative to ply 0. We need an absolute value.
+    //  Teasing out the absolute value is awkward. The score has two
+    //  components (material and board control) and these are stored
+    //  and limited (i.e. truncated) separately. The errors associated
+    //  with truncation can compound if we try to work backwards from
+    //  a relative score, so it is best to pick out the absolute
+    //  score before it is made relative. That approach eventually
+    //  yielded the code below - which is just a C++ conversion of
+    //  the sargon assembly code above. See other comments with
+    //  the text ABSOLUTE (all caps) in this file.
+
+// PT25A:  MOV     al,byte ptr [ebp+PTSL]          ; Get max points lost
+//         AND     al,al                           ; Is it zero ?
+//         JZ      rel013                          ; Yes - jump
+//         DEC     al                              ; Decrement it
+// rel013: MOV     ch,al                           ; Save it
+    char ptsl  = static_cast<char>(peekb(PTSL));
+    if( ptsl != 0 )
+        ptsl--;
+
+//         MOV     al,byte ptr [ebp+PTSW1]         ; Max,points won
+//         AND     al,al                           ; Is it zero ?
+//         JZ      rel014                          ; Yes - jump
+//         MOV     al,byte ptr [ebp+PTSW2]         ; 2nd max points won
+//         AND     al,al                           ; Is it zero ?
+//         JZ      rel014                          ; Yes - jump
+//         DEC     al                              ; Decrement it
+//         SHR     al,1                            ; Divide it by 2
+    char ptsw1 = static_cast<char>(peekb(PTSW1));
+    char ptsw2 = static_cast<char>(peekb(PTSW2));
+    char val = ptsw1;
+    if( ptsw1 != 0 )
+    {
+        val = ptsw2;
+        if( ptsw2 != 0 )
+        {
+            val--;
+            val /= 2;
+        }
+    }
+
+// rel014: SUB     al,ch                           ; Subtract points lost
+//         MOV     bx,COLOR                        ; Color of side just moved ???
+//         TEST    byte ptr [ebp+ebx],80h          ; Is it white ?
+//         JZ      rel015                          ; Yes - jump
+//         NEG     al                              ; Negate for black
+    val -= ptsl;
+    //unsigned char color = peekb(COLOR);
+    if( (end_of_points_color&0x80) != 0 )
+        val = 0 - val;
+
+// rel015: MOV     bx,MTRL                         ; Net material on board
+//         ADD     al,byte ptr [ebp+ebx]           ; Add exchange adjustments
+//         MOV     _gbl_adjusted_material,al
+    char mtrl = static_cast<char>(peekb(MTRL));
+    char adjusted_material = (val + mtrl);
+
+    //  It took a few goes to get the calculation working right, we
+    //   checked it and debugged the process here. The biggest problem
+    //   was that sometimes (but not always) Sargon's COLOR had toggled
+    //   since the POINTS() function ran, so now we save the value
+    //   of COLOR in POINTS() [which we have a callback for].
+#if 0
+//extern "C" {
+//extern char gbl_adjusted_material;
+//};
+    if( adjusted_material != gbl_adjusted_material )
+    {
+        printf( "***** WHOOP WHOOP PULL UP *****\n" );
+        printf( "ptsl = %d\n", ptsl );
+        printf( "ptsw1 = %d\n", ptsw1 );
+        printf( "ptsw2 = %d\n", ptsw2 );
+        printf( "val = %d\n", val );
+        printf( "color = 0x%02x\n", color );
+        printf( "end_of_points_color = 0x%02x\n", end_of_points_color );
+        printf( "mtrl = %d\n", mtrl );
+        printf( "adjusted_material = %d\n", adjusted_material );
+        printf( "gbl_adjusted_material = %d\n", gbl_adjusted_material );
+        printf( "***** WHOOP WHOOP PULL UP *****\n" );
+    }
+#endif // 0
+    char brdc = static_cast<char>(peekb(BRDC));
     if( peekb(PTSCK) )
         brdc = 0;
     NODE n(level,from,to,flags,value,adjusted_material,brdc);
@@ -202,6 +318,10 @@ static void BuildPV( PV &pv )
     //  The actual ply0 score is available, but since it also adds the possible exchanges
     //  adjustment and we don't want that, calculate the weighted combination of net
     //  material and net mobility at ply0 instead.
+    //  We no long use the results calculated from this code. Instead of getting an
+    //  RELATIVE value and working backwards to get an ABSOLUTE value, we calculate an
+    //  ABSOLUTE value directly and use that. Search for ABSOLUTE (in caps) in comments
+    //  in this file for more information.
     char mv0 = peekb(MV0);      // net ply 0 material (pawn=2, knight/bishop=6, rook=10...)
     if( mv0 > 30 )              // Sargon limits this to +-30 (so 15 pawns) to avoid overflow
         mv0 = 30;
@@ -215,17 +335,15 @@ static void BuildPV( PV &pv )
     int ply0 = mv0*4 + bc0;     // Material gets 4 times weight as mobility (4*30 + 6 = 126 doesn't overflow signed char)
     double centipawns_ply0 = ply0 * 100.0/8.0;   // pawn is 2*4 = 8 -> 100 centipawns 
 
-    // Avoid this apparently simpler alternative, because don't want exchange adjustment at ply 0
-#if 0
-    double fvalue_ply0 = sargon_export_value( peekb(5) ); //Where root node value ends up if MLPTRJ=0, which it does initially
-#endif
+    // Don't use this, we don't want exchange adjustment at ply 0
+    //double fvalue_ply0 = sargon_export_value( peekb(5) ); //Where root node value ends up if MLPTRJ=0, which it does initially
 
     // So actual value is ply0 + score relative to ply0
-    pv.value2 = static_cast<int>(centipawns_ply0+centipawns);
-    printf( "End of PV position is %s\n", cr.ToDebugStr().c_str() );
-    printf( "Old value=%d, centipawns=%f, centipawns_ply0=%f, plymax=%d\n", pv.value2, centipawns, centipawns_ply0, plymax );
+    pv.value2 = static_cast<int>(centipawns_ply0+centipawns);   // pv.value2 is deprecated, we use pv.value based on ABSOLUTE calculation
+    //printf( "End of PV position is %s\n", cr.ToDebugStr().c_str() );
+    //printf( "Old value=%d, centipawns=%f, centipawns_ply0=%f, plymax=%d\n", pv.value2, centipawns, centipawns_ply0, plymax );
 
-    // Simplified and improved value calculation
+    // Simplified and improved ABSOLUTE value calculation
     int limit_brdc = nptr->brdc;
     if( limit_brdc > 6 )
         limit_brdc = 6;
@@ -237,8 +355,9 @@ static void BuildPV( PV &pv )
     else if( limit_material < -30 )
         limit_material = -30;
     centipawns = (4*limit_material + limit_brdc) * 100.0/8.0;
-    pv.value = static_cast<int>(centipawns);
-    printf( "New value=%d, centipawns=%f, material=%d brdc=%d\n", pv.value, centipawns, nptr->adjusted_material, nptr->brdc );
+    pv.value = static_cast<int>(centipawns);   // the old pv.value calculation is still available as pv.value2 but is deprecated
+                                               // the new pv.value is now based on the improved ABSOLUTE calculation
+    //printf( "New value=%d, centipawns=%f, material=%d brdc=%d\n", pv.value, centipawns, nptr->adjusted_material, nptr->brdc );
 }
 
 std::string sargon_pv_report_stats()

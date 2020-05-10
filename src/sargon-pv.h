@@ -23,7 +23,7 @@ struct PV
 
 void sargon_pv_clear( thc::ChessRules &current_position );
 PV sargon_pv_get();
-//void sargon_pv_callback_material( uint32_t reg_eax );
+void sargon_pv_callback_end_of_points();
 void sargon_pv_callback_yes_best_move();
 std::string sargon_pv_report_stats();
 
