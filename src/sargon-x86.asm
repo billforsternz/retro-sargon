@@ -382,12 +382,14 @@ BMOVES  EQU     0334h
         DB      34,54,10H
         DB      85,65,10H
         DB      84,64,10H
-LINECT  EQU     0340h                           ;not needed in X86 port (but avoids assembler error)
+                                                ;Two variables defined in a later .IF_Z80 section for Z80
+LINECT  EQU     0340h                           ;not really needed in X86 port (but avoids assembler error)
         DB      0
-MVEMSG  EQU     0341h                           ;not needed in X86 port (but avoids assembler error)
+MVEMSG  EQU     0341h                           ;(in Z80 Sargon user interface was algebraic move in ascii
         DB      0,0,0,0,0
-                                                ;(in Z80 Sargon user interface was algebraic move in ascii
-                                                ; here we just need to allocate the same 5 bytes)
+                                                ; [5 bytes] and also used for a quite different purpose as
+                                                ; a pair of binary bytes in PLYRMV and VALMOV. In our X86
+                                                ; port we do need and use the VALMOV functionality).
 
 ;***********************************************************
 ; MOVE LIST SECTION
