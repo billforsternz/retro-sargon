@@ -534,6 +534,14 @@ static void sargon_import_position_inner( const thc::ChessPosition &cp )
             bool moved=true;
             if( i==0 )
             {
+                // The next comment is a bit confusing, here is an attempt to
+                // unravel its meaning.
+                // Indicate a R on its home square has not moved, unless it's
+                //  essential to mark it moved in order to stop illegal castling
+                // So if white a rook is on h1,
+                //    Only mark it moved if both !wking_allowed() AND wking on e1
+                //    So mark it moved, unless wking_allowed() OR wking not on e1
+                //    !(x and y) === (!x || !y) 
                 if( j==0 && c=='R' && (cp.wking_allowed()||!white_king_on_e1) )
                     moved = false;  // indicate R on home square has not moved, unless it's
                                     //  essential to mark it moved in order to stop illegal castling 
@@ -587,10 +595,15 @@ void sargon_run_engine( const thc::ChessPosition &cp, int plymax, PV &pv, bool a
 {
     sargon_pv_clear( cp );
     pokeb(PLYMAX, plymax);
-    pokeb(MLPTRJ,0);
-    pokeb(MLPTRJ+1,0);
+    pokeb(MLPTRJ,0);    // There is an apparent bug in Sargon. Variable MLPTRJ is not explicitly initialised
+    pokeb(MLPTRJ+1,0);  //  by Sargon CPTRMV(). The the score (MLVAL) of the root node is stored early in
+                        //  the calculation at the MLVAL offset from MLPTRJ. If MLPTRJ has its initial
+                        //  default value of 0, this means MLVAL is poked into address 5. In the Sargon
+                        //  emulation, we leave the whole 256 bytes emulating the start of memory unused,
+                        //  in part to make this flaw harmless. We set MLPTRJ to 0 before every CPTRMV() to
+                        //  lock down this behaviour.
     sargon_import_position(cp,avoid_book);
-    pokeb( KOLOR, cp.WhiteToPlay() ? 0 : 0x80 );    // Sargon is side to move
+    pokeb( KOLOR, peekb(COLOR) );  // Set KOLOR (Sargon's colour) to COLOR (side to move)
     sargon(api_CPTRMV);
     pv = sargon_pv_get(); // only update if CPTRMV completes (engine uses longjmp to abort if timeout)
 }
