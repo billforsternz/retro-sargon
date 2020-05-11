@@ -156,13 +156,6 @@ bool sargon_whole_game_tests( bool quiet, int comprehensive )
             pokeb(PLYMAX, plymax );
             if( regenerate_position )
                 sargon_import_position(cr);
-            pokeb(MLPTRJ,0);    // There is an apparent bug in Sargon. Variable MLPTRJ is not explicitly initialised
-            pokeb(MLPTRJ+1,0);  //  by Sargon CPTRMV(). The the score (MLVAL) of the root node is stored early in
-                                //  the calculation at the MLVAL offset from MLPTRJ. If MLPTRJ has its initial
-                                //  default value of 0, this means MLVAL is poked into address 5. In the Sargon
-                                //  emulation, we leave the whole 256 bytes emulating the start of memory unused,
-                                //  in part to make this flaw harmless. We set MLPTRJ to 0 before every CPTRMV() to
-                                //  lock down this behaviour.
             sargon(api_CPTRMV);
             thc::ChessRules cr_after;
             sargon_export_position(cr_after);

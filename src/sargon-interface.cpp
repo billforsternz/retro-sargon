@@ -372,6 +372,14 @@ void sargon_export_position( thc::ChessPosition &cp )
 // Write chess position into Sargon
 void sargon_import_position( const thc::ChessPosition &cp, bool avoid_book )
 {
+    pokeb(MLPTRJ,0);    // There is an apparent bug in Sargon. Variable MLPTRJ is not explicitly initialised
+    pokeb(MLPTRJ+1,0);  //  by Sargon CPTRMV(). The the score (MLVAL) of the root node is stored early in
+                        //  the calculation at the MLVAL offset from MLPTRJ. If MLPTRJ has its initial
+                        //  default value of 0, this means MLVAL is poked into address 5. In the Sargon
+                        //  emulation, we leave the whole 256 bytes emulating the start of memory unused,
+                        //  in part to make this flaw harmless. We set MLPTRJ to 0 before any sequence of
+                        //  Sargon operations to lock down this behaviour.
+
     // Sargon's move evaluation takes some account of the full move number (it
     //  prioritises moving unmoved pieces early). So get an approximation to
     //  that by counting pieces that aren't in their initial positions
@@ -595,13 +603,6 @@ void sargon_run_engine( const thc::ChessPosition &cp, int plymax, PV &pv, bool a
 {
     sargon_pv_clear( cp );
     pokeb(PLYMAX, plymax);
-    pokeb(MLPTRJ,0);    // There is an apparent bug in Sargon. Variable MLPTRJ is not explicitly initialised
-    pokeb(MLPTRJ+1,0);  //  by Sargon CPTRMV(). The the score (MLVAL) of the root node is stored early in
-                        //  the calculation at the MLVAL offset from MLPTRJ. If MLPTRJ has its initial
-                        //  default value of 0, this means MLVAL is poked into address 5. In the Sargon
-                        //  emulation, we leave the whole 256 bytes emulating the start of memory unused,
-                        //  in part to make this flaw harmless. We set MLPTRJ to 0 before every CPTRMV() to
-                        //  lock down this behaviour.
     sargon_import_position(cp,avoid_book);
     pokeb( KOLOR, peekb(COLOR) );  // Set KOLOR (Sargon's colour) to COLOR (side to move)
     sargon(api_CPTRMV);
