@@ -361,10 +361,12 @@ BMOVES: .BYTE   35,55,10H
         .BYTE   84,64,10H
         .IF_Z80
         .ELSE
-LINECT  .BYTE   0               ;not needed in X86 port (but avoids assembler error)
-MVEMSG  .BYTE   0,0,0,0,0       ;not needed in X86 port (but avoids assembler error)
-                                ;(in Z80 Sargon user interface was algebraic move in ascii
-                                ; here we just need to allocate the same 5 bytes)
+                                ;Two variables defined in a later .IF_Z80 section for Z80
+LINECT  .BYTE   0               ;not really needed in X86 port (but avoids assembler error)
+MVEMSG  .BYTE   0,0,0,0,0       ;(in Z80 Sargon user interface was algebraic move in ascii
+                                ; [5 bytes] and also used for a quite different purpose as
+                                ; a pair of binary bytes in PLYRMV and VALMOV. In our X86
+                                ; port we do need and use the VALMOV functionality).
         .ENDIF
         
 ;***********************************************************

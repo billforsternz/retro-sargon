@@ -2064,7 +2064,7 @@ INVAL2  DB      "TRY AGAIN"
 BRDPOS  DS      1               ; Index into the board array
 ANBDPS  DS      1               ; Additional index required for ANALYS
 INDXER  DW      BLBASE          ; Index into graphics data base
-NORMAD  DS      2*(1)           ; The address of the upper left hand
+NORMAD  DS      2               ; The address of the upper left hand
                                 ; corner of the square on the board
 LINECT  DB      0               ; Current line number
 

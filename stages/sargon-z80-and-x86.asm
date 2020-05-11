@@ -361,10 +361,12 @@ BMOVES  DB      35,55,10H
         DB      84,64,10H
         .IF_Z80
         .ELSE
-LINECT  DB      0               ;not needed in X86 port (but avoids assembler error)
-MVEMSG  DB      0,0,0,0,0       ;not needed in X86 port (but avoids assembler error)
-                                ;(in Z80 Sargon user interface was algebraic move in ascii
-                                ; here we just need to allocate the same 5 bytes)
+                                ;Two variables defined in a later .IF_Z80 section for Z80
+LINECT  DB      0               ;not really needed in X86 port (but avoids assembler error)
+MVEMSG  DB      0,0,0,0,0       ;(in Z80 Sargon user interface was algebraic move in ascii
+                                ; [5 bytes] and also used for a quite different purpose as
+                                ; a pair of binary bytes in PLYRMV and VALMOV. In our X86
+                                ; port we do need and use the VALMOV functionality).
         .ENDIF
 
 ;***********************************************************
@@ -2361,7 +2363,7 @@ INVAL2  DB      "TRY AGAIN"
 BRDPOS  DS      1               ; Index into the board array
 ANBDPS  DS      1               ; Additional index required for ANALYS
 INDXER  DW      BLBASE          ; Index into graphics data base
-NORMAD  DS      2*(1)           ; The address of the upper left hand
+NORMAD  DS      2               ; The address of the upper left hand
                                 ; corner of the square on the board
 LINECT  DB      0               ; Current line number
         .CODE
