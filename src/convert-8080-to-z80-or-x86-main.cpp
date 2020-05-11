@@ -499,7 +499,7 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
     // We can enable (or disable) callback to C++ code
     bool callback_enabled = true;
 
-    // .IF controls let us switch between three modes (currently)
+    // .IF controls let us switch between four modes
     enum { mode_normal, mode_x86, mode_z80, mode_not_z80 } mode = mode_normal;
         // mode_normal, converting 8080 to x86 or z80
         // mode_x86, added x86 code to be passed through (unless generate_z80_only)
@@ -509,6 +509,37 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
         // mode_not_z80, alternative to z80 code
         //   if generate_z80_only remove it
         //   else same as mode_normal
+
+    /*
+
+     Mode changes are as follows;
+     
+     mode_normal
+
+     .IF_X86
+       mode_x86
+     .ELSE
+       mode_z80
+     .ENDIF
+
+     mode_normal
+
+     .IF_Z80
+       mode_z80
+     .ELSE
+       mode_not_z80
+     .ENDIF
+
+     mode_normal
+
+     mode_normal:  8080 code we are translating, to X86 or Z80 mnemonics
+     mode_x86:     X86 code we pass through to X86 target and eliminate in Z80 target
+     mode_z80:     8080 code we translate to Z80 mnemonics but don't pass through to X86
+                   target, for example low level native hardware code
+     mode_not_z80: alternative to mode_z80 code, translate to X86 but strip if target
+                   is z80_only. Also known as mode_convert_or_strip
+
+    */
 
     unsigned int track_location = 0;
     for(;;)
@@ -630,7 +661,7 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
             else if( stmt.instruction == ".ELSE" )
             {
                 if( mode==mode_x86 )
-                    mode = mode_normal;
+                    mode = mode_z80;
                 else if( mode==mode_z80 )
                     mode = mode_not_z80;
                 else

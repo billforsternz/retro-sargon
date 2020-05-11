@@ -448,8 +448,40 @@ void convert( bool relax, bool z80_only, std::string fin, std::string fout, std:
     bool data_mode = true;
     translate_init( relax );
 
-    // .IF controls let us switch between four modes (currently)
-    enum { mode_convert, mode_pass_thru, mode_suspended, mode_convert_or_strip } mode = mode_convert;
+    // .IF controls let us switch between four modes
+    enum { mode_normal, mode_x86, mode_z80, mode_not_z80 } mode = mode_normal;
+
+    /*
+
+     Mode changes are as follows;
+     
+     mode_normal
+
+     .IF_X86
+       mode_x86
+     .ELSE
+       mode_z80
+     .ENDIF
+
+     mode_normal
+
+     .IF_Z80
+       mode_z80
+     .ELSE
+       mode_not_z80
+     .ENDIF
+
+     mode_normal
+
+     mode_normal:  Z80 code we are translating to X86
+     mode_x86:     X86 code we pass through to X86 target and eliminate in Z80 target
+     mode_z80:     8080 code that's been translated to Z80 mnemonics by
+                   convert-8080-to-z80-or-x86 but which we don't pass through to X86
+                   target, for example low level native hardware code
+     mode_not_z80: alternative to mode_z80 code, translate to X86 but strip if target
+                   is z80_only. Also known as mode_convert_or_strip
+
+    */
 
     unsigned int track_location = 0;
     for(;;)
@@ -493,7 +525,7 @@ void convert( bool relax, bool z80_only, std::string fin, std::string fout, std:
         }
 
         // Line by line reporting
-        if( !done && (mode==mode_convert || mode==mode_convert_or_strip) )
+        if( !done && (mode==mode_normal || mode==mode_not_z80) )
         {
             if( stmt.label != "" )
             {
@@ -531,7 +563,7 @@ void convert( bool relax, bool z80_only, std::string fin, std::string fout, std:
                 first = false;
             }
         }
-        if( !done && (mode==mode_convert || mode==mode_convert_or_strip) )
+        if( !done && (mode==mode_normal || mode==mode_not_z80) )
             util::putline(report_out,line_out);
 
         // Handle macro definition
@@ -554,25 +586,27 @@ void convert( bool relax, bool z80_only, std::string fin, std::string fout, std:
             }
             else if( stmt.instruction == ".IF_Z80" )
             {
-                mode = mode_suspended;
+                mode = mode_z80;
                 handled = true;         
             }
             else if( stmt.instruction == ".IF_X86" )
             {
-                mode = mode_pass_thru;
+                mode = mode_x86;
                 handled = true;         
             }
             else if( stmt.instruction == ".ELSE" )
             {
-                if( mode == mode_suspended )
-                    mode = mode_convert_or_strip;
+                if( mode == mode_z80 )
+                    mode = mode_not_z80;
+                else if( mode == mode_x86 )
+                    mode = mode_z80;
                 else
                     printf( "Error, unexpected .ELSE\n" );
                 handled = true;         
             }
             else if( stmt.instruction == ".ENDIF" )
             {
-                mode = mode_convert;
+                mode = mode_normal;
                 handled = true;         
             }
         }
@@ -580,7 +614,7 @@ void convert( bool relax, bool z80_only, std::string fin, std::string fout, std:
         // Generate the -z80_only file if that switch invoked
         if( z80_only )
         {
-            if( !handled && (mode==mode_suspended || mode==mode_convert) )
+            if( !handled && (mode==mode_z80 || mode==mode_normal) )
             {
                 if( stmt.instruction != "CALLBACK" )
                     util::putline( asm_out, line_original );
@@ -604,7 +638,7 @@ void convert( bool relax, bool z80_only, std::string fin, std::string fout, std:
         }
 
         // Pass through new X86 code
-        if( mode==mode_pass_thru && !handled )
+        if( mode==mode_x86 && !handled )
         {
             // special handling of lines like "api_n_X:"
             //  generate C code "const int api_X = n;"
@@ -637,7 +671,7 @@ void convert( bool relax, bool z80_only, std::string fin, std::string fout, std:
             continue;
         }
 
-        if( mode == mode_suspended  )
+        if( mode == mode_z80  )
             continue;
 
         // Generate assembly language output
@@ -662,7 +696,7 @@ void convert( bool relax, bool z80_only, std::string fin, std::string fout, std:
         if( stmt.typ!=normal && stmt.typ!=equate )
             continue;
 
-        if( handled || mode == mode_pass_thru )
+        if( handled || mode == mode_x86 )
             continue;
 
         switch( original_switch )

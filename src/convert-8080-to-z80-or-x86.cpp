@@ -17,6 +17,7 @@ enum ParameterPattern
 {
     echo,
     echo_allow_none,
+    echo_blkw,
     imm8,
     jump_addr_around,
     jump_around,
@@ -370,6 +371,19 @@ bool translate_z80( const std::string &line, const std::string &instruction, con
             util::rtrim(z80_out);   // for echo_allow_none
             break;
         }
+        case echo_blkw:     // like echo but doubles a string parameter, eg "23" -> "46"
+        {
+            std::string parm = parameters[0];
+            int nbr_words = atoi( parm.c_str() );
+            if( nbr_words == 0 )
+            {
+                printf( "Error: Illegal BLKW parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                return false;
+            }
+            int nbr_bytes = nbr_words*2;
+            z80_out = util::sprintf( format, util::sprintf("%d",nbr_bytes).c_str() );
+            break;
+        }
         case imm8:
         {
             std::string parm = parameters[0];
@@ -648,6 +662,7 @@ bool translate_x86( const std::string &line, const std::string &instruction, con
             break;
         }
         case echo_allow_none:
+        case echo_blkw:
         case echo:
         {
             x86_out = util::sprintf( format, parameters_listed.c_str() );
@@ -1307,7 +1322,7 @@ void translate_init()
     // Directives
     //
     xlat[".BLKB"] = { "DB\t%s DUP (?)", "DS\t%s", NULL, echo };
-    xlat[".BLKW"] = { "DW\t%s DUP (?)", "DS\t2*(%s)", NULL, echo };
+    xlat[".BLKW"] = { "DW\t%s DUP (?)", "DS\t%s", NULL, echo_blkw };
     xlat[".BYTE"] = { "DB\t%s", "DB\t%s", NULL, echo };
     xlat[".WORD"] = { "DD\t%s", "DW\t%s", NULL, echo };
     xlat[".LOC"]  = { ";ORG\t%s", "ORG\t%s", NULL, echo };
