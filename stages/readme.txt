@@ -10,9 +10,6 @@ sargon-asm-interface.h          ;Companion to sargon-x86.asm
 sargon-z80.asm                  ;Automatically generated from sargon-8080-and-x86.asm
 sargon-z80.lst                  ;Z80 listing after assembling with the excellent zmac.exe cross assembler
 sargon-z80-and-x86.asm          ;Automatically generated from sargon-8080-and-x86.asm
-sargon-x86-COMPARE.asm          ;Automatically generated from sargon-z80-and-x86.asm, matches sargon-x86.asm
-sargon-asm-interface-COMPARE.h  ;Companion to sargon-x86-COMPARE.asm, matches sargon-asm-interface.h
-sargon-z80-COMPARE.asm          ;Automatically generated from sargon-z80-and-x86.asm, matches sargon-z80.asm
 
 Notes
 =====
