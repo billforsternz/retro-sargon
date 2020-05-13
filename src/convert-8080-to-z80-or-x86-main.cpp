@@ -873,7 +873,11 @@ void convert( bool relax_switch, std::string fin, std::string fout, std::string 
             {
                 if( data_mode )
                 {
-                    asm_line_out = util::sprintf( "%s\tEQU\t%s", stmt.label.c_str(), str_location.c_str() );
+                    bool gen_z80 = (generate_switch==generate_z80 || generate_switch==generate_hybrid || generate_switch==generate_z80_only);
+                    if( gen_z80 )
+                        asm_line_out = util::sprintf( "%s:", stmt.label.c_str() );
+                    else
+                        asm_line_out = util::sprintf( "%s\tEQU\t%s", stmt.label.c_str(), str_location.c_str() );
                     std::string c_include_line_out = util::sprintf( "    const int %s = 0x%04x;", stmt.label.c_str(), track_location  );
                     util::putline( h_out, c_include_line_out );
                 }
