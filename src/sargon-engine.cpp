@@ -65,7 +65,7 @@ static bool is_new_game();
 static int log( const char *fmt, ... );
 static bool RunSargon( int plymax, bool avoid_book );
 static void ProgressReport();
-static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long ms_inc );
+static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long ms_inc, int depth );
 
 // A threadsafe-queue. (from https://stackoverflow.com/questions/15278343/c11-thread-safe-queue )
 template <class T>
@@ -122,29 +122,16 @@ int main( int argc, char *argv[] )
     std::string filename_base( argv[0] );
     logfile_name = filename_base + "-log.txt";
 #ifdef _DEBUG
-#if 1
     depth_option = 5;
     static const char *test_sequence[] =
     {
         "uci\n",
         "isready\n",
-        "position fen 7k/8/8/8/8/8/8/N6K b - - 0 1\n",   // an extra knight (+3.25 sensible)
-        "go\n",                                          // After fixing units per pawn from 10 to 8, now 4.00 (so something still wrong?) 
-        "position fen 7k/8/8/8/8/8/8/N5Kq w - - 0 1\n",  // an extra knight only after capturing queen (+1.05 ??)
-        "go\n"                                           // After fixing units per pawn from 10 to 8, now 3.00 (good)
+        "position fen 7k/8/8/8/8/8/8/N6K b - - 0 1\n",   // an extra knight
+        "go depth 6\n",                                  
+        "position fen 7k/8/8/8/8/8/8/N5Kq w - - 0 1\n",  // an extra knight only after capturing queen
+        "go\n"                                           
     };
-#else
-    depth_option = 5;
-    static const char *test_sequence[] =
-    {
-        "uci\n",
-        "isready\n",
-        "position fen 1r2kb1r/2pbpqp1/p1p2p2/2P2P2/2PP2P1/5N2/P3Q3/R1B2RK1 b k - 0 20\n",
-        "go\n",
-        "position fen r1b2rk1/p3q3/5n2/2pp2p1/2p2p2/P1P2P2/2PBPQP1/1R2KB1R w K - 0 20\n",
-        "go\n"
-    };
-#endif
     for( int i=0; i<sizeof(test_sequence)/sizeof(test_sequence[0]); i++ )
     {
         std::string s(test_sequence[i]);
@@ -419,19 +406,26 @@ static std::string cmd_go( const std::vector<std::string> &fields )
     }
     bool expecting_time = false;
     bool expecting_inc = false;
+    bool expecting_depth = false;
     int ms_time   = 0;
     int ms_inc    = 0;
+    int depth     = 0;
     for( std::string parm: fields )
     {
         if( expecting_time )
         {
             ms_time = atoi(parm.c_str());
-            expecting_time = 0;
+            expecting_time = false;
         }
         else if( expecting_inc )
         {
             ms_inc = atoi(parm.c_str());
-            expecting_inc = 0;
+            expecting_inc = false;
+        }
+        else if( expecting_depth )
+        {
+            depth = atoi(parm.c_str());
+            expecting_depth = false;
         }
         else
         {
@@ -439,10 +433,12 @@ static std::string cmd_go( const std::vector<std::string> &fields )
                 expecting_time = true;
             if( parm == sinc )
                 expecting_inc = true;
+            if( parm == "depth" )
+                expecting_depth = true;
         }
     }
     bool new_game = is_new_game();
-    thc::Move bestmove = CalculateNextMove( new_game, ms_time, ms_inc );
+    thc::Move bestmove = CalculateNextMove( new_game, ms_time, ms_inc, depth );
     return util::sprintf( "bestmove %s\n", bestmove.TerseOut().c_str() );
 }
 
@@ -684,33 +680,51 @@ static void ProgressReport()
 
 */
 
-static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long ms_inc )
+static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long ms_inc, int depth )
 {
-    log( "Input ms_time=%d, ms_inc=%d\n", ms_time, ms_inc );
+    log( "Input ms_time=%lu, ms_inc=%lu, depth=%d\n", ms_time, ms_inc, depth );
     static int plymax_target;
-    const unsigned long LO =100;
-    const unsigned long MED=30;
-    const unsigned long HI =16;
-    unsigned long ms_lo  = ms_time / LO;
-    unsigned long ms_med = ms_time / MED;
-    unsigned long ms_hi  = ms_time / HI;
+    unsigned long ms_lo=0;
 
-    // Use the cut off timer, with a medium cutoff if we haven't yet
-    //  established a target plymax
-    if( new_game || plymax_target == 0 )
+    // There are multiple reasons why we would run fixed depth, without a timer
+    if( depth == 0 )
     {
-        plymax_target = 0;
-        TimerSet( ms_med );
+        if( depth_option > 0 )
+            depth = depth_option;
+        else if( ms_time == 0 )
+            depth = 3;  // Set plymax=3 as a baseline, it's more or less instant
     }
+    bool fixed_depth = (depth>0);
+    if( fixed_depth )
+        TimerClear();
 
-    // Else the cut off timer is more of an emergency brake, and normally
-    //  we just re-run Sargon until we hit plymax_target
+    // Otherwise set a cutoff timer
     else
     {
-        TimerSet( ms_hi );
+        const unsigned long LO =100;
+        const unsigned long MED=30;
+        const unsigned long HI =16;
+        ms_lo  = ms_time / LO;
+        unsigned long ms_med = ms_time / MED;
+        unsigned long ms_hi  = ms_time / HI;
+
+
+        // Use the cut off timer, with a medium cutoff if we haven't yet
+        //  established a target plymax
+        if( new_game || plymax_target == 0 )
+        {
+            plymax_target = 0;
+            TimerSet( ms_med );
+        }
+
+        // Else the cut off timer is more of an emergency brake, and normally
+        //  we just re-run Sargon until we hit plymax_target
+        else
+        {
+            TimerSet( ms_hi );
+        }
     }
-    bool fixed_depth = (depth_option>0);
-    int plymax = fixed_depth ? depth_option : 3;
+    int plymax = 3; // Set plymax=3 as a baseline, it's more or less instant
     int stalemates = 0;
     std::string bestmove_terse;
     unsigned long base = elapsed_milliseconds();
@@ -741,13 +755,13 @@ static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsign
         else
         {
 
-            // If we have a move, and it checkmates opponent, play it!
+            // Best move found
             bestmove_terse = the_pv.variation[0].TerseOut();
             std::string bestm = sargon_export_move(BESTM);
             if( !aborted && bestmove_terse.substr(0,4) != bestm )
-            {
                 log( "Unexpected event: BESTM=%s != PV[0]=%s\n%s", bestm.c_str(), bestmove_terse.c_str(), the_position.ToDebugStr().c_str() );
-            }
+
+            // If we have a move, and it checkmates opponent, don't iterate further!
             thc::TERMINAL score_terminal;
             thc::ChessRules ce = the_position;
             ce.PlayMove(the_pv.variation[0]);
@@ -766,10 +780,6 @@ static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsign
                 }
             }
 
-            // If fixed depth, never iterate
-            if( fixed_depth )
-                break;
-
             // If we timed out, target plymax should be reduced
             if( aborted )
             {
@@ -777,22 +787,35 @@ static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsign
                 break;
             }
 
-            // Otherwise keep iterating or not, according to the time management algorithm
+            // Otherwise keep iterating or not
             bool keep_going = false;
-            if( plymax_target<=0 || plymax<plymax_target )
-                keep_going = true;  // no target or haven't reached target
-            else if( plymax_target>0 && plymax>=plymax_target && elapsed<ms_lo )
-                keep_going = true;  // reached target very quickly, so extend target
-            else if( stalemates == 1 )
-                keep_going = true;  // try one more ply if we stalemate opponent!
-            log( "elapsed=%lu, ms_lo=%lu, plymax=%d, plymax_target=%d, keep_going=%s\n", elapsed, ms_lo, plymax, plymax_target, keep_going?"true":"false @@" );  // @@ marks move in log
+            if( fixed_depth )
+            {
+                // If fixed_depth, iterate until required depth
+                if( plymax < depth )
+                    keep_going = true;  // haven't reached required depth
+            }
+            else
+            {
+                // If not fixed_depth, according to the time management algorithm
+                if( plymax_target<=0 || plymax<plymax_target )
+                    keep_going = true;  // no target or haven't reached target
+                else if( plymax_target>0 && plymax>=plymax_target && elapsed<ms_lo )
+                    keep_going = true;  // reached target very quickly, so extend target
+                else if( stalemates == 1 )
+                    keep_going = true;  // try one more ply if we stalemate opponent!
+                log( "elapsed=%lu, ms_lo=%lu, plymax=%d, plymax_target=%d, keep_going=%s\n", elapsed, ms_lo, plymax, plymax_target, keep_going?"true":"false @@" );  // @@ marks move in log
+            }
             if( !keep_going )
                 break;
             plymax++;
         }
     }
-    TimerClear();
-    plymax_target = plymax;
+    if( !fixed_depth )
+    {
+        TimerClear();
+        plymax_target = plymax;
+    }
     thc::Move bestmove;
     bestmove.Invalid();
     bool have_move = bestmove.TerseIn( &the_position, bestmove_terse.c_str() );
