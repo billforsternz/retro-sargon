@@ -602,8 +602,12 @@ static void sargon_import_position_inner( const thc::ChessPosition &cp )
 void sargon_run_engine( const thc::ChessPosition &cp, int plymax, PV &pv, bool avoid_book )
 {
     sargon_pv_clear( cp );
-    pokeb(PLYMAX, plymax);
-    sargon_import_position(cp,avoid_book);
+    if( plymax < 1 )  // constrain to sensible range
+        plymax = 1;
+    else if( plymax > 20 )
+        plymax = 20;
+    pokeb( PLYMAX, plymax );
+    sargon_import_position( cp, avoid_book );
     pokeb( KOLOR, peekb(COLOR) );  // Set KOLOR (Sargon's colour) to COLOR (side to move)
     sargon(api_CPTRMV);
     pv = sargon_pv_get(); // only update if CPTRMV completes (engine uses longjmp to abort if timeout)
