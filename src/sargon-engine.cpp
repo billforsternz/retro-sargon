@@ -725,6 +725,10 @@ static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsign
         }
     }
     int plymax = 3; // Set plymax=3 as a baseline, it's more or less instant
+#ifdef DONT_ITERATE_IF_FIXED_DEPTH
+    if( fixed_depth )    // it's more efficient but less informative (no progress reports)
+        plymax = depth;  //  to go straight to the final depth without iterating
+#endif
     int stalemates = 0;
     std::string bestmove_terse;
     unsigned long base = elapsed_milliseconds();
