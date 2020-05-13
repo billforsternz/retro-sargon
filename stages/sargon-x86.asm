@@ -186,6 +186,7 @@ POSQ    EQU     01d0h
         DB      45      DUP (?)                 ;Padding bytes to ORG location
 SCORE   EQU     0200h                           ;extended up to 10 ply
         DW      0,0,0,0,0,0,0,0,0,0,0
+        DW      0,0,0,0,0,0,0,0,0,0
 
 ;***********************************************************
 ; PLYIX   --  Ply Table. Contains pairs of pointers, a pair
@@ -194,7 +195,7 @@ SCORE   EQU     0200h                           ;extended up to 10 ply
 ;             The second pointer points to which move in the
 ;             list is the one currently being considered.
 ;***********************************************************
-PLYIX   EQU     0216h
+PLYIX   EQU     022ah
         DW      0,0,0,0,0,0,0,0,0,0
         DW      0,0,0,0,0,0,0,0,0,0
 
@@ -242,7 +243,7 @@ PLYIX   EQU     0216h
 ;
 ;***********************************************************
 ;       ORG     300h
-        DB      194     DUP (?)                 ;Padding bytes to ORG location
+        DB      174     DUP (?)                 ;Padding bytes to ORG location
 M1      EQU     0300h
         DW      TBASE
 M2      EQU     0302h

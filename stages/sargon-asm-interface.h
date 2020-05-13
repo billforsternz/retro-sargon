@@ -34,7 +34,7 @@ extern "C" {
     const int POSK = 0x01ce;
     const int POSQ = 0x01d0;
     const int SCORE = 0x0200;
-    const int PLYIX = 0x0216;
+    const int PLYIX = 0x022a;
     const int M1 = 0x0300;
     const int M2 = 0x0302;
     const int M3 = 0x0304;
