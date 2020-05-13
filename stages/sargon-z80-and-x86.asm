@@ -42,7 +42,7 @@ PUBLIC  _sargon_base_address
 _sargon_base_address:   ;Base of 64K of Z80 data we are emulating
         .ENDIF
         .IF_Z80
-START   EQU     $
+START:
         ORG     START+80H
 TBASE   EQU     START+100H
         .ELSE
@@ -192,6 +192,7 @@ SCORE   DW      0,0,0,0,0,0
         .ELSE
         ORG     200h
 SCORE   DW      0,0,0,0,0,0,0,0,0,0,0 ;extended up to 10 ply
+        DW      0,0,0,0,0,0,0,0,0,0
         .ENDIF
 
 ;***********************************************************
@@ -209,7 +210,7 @@ PLYIX   DW      0,0,0,0,0,0,0,0,0,0
 ;***********************************************************
         .IF_Z80
         ORG     START+2FFH
-STACK   EQU     $
+STACK:
         .ELSE
 ;For this C Callable Sargon, we just use the standard C Stack
 ;Significantly, Sargon doesn't do any stack based trickery
