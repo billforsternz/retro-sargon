@@ -32,14 +32,12 @@
 #include "sargon-asm-interface.h"
 #include "sargon-pv.h"
 
-//-- preferences
-#define VERSION "1978"
-#define ENGINE_NAME "Sargon"
-
 // Measure elapsed time, nodes    
 static unsigned long base_time;
 
 // Misc
+#define VERSION "1978 V1.00"
+#define ENGINE_NAME "Sargon"
 static int depth_option;    // 0=auto, other values for fixed depth play
 static std::string logfile_name;
 static unsigned long total_callbacks;
@@ -117,7 +115,6 @@ static void write_stdout();
 static void TimerClear();          // Clear the timer
 static void TimerEnd();            // End the timer subsystem system
 static void TimerSet( int ms );    // Set a timeout event, ms millisecs into the future (0 and -1 are special values)
-
 
 // main()
 int main( int argc, char *argv[] )
@@ -942,8 +939,9 @@ extern "C" {
             sargon_pv_callback_yes_best_move();
         }
 
-        // Abort RunSargon() if new event in queue (and it has found something)
-        if( !async_queue.empty() && the_pv.variation.size()>0 )
+        // Abort RunSargon() if new event in queue (and not PLYMAX<=3 which is
+        //  effectively instantaneous, finds a baseline move)
+        if( !async_queue.empty() && peekb(PLYMAX)>3 )
         {
             longjmp( jmp_buf_env, 1 );
         }
