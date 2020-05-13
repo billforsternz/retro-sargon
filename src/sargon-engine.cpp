@@ -149,9 +149,9 @@ int main( int argc, char *argv[] )
     first.join();                // pauses until first finishes
     second.join();               // pauses until second finishes
 
-    // Tell timer thread to finish, then wait for it too
+    // Tell timer thread to finish, then kill it immediately
     TimerEnd();
-    third.join();
+    third.detach();
     return 0;
 }
 
