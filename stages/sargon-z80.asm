@@ -29,6 +29,67 @@ BPAWN   EQU     BLACK+PAWN
 START:
         ORG     START+80H
 TBASE   EQU     START+100H
+;There are multiple tables used for fast table look ups
+;that are declared relative to TBASE. In each case there
+;is a table (say DIRECT) and one or more variables that
+;index into the table (say INDX2). The table is declared
+;as a relative offset from the TBASE like this;
+;
+;DIRECT = .-TBASE  ;In this . is the current location
+;                  ;($ rather than . is used in most assemblers)
+;
+;The index variable is declared as;
+;INDX2    .WORD TBASE
+;
+;TBASE itself is page aligned, for example TBASE = 100h
+;Although 2 bytes are allocated for INDX2 the most significant
+;never changes (so in our example it's 01h). If we want
+;to index 5 bytes into DIRECT we set the low byte of INDX2
+;to 5 (now INDX2 = 105h) and load IDX2 into an index
+;register. The following sequence loads register C with
+;the 5th byte of the DIRECT table (Z80 mnemonics)
+;        LD      A,5
+;        LD      [INDX2],A
+;        LD      IY,INDX2
+;        LD      C,[IY+DIRECT]
+;
+;It's a bit like the little known C trick where array[5]
+;can also be written as 5[array].
+;
+;The Z80 indexed addressing mode uses a signed 8 bit
+;displacement offset (here DIRECT) in the range -128
+;to 127. Sargon needs most of this range, which explains
+;why DIRECT is allocated 80h bytes after start and 80h
+;bytes *before* TBASE, this arrangement sets the DIRECT
+;displacement to be -80h bytes (-128 bytes). After the 24
+;byte DIRECT table comes the DPOINT table. So the DPOINT
+;displacement is -128 + 24 = -104. The final tables have
+;positive displacements.
+;
+;The negative displacements are not necessary in X86 where
+;the equivalent mov reg,[di+offset] indexed addressing
+;is not limited to 8 bit offsets, so in the X86 port we
+;put the first table DIRECT at the same address as TBASE,
+;a more natural arrangement I am sure you'll agree.
+;
+;In general it seems Sargon doesn't want memory allocated
+;in the first page of memory, so we start TBASE at 100h not
+;at 0h. One reason is that Sargon extensively uses a trick
+;to test for a NULL pointer; it tests whether the hi byte of
+;a pointer == 0 considers this as a equivalent to testing
+;whether the whole pointer == 0 (works as long as pointers
+;never point to page 0).
+;
+;Also there is an apparent bug in Sargon, such that MLPTRJ
+;is left at 0 for the root node and the MLVAL for that root
+;node is therefore written to memory at offset 5 from 0 (so
+;in page 0). It's a bit wasteful to waste a whole 256 byte
+;page for this, but it is compatible with the goal of making
+;as few changes as possible to the inner heart of Sargon.
+;In the X86 port we lock the uninitialised MLPTRJ bug down
+;so MLPTRJ is always set to zero and rendering the bug
+;harmless (search for MLPTRJ to find the relevant code).
+
 ;**********************************************************
 ; DIRECT  --  Direction Table.  Used to determine the dir-
 ;             ection of movement of each piece.
@@ -156,7 +217,7 @@ POSQ    DB      14,94
 ;             hold the scores at each ply. It includes two
 ;             "dummy" entries for ply -1 and ply 0.
 ;***********************************************************
-SCORE   DW      0,0,0,0,0,0
+SCORE   DW      0,0,0,0,0,0     ;Z80 max 6 ply
 
 ;***********************************************************
 ; PLYIX   --  Ply Table. Contains pairs of pointers, a pair
@@ -167,6 +228,10 @@ SCORE   DW      0,0,0,0,0,0
 ;***********************************************************
 PLYIX   DW      0,0,0,0,0,0,0,0,0,0
         DW      0,0,0,0,0,0,0,0,0,0
+;Although the X86 build allows many more ply, there is
+;more than sufficient zeroed memory available between
+;PLYIX and M1 (214 bytes, 107 words) so no need to adjust
+;this declaration
 
 ;***********************************************************
 ; STACK   --  Contains the stack for the program.
