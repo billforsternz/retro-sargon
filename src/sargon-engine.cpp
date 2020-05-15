@@ -119,22 +119,21 @@ static void TimerSet( int ms );    // Set a timeout event, ms millisecs into the
 // main()
 int main( int argc, char *argv[] )
 {
-    std::string filename_base( argv[0] );
-    logfile_name = filename_base + "-log.txt";
+    //logfile_name = std::string(argv[0]) + "-log.txt"; // wake this up for early logging
 #ifdef _DEBUG
-    depth_option = 5;
-    static const char *test_sequence[] =
+    static const std::vector<std::string> test_sequence =
     {
         "uci\n",
         "isready\n",
+        "setoption name FixedDepth value 5\n",           // go straight to depth 5 without iterating
+        "setoption name LogFileName value c:\\windows\\temp\\sargon-log-file.txt\n",
         "position fen 7k/8/8/8/8/8/8/N6K b - - 0 1\n",   // an extra knight
-        "go depth 6\n",                                  
+        "go depth 6\n",                                  // will override fixed depth option, iterates
         "position fen 7k/8/8/8/8/8/8/N5Kq w - - 0 1\n",  // an extra knight only after capturing queen
-        "go\n"                                           
+        "go\n"                                           // will go straight to depth 5, no iteration
     };
-    for( int i=0; i<sizeof(test_sequence)/sizeof(test_sequence[0]); i++ )
+    for( std::string s: test_sequence )
     {
-        std::string s(test_sequence[i]);
         util::rtrim(s);
         log( "cmd>%s\n", s.c_str() );
         process(s);
@@ -305,7 +304,7 @@ static bool process( const std::string &s )
     std::vector<std::string> fields_raw, fields;
     util::split( s, fields_raw );
     for( std::string f: fields_raw )
-        fields.push_back( util::tolower(f) );
+        fields.push_back( util::tolower(f) ); 
     if( fields.size() == 0 )
         return false;
     std::string cmd = fields[0];
@@ -346,7 +345,7 @@ static bool process( const std::string &s )
             end_of_points_callbacks,
             max_variance_so_far,
             max_gap_so_far );
-    log( "%s\n", sargon_pv_report_stats() );
+    log( "%s\n", sargon_pv_report_stats().c_str() );
     return quit;
 }
 
@@ -355,7 +354,8 @@ static std::string cmd_uci()
     std::string rsp=
     "id name " ENGINE_NAME " " VERSION "\n"
     "id author Dan and Kathe Spracklin, Windows port by Bill Forster\n"
-    "option name Depth type spin min 0 max 20 default 0\n"
+    "option name FixedDepth type spin min 0 max 20 default 0\n"
+    "option name LogFileName type string default\n"
     "uciok\n";
     return rsp;
 }
@@ -373,16 +373,23 @@ static std::string cmd_stop()
 
 static void cmd_setoption( const std::vector<std::string> &fields )
 {
-    // Support single option "Depth"
-    //  Depth is 0-20, default is 0. 0 indicates auto depth selection,
+    // Option "FixedDepth"
+    //  Range is 0-20, default is 0. 0 indicates auto depth selection,
     //   others are fixed depth
-
-    // eg "setoption name Depth value 3"
-    if( fields.size()>4 && fields[1]=="name" && fields[2]=="depth" && fields[3]=="value" )
+    // eg "setoption name FixedDepth value 3"
+    if( fields.size()>4 && fields[1]=="name" && fields[2]=="fixeddepth" && fields[3]=="value" )
     {
         depth_option = atoi(fields[4].c_str());
         if( depth_option<0 || depth_option>20 )
             depth_option = 0;
+    }
+
+    // Option "LogFileName"
+    //   string, default is empty string (no log kept in that case)
+    // eg "setoption name LogFileName value c:\windows\temp\sargon-log-file.txt"
+    else if( fields.size()>4 && fields[1]=="name" && fields[2]=="logfilename" && fields[3]=="value" )
+    {
+        logfile_name = fields[4];
     }
 }
 
@@ -685,12 +692,17 @@ static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsign
     log( "Input ms_time=%lu, ms_inc=%lu, depth=%d\n", ms_time, ms_inc, depth );
     static int plymax_target;
     unsigned long ms_lo=0;
+    bool go_straight_to_fixed_depth = false;
 
     // There are multiple reasons why we would run fixed depth, without a timer
     if( depth == 0 )
     {
         if( depth_option > 0 )
+        {
             depth = depth_option;
+            go_straight_to_fixed_depth = true;  // Only this way do we go straight to
+                                                //  specified depth without iterating
+        }
         else if( ms_time == 0 )
             depth = 3;  // Set plymax=3 as a baseline, it's more or less instant
     }
@@ -724,11 +736,12 @@ static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsign
             TimerSet( ms_hi );
         }
     }
-    int plymax = 3; // Set plymax=3 as a baseline, it's more or less instant
-#ifdef DONT_ITERATE_IF_FIXED_DEPTH
-    if( fixed_depth )    // it's more efficient but less informative (no progress reports)
-        plymax = depth;  //  to go straight to the final depth without iterating
-#endif
+    int plymax = 3;     // Set plymax=3 as a baseline, it's more or less instant
+    if( go_straight_to_fixed_depth )
+    {
+        plymax = depth;  // It's more efficient but less informative (no progress reports)
+                         //  to go straight to the final depth without iterating
+    }
     int stalemates = 0;
     std::string bestmove_terse;
     unsigned long base = elapsed_milliseconds();
@@ -835,26 +848,29 @@ static int log( const char *fmt, ... )
     std::lock_guard<std::mutex> lck(mtx);
 	va_list args;
 	va_start( args, fmt );
-    static bool first=true;
-    FILE *file_log;
-    errno_t err = fopen_s( &file_log, logfile_name.c_str(), first? "wt" : "at" );
-    first = false;
-    if( !err )
+    if( logfile_name != "" )
     {
-        static char buf[1024];
-        time_t t = time(NULL);
-        struct tm ptm;
-        localtime_s( &ptm, &t );
-        asctime_s( buf, sizeof(buf), &ptm );
-        char *p = strchr(buf,'\n');
-        if( p )
-            *p = '\0';
-        fputs( buf, file_log);
-        buf[0] = ':';
-        buf[1] = ' ';
-        vsnprintf( buf+2, sizeof(buf)-4, fmt, args ); 
-        fputs( buf, file_log );
-        fclose( file_log );
+        static bool first=true;
+        FILE *file_log;
+        errno_t err = fopen_s( &file_log, logfile_name.c_str(), first? "wt" : "at" );
+        first = false;
+        if( !err )
+        {
+            static char buf[1024];
+            time_t t = time(NULL);
+            struct tm ptm;
+            localtime_s( &ptm, &t );
+            asctime_s( buf, sizeof(buf), &ptm );
+            char *p = strchr(buf,'\n');
+            if( p )
+                *p = '\0';
+            fputs( buf, file_log);
+            buf[0] = ':';
+            buf[1] = ' ';
+            vsnprintf( buf+2, sizeof(buf)-4, fmt, args ); 
+            fputs( buf, file_log );
+            fclose( file_log );
+        }
     }
     va_end(args);
     return 0;
