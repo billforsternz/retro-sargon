@@ -1,0 +1,819 @@
+(The remainder of this auto-generated documentation is created by
+running sargon-tests -doc from the command line)
+
+A Window into Sargon
+====================
+
+This is an attempt to peer into Sargon and see how it works. Hopefully
+it will also be a useful exercise for anyone starting out in computer
+chess programming to see a working model of Minimax and Alpha-Beta
+algorithms and "see" how those algorithms work.
+
+The idea of a "model" is very important. The exponentially exploding
+complexity of analysis of a real chess position can overwhelm human
+attempts to understand it in detail. So we build a small model instead.
+Small enought to be easily understood, large enough to capture all the
+important concepts.
+
+Our model is a 2x2x2 system. That is in the root position, White to play
+has two moves only. In each position reached, Black to play then has two
+possible moves. Finally in each of those positions White to play again
+has just two possible moves. Counting the root position, only 15
+positions are encountered.
+
+We use short "key" notation to describe the positions in our models.
+"A" and and "B" are the keys for the positions reached after White's
+first move. Then "AG" and "AH" are the positions reached after Black
+responds with each of their options after "A". Similarly "BG" and
+"BH" are the positions after Black responds to "B". Then "AGA",
+"AGB" etc. Basically at each turn White's moves are A and B, Black's
+are G and H.
+
+To make Sargon co-operate with this idea we tell it to analyse the
+following simple position to depth 3 ply;
+
+White king on a1 pawns a4,b3. Black king on h8 pawns g6,h6.
+
+Even this position is more complicated than our simple model, because
+both sides have five legal moves rather than two. So we use the Callback
+facility to interfere with Sargon's move generator - suppressing all
+king moves. Now there are just two moves each at each ply, conveniently
+for our notation single square 'a' and 'b' pawn pushes for White and 'g'
+and 'h' pushes for Black. The reason the White 'a' pawn is the only one
+on the fourth rank is just a pesky detail - it ensures Sargon always
+generates A moves ahead of B moves, on the third ply as well as the
+first.
+
+Of course from a chess perspective nothing is going to be decided in
+this position after just 3 ply, pawn promotion will be well over the
+horizon. So just as we suppressed Sargon's king moves, we will go ahead
+and interfere with Sargon's scoring function using the callback
+facility, to pretend that the positions reached have very different
+scores. While we are at it, we will pretend that the starting position
+and the lines of play are quite different to the actual simple pawn
+ending, and we'll make up positions and moves that match the pretend
+scores. Sargon doesn't need to know!
+
+The cool thing about this with this simple model approach in hand we
+will be able to watch Sargon accurately calculate (for example)
+Philidor's smothered mate;
+
+We pretend that the initial position is
+
+FEN "1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1",
+
+.rr....k
+....n.pp
+.......N
+........
+........
+........
+Q....PPP
+......K.
+
+Our pretend lines and scores are as follows, format is: {key, line, score}
+
+{ "A"  , "1.Qg8+",             0.0   },
+{ "AG" , "1.Qg8+ Nxg8",        0.0   },
+{ "AGA", "1.Qg8+ Nxg8 2.Nf7#", 12.0  },   // White gives mate
+{ "AGB", "1.Qg8+ Nxg8 2.Nxg8", -10.0 },   // Black has huge material plus
+{ "AH" , "1.Qg8+ Rxg8",        0.0   },
+{ "AHA", "1.Qg8+ Rxg8 2.Nf7#", 12.0  },   // White gives mate
+{ "AHB", "1.Qg8+ Rxg8 2.Nxg8", -8.0  },   // Black has large material plus
+{ "B"  , "1.Qa1",              0.0   },
+{ "BG" , "1.Qa1 Rc6",          0.0   },
+{ "BGA", "1.Qa1 Rc6 2.Nf7+",   0.0   },   // equal(ish)
+{ "BGB", "1.Qa1 Rc6 2.Ng4",    0.0   },   // equal(ish)
+{ "BH" , "1.Qa1 Ng8",          0.0   },
+{ "BHA", "1.Qa1 Ng8 2.Nf7#",   12.0  },   // White gives mate
+{ "BHB", "1.Qa1 Ng8 2.Ng4",    0.0   }    // equal(ish)
+
+I hope this all makes sense. We'll see exactly this model run later, and
+watch Sargon accurately calculate the PV (Principal Variation) as;
+
+PV = 1.Qg8+ Nxg8 2.Nf7#
+
+
+    Tree Structure          Creation Order            Minimax Order
+    ==============          ==============            =============
+
+                  AGA                     AGA 5                   AGA 1
+                 / |                     / |                     / |
+                AG |                  3 AG |                  3 AG |
+               /|\ |                   /|\ |                   /|\ |
+              / | AGB                 / | AGB 6               / | AGB 2
+             /  |                    /  |                    /  |
+            A   |                 1 A   |                 7 A   |
+           /|\  |                  /|\  |                  /|\  |
+          / | \ | AHA             / | \ | AHA 7           / | \ | AHA 4
+         /  |  \|/ |             /  |  \|/ |             /  |  \|/ |
+        /   |   AH |            /   | 4 AH |            /   | 6 AH |
+       /    |    \ |           /    |    \ |           /    |    \ |
+      /     |     AHB         /     |     AHB 8       /     |     AHB 5
+     /      |                /      |                /      |
+  (root)    |             (root)    |             (root)    |
+     \      |                \      |                \      |
+      \     |     BGA         \     |     BGA 11      \     |     BGA 8
+       \    |    / |           \    |    / |           \    |    / |
+        \   |   BG |            \   | 9 BG |            \   |10 BG |
+         \  |  /|\ |             \  |  /|\ |             \  |  /|\ |
+          \ | / | BGB             \ | / | BGB 12          \ | / | BGB 9
+           \|/  |                  \|/  |                  \|/  |
+            B   |                 2 B   |                14 B   |
+             \  |                    \  |                    \  |
+              \ | BHA                 \ | BHA 13              \ | BHA 11
+               \|/ |                   \|/ |                   \|/ |
+                BH |                 10 BH |                 13 BH |
+                 \ |                     \ |                     \ |
+                  BHB                     BHB 14                  BHB 12
+
+
+
+In the examples below the lines are annotated as follows;
+Moves (N) [A,M] Score Result
+ N indicates the evaluation order,
+ A is the Alpha-Beta threshold (two ply down),
+ M is the minimax threshold (one ply down),
+ Score is the node score (static score for leaf nodes, minimax score for
+  non-leaf nodes),
+ Result indicates the result of comparing the score to the thresholds
+
+Example number 1)
+-----------------
+White can take a bishop or fork king queen and rook
+White to move
+.......k
+R.ppp.p.
+.p......
+....q...
+.....N.r
+...b...P
+PP...PP.
+Q.....K.
+
+                    1.Nxd3 Qd6 2.Ne1 (1): 3.375 [MAX,-MAX] 3.375> -MAX so NEW BEST MOVE
+                   / |
+                  /  |
+                 1.Nxd3 Qd6 (3): -3.375 [MAX,-MAX] -3.375> -MAX so NEW BEST MOVE
+                /|\  |
+               / | \ |
+              /  |  1.Nxd3 Qd6 2.Qb1 (2): 3.000 [MAX,3.375] 3.000<=3.375 so discard
+             /   |
+            1.Nxd3 (7): 3.250 [MAX,-MAX] 3.250> -MAX so NEW BEST MOVE
+           /|\   |
+          / | \  |  1.Nxd3 Qg5 2.Rxc7 (4): 3.125 [3.375,-MAX] 3.125> -MAX so NEW BEST MOVE
+         /  |  \ | / |
+        /   |   \|/  |
+       /    |    1.Nxd3 Qg5 (6): -3.250 [MAX,-3.375] -3.250>-3.375 so NEW BEST MOVE
+      /     |     \  |
+     /      |      \ |
+    /       |       1.Nxd3 Qg5 2.Kh2 (5): 3.250 [3.375,3.125] 3.250>3.125 so NEW BEST MOVE
+   /        |
+(root)      |
+   \        |
+    \       |       1.Ng6+ Kh7 2.Nxe5 (8): 9.250 [MAX,3.250] 9.250>3.250 so NEW BEST MOVE
+     \      |      / |
+      \     |     /  |
+       \    |    1.Ng6+ Kh7 (10): -9.250 [-3.250,-MAX] -9.250> -MAX so NEW BEST MOVE
+        \   |   /|\  |
+         \  |  / | \ |
+          \ | /  |  1.Ng6+ Kh7 2.Nxh4 (9): 5.000 [MAX,9.250] 5.000<=9.250 so discard
+           \|/   |
+           *1.Ng6+ (14): 9.000 [MAX,3.250] 9.000>3.250 so NEW BEST MOVE
+             \   |
+              \  | *1.Ng6+ Kg8 2.Nxe5 (11): 9.000 [9.250,3.250] 9.000>3.250 so NEW BEST MOVE
+               \ | / |
+                \|/  |
+                *1.Ng6+ Kg8 (13): -9.000 [-3.250,-9.250] -9.000>-9.250 so NEW BEST MOVE
+                  \  |
+                   \ |
+                    1.Ng6+ Kg8 2.Nxh4 (12): 5.250 [9.250,9.000] 5.250<=9.000 so discard
+
+PV = 1.Ng6+ Kg8 2.Nxe5, note that the PV nodes are asterisked
+There are no Alpha-Beta cutoffs, PV shows white correctly winning queen
+
+Detailed log
+Position 0, "" created in tree
+Position 1, "1.Nxd3" created in tree
+Position 2, "1.Ng6+" created in tree
+Position 3, "1.Nxd3 Qd6" created in tree
+Position 4, "1.Nxd3 Qg5" created in tree
+Position 5, "1.Nxd3 Qd6 2.Ne1" created in tree
+Eval (ply 3), 1.Nxd3 Qd6 2.Ne1
+No alpha beta cutoff because move value=3.375 < two lower ply value=MAX
+Best move because negated move value=-3.375 < one lower ply value=MAX
+(Confirming best move)
+Position 6, "1.Nxd3 Qd6 2.Qb1" created in tree
+Eval (ply 3), 1.Nxd3 Qd6 2.Qb1
+No alpha beta cutoff because move value=3.000 < two lower ply value=MAX
+Not best move because negated move value=-3.000 >= one lower ply value=-3.375
+Eval (ply 2), 1.Nxd3 Qd6
+No alpha beta cutoff because move value=-3.375 < two lower ply value=MAX
+Best move because negated move value=3.375 < one lower ply value=MAX
+(Confirming best move)
+Position 7, "1.Nxd3 Qg5 2.Rxc7" created in tree
+Eval (ply 3), 1.Nxd3 Qg5 2.Rxc7
+No alpha beta cutoff because move value=3.125 < two lower ply value=3.375
+Best move because negated move value=-3.125 < one lower ply value=MAX
+(Confirming best move)
+Position 8, "1.Nxd3 Qg5 2.Kh2" created in tree
+Eval (ply 3), 1.Nxd3 Qg5 2.Kh2
+No alpha beta cutoff because move value=3.250 < two lower ply value=3.375
+Best move because negated move value=-3.250 < one lower ply value=-3.125
+(Confirming best move)
+Eval (ply 2), 1.Nxd3 Qg5
+No alpha beta cutoff because move value=-3.250 < two lower ply value=MAX
+Best move because negated move value=3.250 < one lower ply value=3.375
+(Confirming best move)
+Eval (ply 1), 1.Nxd3
+No alpha beta cutoff because move value=3.250 < two lower ply value=MAX
+Best move because negated move value=-3.250 < one lower ply value=MAX
+(Confirming best move)
+Position 9, "1.Ng6+ Kh7" created in tree
+Position 10, "1.Ng6+ Kg8" created in tree
+Position 11, "1.Ng6+ Kh7 2.Nxe5" created in tree
+Eval (ply 3), 1.Ng6+ Kh7 2.Nxe5
+No alpha beta cutoff because move value=9.250 < two lower ply value=MAX
+Best move because negated move value=-9.250 < one lower ply value=-3.250
+(Confirming best move)
+Position 12, "1.Ng6+ Kh7 2.Nxh4" created in tree
+Eval (ply 3), 1.Ng6+ Kh7 2.Nxh4
+No alpha beta cutoff because move value=5.000 < two lower ply value=MAX
+Not best move because negated move value=-5.000 >= one lower ply value=-9.250
+Eval (ply 2), 1.Ng6+ Kh7
+No alpha beta cutoff because move value=-9.250 < two lower ply value=-3.250
+Best move because negated move value=9.250 < one lower ply value=MAX
+(Confirming best move)
+Position 13, "1.Ng6+ Kg8 2.Nxe5" created in tree
+Eval (ply 3), 1.Ng6+ Kg8 2.Nxe5
+No alpha beta cutoff because move value=9.000 < two lower ply value=9.250
+Best move because negated move value=-9.000 < one lower ply value=-3.250
+(Confirming best move)
+Position 14, "1.Ng6+ Kg8 2.Nxh4" created in tree
+Eval (ply 3), 1.Ng6+ Kg8 2.Nxh4
+No alpha beta cutoff because move value=5.250 < two lower ply value=9.250
+Not best move because negated move value=-5.250 >= one lower ply value=-9.000
+Eval (ply 2), 1.Ng6+ Kg8
+No alpha beta cutoff because move value=-9.000 < two lower ply value=-3.250
+Best move because negated move value=9.000 < one lower ply value=9.250
+(Confirming best move)
+Eval (ply 1), 1.Ng6+
+No alpha beta cutoff because move value=9.000 < two lower ply value=MAX
+Best move because negated move value=-9.000 < one lower ply value=-3.250
+(Confirming best move)
+
+Example number 2)
+-----------------
+White can give Philidor's mate, or defend
+White to move
+.rr....k
+....n.pp
+.......N
+........
+........
+........
+Q....PPP
+......K.
+
+                   *1.Qg8+ Nxg8 2.Nf7# (1): 12.000 [MAX,-MAX] 12.000> -MAX so NEW BEST MOVE
+                   / |
+                  /  |
+                *1.Qg8+ Nxg8 (3): -12.000 [MAX,-MAX] -12.000> -MAX so NEW BEST MOVE
+                /|\  |
+               / | \ |
+              /  |  1.Qg8+ Nxg8 2.Nxg8 (2): -10.000 [MAX,12.000] -10.000<=12.000 so discard
+             /   |
+           *1.Qg8+ (5): 12.000 [MAX,-MAX] 12.000> -MAX so NEW BEST MOVE
+           /|\   |
+          / | \  |  1.Qg8+ Rxg8 2.Nf7# (4): 12.000 [12.000,-MAX] 12.000>=12.000 so ALPHA BETA CUTOFF
+         /  |  \ | / |
+        /   |   \|/  |
+       /    |    1.Qg8+ Rxg8
+      /     |     \  |
+     /      |      \ |
+    /       |       1.Qg8+ Rxg8 2.Nxg8
+   /        |
+(root)      |
+   \        |
+    \       |       1.Qa1 Rc6 2.Nf7+ (6): 0.000 [MAX,12.000] 0.000<=12.000 so discard
+     \      |      / |
+      \     |     /  |
+       \    |    1.Qa1 Rc6 (8): -12.000 [-12.000,-MAX] -12.000>=-12.000 so ALPHA BETA CUTOFF
+        \   |   /|\  |
+         \  |  / | \ |
+          \ | /  |  1.Qa1 Rc6 2.Ng4 (7): 0.000 [MAX,12.000] 0.000<=12.000 so discard
+           \|/   |
+            1.Qa1|
+             \   |
+              \  |  1.Qa1 Ng8 2.Nf7#
+               \ | / |
+                \|/  |
+                 1.Qa1 Ng8
+                  \  |
+                   \ |
+                    1.Qa1 Ng8 2.Ng4
+
+PV = 1.Qg8+ Nxg8 2.Nf7#, note that the PV nodes are asterisked
+Philidor's mating line comes first, so plenty of alpha-beta cutoffs
+
+Detailed log
+Position 0, "" created in tree
+Position 1, "1.Qg8+" created in tree
+Position 2, "1.Qa1" created in tree
+Position 3, "1.Qg8+ Nxg8" created in tree
+Position 4, "1.Qg8+ Rxg8" created in tree
+Position 5, "1.Qg8+ Nxg8 2.Nf7#" created in tree
+Eval (ply 3), 1.Qg8+ Nxg8 2.Nf7#
+No alpha beta cutoff because move value=12.000 < two lower ply value=MAX
+Best move because negated move value=-12.000 < one lower ply value=MAX
+(Confirming best move)
+Position 6, "1.Qg8+ Nxg8 2.Nxg8" created in tree
+Eval (ply 3), 1.Qg8+ Nxg8 2.Nxg8
+No alpha beta cutoff because move value=-10.000 < two lower ply value=MAX
+Not best move because negated move value=10.000 >= one lower ply value=-12.000
+Eval (ply 2), 1.Qg8+ Nxg8
+No alpha beta cutoff because move value=-12.000 < two lower ply value=MAX
+Best move because negated move value=12.000 < one lower ply value=MAX
+(Confirming best move)
+Position 7, "1.Qg8+ Rxg8 2.Nf7#" created in tree
+Eval (ply 3), 1.Qg8+ Rxg8 2.Nf7#
+Alpha beta cutoff because move value=12.000 >= two lower ply value=12.000
+Eval (ply 1), 1.Qg8+
+No alpha beta cutoff because move value=12.000 < two lower ply value=MAX
+Best move because negated move value=-12.000 < one lower ply value=MAX
+(Confirming best move)
+Position 9, "1.Qa1 Rc6" created in tree
+Position 10, "1.Qa1 Ng8" created in tree
+Position 11, "1.Qa1 Rc6 2.Nf7+" created in tree
+Eval (ply 3), 1.Qa1 Rc6 2.Nf7+
+No alpha beta cutoff because move value=0.000 < two lower ply value=MAX
+Not best move because negated move value=0.000 >= one lower ply value=-12.000
+Position 12, "1.Qa1 Rc6 2.Ng4" created in tree
+Eval (ply 3), 1.Qa1 Rc6 2.Ng4
+No alpha beta cutoff because move value=0.000 < two lower ply value=MAX
+Not best move because negated move value=0.000 >= one lower ply value=-12.000
+Eval (ply 2), 1.Qa1 Rc6
+Alpha beta cutoff because move value=-12.000 >= two lower ply value=-12.000
+
+Example number 3)
+-----------------
+White can defend or give Philidor's mate (same as above, with first move reversed)
+White to move
+.rr....k
+....n.pp
+.......N
+........
+........
+........
+Q....PPP
+......K.
+
+                    1.Qa1 Rc6 2.Nf7+ (1): 0.000 [MAX,-MAX] 0.000> -MAX so NEW BEST MOVE
+                   / |
+                  /  |
+                 1.Qa1 Rc6 (3): 0.000 [MAX,-MAX] 0.000> -MAX so NEW BEST MOVE
+                /|\  |
+               / | \ |
+              /  |  1.Qa1 Rc6 2.Ng4 (2): 0.000 [MAX,0.000] 0.000<=0.000 so discard
+             /   |
+            1.Qa1 (5): 0.000 [MAX,-MAX] 0.000> -MAX so NEW BEST MOVE
+           /|\   |
+          / | \  |  1.Qa1 Ng8 2.Nf7# (4): 12.000 [0.000,-MAX] 12.000>=0.000 so ALPHA BETA CUTOFF
+         /  |  \ | / |
+        /   |   \|/  |
+       /    |    1.Qa1 Ng8
+      /     |     \  |
+     /      |      \ |
+    /       |       1.Qa1 Ng8 2.Ng4
+   /        |
+(root)      |
+   \        |
+    \       |      *1.Qg8+ Nxg8 2.Nf7# (6): 12.000 [MAX,0.000] 12.000>0.000 so NEW BEST MOVE
+     \      |      / |
+      \     |     /  |
+       \    |   *1.Qg8+ Nxg8 (8): -12.000 [0.000,-MAX] -12.000> -MAX so NEW BEST MOVE
+        \   |   /|\  |
+         \  |  / | \ |
+          \ | /  |  1.Qg8+ Nxg8 2.Nxg8 (7): -10.000 [MAX,12.000] -10.000<=12.000 so discard
+           \|/   |
+           *1.Qg8+ (10): 12.000 [MAX,0.000] 12.000>0.000 so NEW BEST MOVE
+             \   |
+              \  |  1.Qg8+ Rxg8 2.Nf7# (9): 12.000 [12.000,0.000] 12.000>=12.000 so ALPHA BETA CUTOFF
+               \ | / |
+                \|/  |
+                 1.Qg8+ Rxg8
+                  \  |
+                   \ |
+                    1.Qg8+ Rxg8 2.Nxg8
+
+PV = 1.Qg8+ Nxg8 2.Nf7#, note that the PV nodes are asterisked
+Since Qg8+ is not first choice, there's less alpha-beta cutoffs than example 2
+
+Detailed log
+Position 0, "" created in tree
+Position 1, "1.Qa1" created in tree
+Position 2, "1.Qg8+" created in tree
+Position 3, "1.Qa1 Rc6" created in tree
+Position 4, "1.Qa1 Ng8" created in tree
+Position 5, "1.Qa1 Rc6 2.Nf7+" created in tree
+Eval (ply 3), 1.Qa1 Rc6 2.Nf7+
+No alpha beta cutoff because move value=0.000 < two lower ply value=MAX
+Best move because negated move value=0.000 < one lower ply value=MAX
+(Confirming best move)
+Position 6, "1.Qa1 Rc6 2.Ng4" created in tree
+Eval (ply 3), 1.Qa1 Rc6 2.Ng4
+No alpha beta cutoff because move value=0.000 < two lower ply value=MAX
+Not best move because negated move value=0.000 >= one lower ply value=0.000
+Eval (ply 2), 1.Qa1 Rc6
+No alpha beta cutoff because move value=0.000 < two lower ply value=MAX
+Best move because negated move value=0.000 < one lower ply value=MAX
+(Confirming best move)
+Position 7, "1.Qa1 Ng8 2.Nf7#" created in tree
+Eval (ply 3), 1.Qa1 Ng8 2.Nf7#
+Alpha beta cutoff because move value=12.000 >= two lower ply value=0.000
+Eval (ply 1), 1.Qa1
+No alpha beta cutoff because move value=0.000 < two lower ply value=MAX
+Best move because negated move value=0.000 < one lower ply value=MAX
+(Confirming best move)
+Position 9, "1.Qg8+ Nxg8" created in tree
+Position 10, "1.Qg8+ Rxg8" created in tree
+Position 11, "1.Qg8+ Nxg8 2.Nf7#" created in tree
+Eval (ply 3), 1.Qg8+ Nxg8 2.Nf7#
+No alpha beta cutoff because move value=12.000 < two lower ply value=MAX
+Best move because negated move value=-12.000 < one lower ply value=0.000
+(Confirming best move)
+Position 12, "1.Qg8+ Nxg8 2.Nxg8" created in tree
+Eval (ply 3), 1.Qg8+ Nxg8 2.Nxg8
+No alpha beta cutoff because move value=-10.000 < two lower ply value=MAX
+Not best move because negated move value=10.000 >= one lower ply value=-12.000
+Eval (ply 2), 1.Qg8+ Nxg8
+No alpha beta cutoff because move value=-12.000 < two lower ply value=0.000
+Best move because negated move value=12.000 < one lower ply value=MAX
+(Confirming best move)
+Position 13, "1.Qg8+ Rxg8 2.Nf7#" created in tree
+Eval (ply 3), 1.Qg8+ Rxg8 2.Nf7#
+Alpha beta cutoff because move value=12.000 >= two lower ply value=12.000
+Eval (ply 1), 1.Qg8+
+No alpha beta cutoff because move value=12.000 < two lower ply value=MAX
+Best move because negated move value=-12.000 < one lower ply value=0.000
+(Confirming best move)
+
+Example number 4)
+-----------------
+White can win a rook, or give mate in some lines
+White to move
+........
+r.....kp
+......pr
+........
+.n.N....
+......R.
+......PP
+...R...K
+
+                   *1.Nf5+ Kg8 2.Nxh6+ (1): 5.125 [MAX,-MAX] 5.125> -MAX so NEW BEST MOVE
+                   / |
+                  /  |
+                *1.Nf5+ Kg8 (3): -5.125 [MAX,-MAX] -5.125> -MAX so NEW BEST MOVE
+                /|\  |
+               / | \ |
+              /  |  1.Nf5+ Kg8 2.h3 (2): 0.125 [MAX,5.125] 0.125<=5.125 so discard
+             /   |
+           *1.Nf5+ (5): 5.125 [MAX,-MAX] 5.125> -MAX so NEW BEST MOVE
+           /|\   |
+          / | \  |  1.Nf5+ Kh8 2.Rd8# (4): 12.000 [5.125,-MAX] 12.000>=5.125 so ALPHA BETA CUTOFF
+         /  |  \ | / |
+        /   |   \|/  |
+       /    |    1.Nf5+ Kh8
+      /     |     \  |
+     /      |      \ |
+    /       |       1.Nf5+ Kh8 2.Nxh6
+   /        |
+(root)      |
+   \        |
+    \       |       1.Ne6+ Kg8 2.h3 (6): 0.375 [MAX,5.125] 0.375<=5.125 so discard
+     \      |      / |
+      \     |     /  |
+       \    |    1.Ne6+ Kg8 (8): -5.125 [-5.125,-MAX] -5.125>=-5.125 so ALPHA BETA CUTOFF
+        \   |   /|\  |
+         \  |  / | \ |
+          \ | /  |  1.Ne6+ Kg8 2.Rd8+ (7): 0.500 [MAX,5.125] 0.500<=5.125 so discard
+           \|/   |
+            1.Ne6+
+             \   |
+              \  |  1.Ne6+ Kh8 2.h3
+               \ | / |
+                \|/  |
+                 1.Ne6+ Kh8
+                  \  |
+                   \ |
+                    1.Ne6+ Kh8 2.Rd8#
+
+PV = 1.Nf5+ Kg8 2.Nxh6+, note that the PV nodes are asterisked
+Decision 4) is a good example of Alpha-Beta cutoff. 2.Rd8 mate refutes
+2...Kh8, given that 2...Kg8 is not mated. So no need to look at other
+replies to 2...Kh8
+
+
+Detailed log
+Position 0, "" created in tree
+Position 1, "1.Nf5+" created in tree
+Position 2, "1.Ne6+" created in tree
+Position 3, "1.Nf5+ Kg8" created in tree
+Position 4, "1.Nf5+ Kh8" created in tree
+Position 5, "1.Nf5+ Kg8 2.Nxh6+" created in tree
+Eval (ply 3), 1.Nf5+ Kg8 2.Nxh6+
+No alpha beta cutoff because move value=5.125 < two lower ply value=MAX
+Best move because negated move value=-5.125 < one lower ply value=MAX
+(Confirming best move)
+Position 6, "1.Nf5+ Kg8 2.h3" created in tree
+Eval (ply 3), 1.Nf5+ Kg8 2.h3
+No alpha beta cutoff because move value=0.125 < two lower ply value=MAX
+Not best move because negated move value=-0.125 >= one lower ply value=-5.125
+Eval (ply 2), 1.Nf5+ Kg8
+No alpha beta cutoff because move value=-5.125 < two lower ply value=MAX
+Best move because negated move value=5.125 < one lower ply value=MAX
+(Confirming best move)
+Position 7, "1.Nf5+ Kh8 2.Rd8#" created in tree
+Eval (ply 3), 1.Nf5+ Kh8 2.Rd8#
+Alpha beta cutoff because move value=12.000 >= two lower ply value=5.125
+Eval (ply 1), 1.Nf5+
+No alpha beta cutoff because move value=5.125 < two lower ply value=MAX
+Best move because negated move value=-5.125 < one lower ply value=MAX
+(Confirming best move)
+Position 9, "1.Ne6+ Kg8" created in tree
+Position 10, "1.Ne6+ Kh8" created in tree
+Position 11, "1.Ne6+ Kg8 2.h3" created in tree
+Eval (ply 3), 1.Ne6+ Kg8 2.h3
+No alpha beta cutoff because move value=0.375 < two lower ply value=MAX
+Not best move because negated move value=-0.375 >= one lower ply value=-5.125
+Position 12, "1.Ne6+ Kg8 2.Rd8+" created in tree
+Eval (ply 3), 1.Ne6+ Kg8 2.Rd8+
+No alpha beta cutoff because move value=0.500 < two lower ply value=MAX
+Not best move because negated move value=-0.500 >= one lower ply value=-5.125
+Eval (ply 2), 1.Ne6+ Kg8
+Alpha beta cutoff because move value=-5.125 >= two lower ply value=-5.125
+
+Example number 5)
+-----------------
+This is the same as Model 1) ...
+... except the static score for move B 1.Ng6+ is 1.0 (versus 0.0 for
+move A 1.Nxd3). Static scores for non-leaf nodes don't affect the
+ultimate PV calculated, but they do result in re-ordering of
+evaluations. The result here is that branch B is evaluated first, so
+this time there are Alpha-Beta cutoffs. Alpha-Beta works best when
+stronger moves are evaluated first.
+
+White to move
+.......k
+R.ppp.p.
+.p......
+....q...
+.....N.r
+...b...P
+PP...PP.
+Q.....K.
+
+                    1.Nxd3 Qd6 2.Ne1 (8): 3.375 [MAX,9.000] 3.375<=9.000 so discard
+                   / |
+                  /  |
+                 1.Nxd3 Qd6 (10): -9.000 [-9.000,-MAX] -9.000>=-9.000 so ALPHA BETA CUTOFF
+                /|\  |
+               / | \ |
+              /  |  1.Nxd3 Qd6 2.Qb1 (9): 3.000 [MAX,9.000] 3.000<=9.000 so discard
+             /   |
+            1.Nxd3
+           /|\   |
+          / | \  |  1.Nxd3 Qg5 2.Rxc7
+         /  |  \ | / |
+        /   |   \|/  |
+       /    |    1.Nxd3 Qg5
+      /     |     \  |
+     /      |      \ |
+    /       |       1.Nxd3 Qg5 2.Kh2
+   /        |
+(root)      |
+   \        |
+    \       |       1.Ng6+ Kh7 2.Nxe5 (1): 9.250 [MAX,-MAX] 9.250> -MAX so NEW BEST MOVE
+     \      |      / |
+      \     |     /  |
+       \    |    1.Ng6+ Kh7 (3): -9.250 [MAX,-MAX] -9.250> -MAX so NEW BEST MOVE
+        \   |   /|\  |
+         \  |  / | \ |
+          \ | /  |  1.Ng6+ Kh7 2.Nxh4 (2): 5.000 [MAX,9.250] 5.000<=9.250 so discard
+           \|/   |
+           *1.Ng6+ (7): 9.000 [MAX,-MAX] 9.000> -MAX so NEW BEST MOVE
+             \   |
+              \  | *1.Ng6+ Kg8 2.Nxe5 (4): 9.000 [9.250,-MAX] 9.000> -MAX so NEW BEST MOVE
+               \ | / |
+                \|/  |
+                *1.Ng6+ Kg8 (6): -9.000 [MAX,-9.250] -9.000>-9.250 so NEW BEST MOVE
+                  \  |
+                   \ |
+                    1.Ng6+ Kg8 2.Nxh4 (5): 5.250 [9.250,9.000] 5.250<=9.000 so discard
+
+PV = 1.Ng6+ Kg8 2.Nxe5, note that the PV nodes are asterisked
+So the result is an optimised calculation compared to Example 1)
+
+Detailed log
+Position 0, "" created in tree
+Position 1, "1.Nxd3" created in tree
+Position 2, "1.Ng6+" created in tree
+Position 9, "1.Ng6+ Kh7" created in tree
+Position 10, "1.Ng6+ Kg8" created in tree
+Position 11, "1.Ng6+ Kh7 2.Nxe5" created in tree
+Eval (ply 3), 1.Ng6+ Kh7 2.Nxe5
+No alpha beta cutoff because move value=9.250 < two lower ply value=MAX
+Best move because negated move value=-9.250 < one lower ply value=MAX
+(Confirming best move)
+Position 12, "1.Ng6+ Kh7 2.Nxh4" created in tree
+Eval (ply 3), 1.Ng6+ Kh7 2.Nxh4
+No alpha beta cutoff because move value=5.000 < two lower ply value=MAX
+Not best move because negated move value=-5.000 >= one lower ply value=-9.250
+Eval (ply 2), 1.Ng6+ Kh7
+No alpha beta cutoff because move value=-9.250 < two lower ply value=MAX
+Best move because negated move value=9.250 < one lower ply value=MAX
+(Confirming best move)
+Position 13, "1.Ng6+ Kg8 2.Nxe5" created in tree
+Eval (ply 3), 1.Ng6+ Kg8 2.Nxe5
+No alpha beta cutoff because move value=9.000 < two lower ply value=9.250
+Best move because negated move value=-9.000 < one lower ply value=MAX
+(Confirming best move)
+Position 14, "1.Ng6+ Kg8 2.Nxh4" created in tree
+Eval (ply 3), 1.Ng6+ Kg8 2.Nxh4
+No alpha beta cutoff because move value=5.250 < two lower ply value=9.250
+Not best move because negated move value=-5.250 >= one lower ply value=-9.000
+Eval (ply 2), 1.Ng6+ Kg8
+No alpha beta cutoff because move value=-9.000 < two lower ply value=MAX
+Best move because negated move value=9.000 < one lower ply value=9.250
+(Confirming best move)
+Eval (ply 1), 1.Ng6+
+No alpha beta cutoff because move value=9.000 < two lower ply value=MAX
+Best move because negated move value=-9.000 < one lower ply value=MAX
+(Confirming best move)
+Position 3, "1.Nxd3 Qd6" created in tree
+Position 4, "1.Nxd3 Qg5" created in tree
+Position 5, "1.Nxd3 Qd6 2.Ne1" created in tree
+Eval (ply 3), 1.Nxd3 Qd6 2.Ne1
+No alpha beta cutoff because move value=3.375 < two lower ply value=MAX
+Not best move because negated move value=-3.375 >= one lower ply value=-9.000
+Position 6, "1.Nxd3 Qd6 2.Qb1" created in tree
+Eval (ply 3), 1.Nxd3 Qd6 2.Qb1
+No alpha beta cutoff because move value=3.000 < two lower ply value=MAX
+Not best move because negated move value=-3.000 >= one lower ply value=-9.000
+Eval (ply 2), 1.Nxd3 Qd6
+Alpha beta cutoff because move value=-9.000 >= two lower ply value=-9.000
+
+Finally, we consider the algorithm developed to highlight the principal
+variation (PV) in the models above. Sargon itself doesn't explicitly
+calculate the PV, it just concerns itself with calculating the best move
+(it was a commercial game, not a modern chess engine). But by
+understanding its tree structure and minimax algorithm, we can calculate
+the PV by saving the 'best so far' nodes as Sargon encounters them in an
+ordered list external to Sargon, and then working backwards once Sargon
+has finished. Using our simple 2-2-2 model as an example, here is the
+list of nodes in the order that they are created;
+
+AGA
+AGB
+AG
+AHA
+AHB
+AH
+A
+BGA
+BGB
+BG
+BHA
+BHB
+BH
+B
+
+To calculate the PV we start by marking each node that's the 'best move
+so far' as the minimax algorithm runs. We'll use an asterisk in our
+lists and diagrams.
+
+In the tree diagrams, lists of moves available in one position are
+represented by vertical lines, for example moves in position AG are
+represented by the vertical line AGA-AGB. We expect minimax to asterisk
+the first move in each of these vertical lists no matter how bad it
+might be, since it is just going through the list looking for the
+highest scoring move. So in this simple 2-2-2 structure we expect at
+least 7 nodes to *always* be asterisked;
+
+AGA *
+AGB
+AG *
+AHA *
+AHB
+AH
+A *
+BGA *
+BGB
+BG *
+BHA *
+BHB
+BH
+B
+
+(Actually Sargon performs an optimisation that reduces the number of
+asterisked nodes in practice - for example it knows that BGA cannot be
+part of the PV unless BGA scores better than A*, so it doesn't asterisk
+it unless it does. But this doesn't affect our reasoning here and can be
+ignored as an optimization detail).
+
+We calculate the PV by working backwards through the list of asterisked
+nodes. If the minimum 7 nodes are asterisked, then the PV is A,AG,AGA.
+Why? A because B was not better than A (wasn't asterisked), AG because
+AH wsn't better than AG (wasn't asterisked), AGA because AHA wasn't
+better than AGA (wasn't asterisked).
+
+The PV algorithm is not hard to discern; Work backwards from the end of
+the list of asterisked nodes. Find the last level one node to be
+asterisked (it's A* because B wasn't asterisked). Continue to work
+backwards from that point looking for a level two asterisked node (it's
+AG* because AH wasn't asterisked). During that search we were only
+looking for level two asterisked nodes, so we quite rightly skipped over
+the level three asterisked AHA* node. The AHA* node lost it's chance to
+be part of the PV when AH did not trump AG and get an asterisk. We're on
+the home stretch now, continue working backwards from AG* looking for a
+level three asterisked node, and find it in AGA*. So solution is
+A,AG,AGA.
+
+Diagramming it;
+
+AGA *   <---- 3
+AGB
+AG *    <---- 2
+AHA *
+AHB
+AH
+A *     <---- 1
+BGA *
+BGB
+BG *
+BHA *
+BHB
+BH
+B
+
+Summarising the PV algorithm is;
+
+Collect a list of nodes representing all positive 'best move so far' decisions
+Define an initially empty list PV
+Set N = 1
+Scan the best so far node list once in reverse order
+If a scanned node has level equal to N, append it to PV and increment N
+
+Another example;
+
+AGA *   <---- 3
+AGB
+AG *    <---- 2
+AHA *
+AHB
+AH
+A *     <---- 1
+BGA *
+BGB *
+BG *
+BHA *
+BHB *
+BH *
+B
+
+This also generates PV = A,AG,AGA. Although there is a lot more activity
+on the B branch of the tree, (BGB trumps BGA, BHB trumps BHA, BH trumps
+BG) none of this affects the PV because B fails to trump A and so the PV
+algorithm rightfully skips the whole B branch searching for A* when N=1.
+
+One final example, letting the B branch have a go;
+
+AGA *
+AGB
+AG *
+AHA *
+AHB *
+AH *
+A *
+BGA *
+BGB *   <---- 3
+BG *    <---- 2
+BHA *
+BHB *
+BH
+B *     <---- 1
+
+This time there's a lot of activity on both branches. In fact almost all
+the nodes are asterisked. B trumps A. But BH does not trump BG, so it's
+B,BG. Finally BGB does trump BGA so PV = B,BG,BGB. This time the PV
+algorithm skips the whole A branch because the algorithm is futilely
+searching for a level N=4 node as it scans backward through the A items
+in the list. Of course a simple optimisation could prevent that wasted
+effort if necessary.
+
+Fortunately none of this is effected in the slightest by Alpha-Beta
+optimisation, which just filters out nodes that were never going to be
+part of the PV anyway.
+
+
