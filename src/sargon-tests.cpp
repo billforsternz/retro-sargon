@@ -45,33 +45,37 @@ int main( int argc, const char *argv[] )
 #endif
     const char *usage =
     "Sargon test suite\n"
-    "Usage:\n"
-    "sargon-tests tests|doc [-1|-2|-3] [-v]\n"
     "\n"
-    "tests = combine 'p' for position tests, 'g' for whole game tests, 'm' for minimax tests\n"
-    "     OR 'doc' run minimax models and print results in the form of documentation\n"
+    "Usage:\n"
+    "sargon-tests tests [-1|-2|-3] [-v] [-doc]\n"
+    "\n"
+    "tests = combine 'p' for position tests, 'g' for whole game tests, 'm' for\n"
+    "        minimax tests\n"
     "\n"
     "-1|-2|-3 = fast, middling or comprehensive suite of tests respectively\n"
     "\n"
-    "-v is verbose\n"
+    "-v means verbose, (i.e. print extra information)\n"
+    "\n"
+    "-doc means don't run any tests, instead run minimax models and print results\n"
+    "     in the form of documentation\n"
     "\n"
     "Examples:\n"
     " sargon-tests pg -3 -v\n"
     "    Run a comprehensive, verbose set of position and whole game tests\n"
-    " sargon-tests doc\n"        
+    " sargon-tests -doc\n"        
     "    Run the minimax models and print out the results as documentation\n";
     bool ok = false, minimax_doc=false, quiet=true;
     std::string test_types;
     int comprehensive = 1;
     for( int i=1; i<argc; i++ )
     {
-        std::string s= argv[i];
-        if( !ok && s.find_first_not_of("gpmv") == std::string::npos )
+        std::string s = argv[i];
+        if( i==1 && s.find_first_not_of("gpm") == std::string::npos )
         {
             test_types = s;
             ok = true;
         }
-        else if( !ok && s=="doc" )
+        else if( i==1 && argc==2 && s=="-doc" )
         {
             minimax_doc = true;
             ok = true;
