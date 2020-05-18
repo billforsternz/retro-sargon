@@ -204,6 +204,16 @@ void sargon_pv_callback_yes_best_move()
 static void BuildPV( PV &pv )
 {
     pv.variation.clear();
+
+    // The PV calculation algorithm is derived in the executable documentation within
+    //  std::string pv_algorithm_txt in src/sargon-minimax.cpp
+    // 
+    // Summarising the PV algorithm is;
+    // Collect a list of nodes representing all positive 'best move so far' decisions
+    // Define an initially empty list PV
+    // Set N = 1
+    // Scan the best so far node list once in reverse order
+    // If a scanned node has level equal to N, append it to PV and increment N
     std::vector<NODE> nodes_pv;
     int nbr = nodes.size();
     int target = 1;
