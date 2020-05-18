@@ -1,0 +1,76 @@
+Introduction to the THC C++ chess library
+Bill Forster 2020.05.17
+
+This project uses my simple chess library THC as a stable, self
+contained, well defined implementation of the rules and conventions of
+chess. THC stands for Triplehappy Chess. Triplehappy was a games company
+that I started with Scott Crabtree but which never really developed. I
+reused the name Triplehappy for my later chess projects, including the
+Tarrash Chess GUI which uses THC.
+ 
+THC has its own public github repository at
+https://github.com/billforsternz/thc-chess-library. The version used here
+is a slightly simplified version. In particular I have removed some
+cruft that requires a couple of extra files, and the ChessEngine
+component (which can calculate a good move with Minimax and AlphaBeta)
+entirely. I will in time retrofit improvements back into the main
+repository.
+
+Although it is by name and nature a library, THC is now simply a pair of
+C++ files; Implementation thc.cpp and header file thc.h. This makes it
+super easy to incorporate it into any C++ project. Originally THC really
+was a library, but when I was working on a commercial project using the
+famous and ubiquitous SQLITE library I took note of the technique they
+used to ship their whole library as just an implementation file and
+header using concatenation and stole the idea for THC.
+
+I have put a simple standalone test/demo program called test-thc.cpp in
+the src directory. This serves to get started with THC in a simple
+'hello world' way.
+
+THC uses a pretty conventional object oriented design. The facilities
+available should be readily understandable directly from the header
+file. To summarise the design the basic class hierarchy is as follows;
+
+   ChessPositionRaw
+     ;A simple C style structure that holds a chess position
+   ChessPosition   extends ChessPositionRaw
+     ;ChessPosition adds constructors, and other simple facilities
+   ChessRules      extends ChessPosition
+     ;ChessRules adds all the rules of standard chess
+   ChessEvaluation extends ChessRules
+     ;ChessEvaluation is a simple scoring function for a chess engine
+     ;it attempts to calculate a score (more +ve numbers for better white
+     ;positions, more -ve numbers for better black positions) for a
+     ;position. Tarrasch GUI uses this only to attempt to list the most
+     ;plausible moves first when you click on a square that can receive
+     ;multiple moves
+   ChessEngine     extends ChessEvaluation
+     ;ChessEngine adds a search tree to ChessEvaluation to make a
+     ;complete simple engine (the Tarrasch Toy Engine)
+
+Most projects will use ChessPosition and ChessRules extensively.
+ChessPositionRaw is an implementation detail and not usually required
+for client programs. ChessEvaluation and ChessEngine are less commonly
+used. This Sargon project uses ChessEvaluation to challenge Sargon in
+whole game tests in the sargon-tests subproject. As mentioned earlier
+ChessEngine has been removed for simplicity.
+
+Sadly I haven't ever got around to creating comprehensive user
+documentation or a proper set of unit tests for THC. (It has served well
+in the field as the foundation for the Tarrash Chess GUI though).
+
+My other regret is that THC is showing its age and is rather old
+fashioned. It grew out of my earliest dabblings in chess software, with
+C in the early 1990s. As such it is still C code that has grown into
+C++. Although there is now a sensible and coherent class hierarchy, I
+should eliminate pointers in favour of references and use const more and
+in the API. Even when I do that though, I might not be able to declare
+everything you'd expect to be const, const. For example to calculate a
+move list each move is made and then undone (pushed, then popped), so
+the underlying ChessRules object is logically const in the sense that it
+ends up in the same state it started, but the compiler won't understand
+that and will no doubt complain if I declare the operation const.
+
+Despite these reqrets, THC is capable, fast, reliable and easy to
+understand and use. I am pretty proud of it.
