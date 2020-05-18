@@ -1141,8 +1141,8 @@ rel004: XCHG    bx,dx                           ; Address of move area
         RET                                     ; Return
 AM10:   MOV     byte ptr [ebp+ebx],0            ; Abort entry on table ovflow
         INC     bx
-        MOV     byte ptr [ebp+ebx],0            ; TODO fix this or at least look at it
-        DEC     bx
+        MOV     byte ptr [ebp+ebx],0            ; TODO does this out of memory
+        DEC     bx                              ;      check actually work?
         RET
 
 ;***********************************************************

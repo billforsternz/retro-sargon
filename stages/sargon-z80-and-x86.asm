@@ -255,10 +255,12 @@ SCORE   DW      0,0,0,0,0,0,0,0,0,0 ;X86 extend to 20 ply
 ;***********************************************************
 PLYIX   DW      0,0,0,0,0,0,0,0,0,0
         DW      0,0,0,0,0,0,0,0,0,0
+        .IF_X86
 ;Although the X86 build allows many more ply, there is
 ;more than sufficient zeroed memory available between
 ;PLYIX and M1 (214 bytes, 107 words) so no need to adjust
 ;this declaration
+        .ENDIF
 
 ;***********************************************************
 ; STACK   --  Contains the stack for the program.
@@ -1104,8 +1106,8 @@ rel004: EX      de,hl           ; Address of move area
         RET                     ; Return
 AM10:   LD      (hl),0          ; Abort entry on table ovflow
         INC     hl
-        LD      (hl),0          ; TODO fix this or at least look at it
-        DEC     hl
+        LD      (hl),0          ; TODO does this out of memory
+        DEC     hl              ;      check actually work?
         RET
 
 ;***********************************************************

@@ -44,7 +44,7 @@ _sargon_base_address:   ;Base of 64K of Z80 data we are emulating
         .IF_Z80
 START:
         .LOC    START+80H
-TBASE   EQU     START+100H
+TBASE   =       START+100H
         .ELSE
         .LOC    100h
 TBASE   =       .
@@ -255,10 +255,12 @@ SCORE:  .WORD   0,0,0,0,0,0,0,0,0,0    ;X86 extend to 20 ply
 ;***********************************************************
 PLYIX:  .WORD   0,0,0,0,0,0,0,0,0,0
         .WORD   0,0,0,0,0,0,0,0,0,0
+        .IF_X86
 ;Although the X86 build allows many more ply, there is
 ;more than sufficient zeroed memory available between
 ;PLYIX and M1 (214 bytes, 107 words) so no need to adjust
 ;this declaration
+        .ENDIF
 
 ;***********************************************************
 ; STACK   --  Contains the stack for the program.
@@ -1104,8 +1106,8 @@ rel004: XCHG                    ; Address of move area
         RET                     ; Return
 AM10:   MVI     M,0             ; Abort entry on table ovflow
         INX     H
-        MVI     M,0             ; TODO fix this or at least look at it
-        DCX     H
+        MVI     M,0             ; TODO does this out of memory
+        DCX     H               ;      check actually work?
         RET
 
 ;***********************************************************

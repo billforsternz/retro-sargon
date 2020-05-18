@@ -7,7 +7,7 @@ example;
 
 We did this initially just by eyeballing and manually assembling to
 machine code at least to the extent of being able to count the number
-of bytes generated. Now that we can assemble sargon4.asm we can
+of bytes generated. Now that we can assemble sargon-z80.asm we can
 check that we calculated the right place for the named jump (either
 backnn for backward jumps or relnnn for forward jumps).
 
