@@ -111,6 +111,10 @@ void sargon_pv_callback_yes_best_move()
     //  yielded the code below - which is just a C++ conversion of
     //  the sargon assembly code above. See other comments with
     //  the text ABSOLUTE (all caps) in this file.
+    //
+    //  Also check the git log for ABSOLUTE and RELATIVE to find the
+    //  point where the old RELATIVE calculation was removed for
+    //  simplicity's sake.
 
 // PT25A:  MOV     al,byte ptr [ebp+PTSL]          ; Get max points lost
 //         AND     al,al                           ; Is it zero ?
@@ -159,10 +163,13 @@ void sargon_pv_callback_yes_best_move()
     char adjusted_material = (val + mtrl);
 
     //  It took a few goes to get the calculation working right, we
-    //   checked it and debugged the process here. The biggest problem
-    //   was that sometimes (but not always) Sargon's COLOR had toggled
-    //   since the POINTS() function ran, so now we save the value
-    //   of COLOR in POINTS() [which we have a callback for].
+    //   checked it and debugged the process here by comparing
+    //   adjusted_material to gbl_adjusted_material (now removed)
+    //   and making sure it was the same.
+    //  The biggest problem was that sometimes (but not always)
+    //   Sargon's COLOR had toggled since the POINTS() function ran,
+    //   so now we save the value of COLOR in POINTS() [which we
+    //   have a callback for].
     char brdc = static_cast<char>(peekb(BRDC));
     if( peekb(PTSCK) )
         brdc = 0;
