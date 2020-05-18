@@ -824,6 +824,9 @@ static Model model3 =
     "1rr4k/4n1pp/7N/8/8/8/Q4PPP/6K1 w - - 0 1",
     "1.Qg8+ Nxg8 2.Nf7#",
     "White can defend or give Philidor's mate (same as above, with first move reversed)",
+    "Decision 4) is a good example of Alpha-Beta cutoff. 2.Nf7 mate refutes\n"
+    "1...Ng8, given that 1...Rc6 is not mated. So no need to look at other\n"
+    "replies to 1...Ng8\n"
     "Since Qg8+ is not first choice, there's less alpha-beta cutoffs than example 2",
     {
         { "A"     , "1.Qa1",                0.0   },
@@ -849,9 +852,8 @@ static Model model4 =
     "8/r5kp/6pr/8/1n1N4/6R1/6PP/3R3K w - - 0 1",
     "1.Nf5+ Kg8 2.Nxh6+",
     "White can win a rook, or give mate in some lines",
-    "Decision 4) is a good example of Alpha-Beta cutoff. 2.Rd8 mate refutes\n"
-    "2...Kh8, given that 2...Kg8 is not mated. So no need to look at other\n"
-    "replies to 2...Kh8\n",
+    "Decision 4) here is also a good example of Alpha-Beta cutoff. 2.Rd8 mate refutes\n"
+    "1...Kh8, so no need to look at other replies to 1...Kh8\n",
     {
         { "A"     , "1.Nf5+",               0.0  },
         { "AG"    , "1.Nf5+ Kg8",           0.0  },

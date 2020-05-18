@@ -1,5 +1,5 @@
 (The remainder of this auto-generated documentation is created by
-running sargon-tests -doc from the command line)
+ running sargon-tests -doc from the command line)
 
 A Window into Sargon
 ====================
@@ -407,6 +407,9 @@ Q....PPP
                     1.Qg8+ Rxg8 2.Nxg8
 
 PV = 1.Qg8+ Nxg8 2.Nf7#, note that the PV nodes are asterisked
+Decision 4) is a good example of Alpha-Beta cutoff. 2.Nf7 mate refutes
+1...Ng8, given that 1...Rc6 is not mated. So no need to look at other
+replies to 1...Ng8
 Since Qg8+ is not first choice, there's less alpha-beta cutoffs than example 2
 
 Detailed log
@@ -510,9 +513,8 @@ r.....kp
                     1.Ne6+ Kh8 2.Rd8#
 
 PV = 1.Nf5+ Kg8 2.Nxh6+, note that the PV nodes are asterisked
-Decision 4) is a good example of Alpha-Beta cutoff. 2.Rd8 mate refutes
-2...Kh8, given that 2...Kg8 is not mated. So no need to look at other
-replies to 2...Kh8
+Decision 4) here is also a good example of Alpha-Beta cutoff. 2.Rd8 mate refutes
+1...Kh8, so no need to look at other replies to 1...Kh8
 
 
 Detailed log
