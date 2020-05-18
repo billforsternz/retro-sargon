@@ -88,7 +88,7 @@ version of the code. Project convert-z80-to-x86 then exists to convert
 the modified Z80 code to X86.
 
 For the moment I have not abandoned the original 8080 code in this way.
-The Windows script rebuild-and-test.bat converts the original Sargon
+The Windows script rebuild-and-compare.bat converts the original Sargon
 code directly to X86 code (8080 -> X86) and via the two step process
 (8080 -> Z80 -> X86) and checks that exactly the same sargon-x86.asm
 file is created by both routes.
@@ -384,7 +384,7 @@ The directory stages/ contains the conversion process, starting with the
 unmodified program text from the book, progressing through manual and
 mechanical modification through to the ultimate sargon-x86.asm file (and
 its companion sargon-asm-interface.h). The directory contains its own
-readme.txt file to describe them. There's also rebuild-and-test.bat
+readme.txt file to describe them. There's also rebuild-and-compare.bat
 script in the project root directory to repeat and test the conversion
 process.
 
