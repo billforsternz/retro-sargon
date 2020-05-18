@@ -1,8 +1,13 @@
-/*
-
-  A program to convert Z80 assembly language to X86
-  
-  */
+/****************************************************************************
+ * This project is a Windows port of the classic program Sargon, as
+ * presented in the book "Sargon a Z80 Computer Chess Program" by Dan
+ * and Kathe Spracklen (Hayden Books 1978).
+ *
+ * File: convert-z80-to-x86.cpp
+ *       Translate normal Z80 mnemonics or to X86 Assembler
+ *
+ * Bill Forster, https://github.com/billforsternz/retro-sargon
+ ****************************************************************************/
 
 #define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>

@@ -1,3 +1,14 @@
+/****************************************************************************
+ * This project is a Windows port of the classic program Sargon, as
+ * presented in the book "Sargon a Z80 Computer Chess Program" by Dan
+ * and Kathe Spracklen (Hayden Books 1978).
+ *
+ * File: convert-8080-to-z80-or-x86.cpp
+ *       Translate TDL Z80 Macro assembler to normal Z80 mnemonics or to X86 Assembler
+ *
+ * Bill Forster, https://github.com/billforsternz/retro-sargon
+ ****************************************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>

@@ -1,8 +1,13 @@
-/*
-
-  Sargon PV (Principal Variation) Calculation
-  
-*/
+/****************************************************************************
+ * This project is a Windows port of the classic program Sargon, as
+ * presented in the book "Sargon a Z80 Computer Chess Program" by Dan
+ * and Kathe Spracklen (Hayden Books 1978).
+ *
+ * File: sargon-pv.h
+ *       Sargon PV (Principal Variation) Calculation
+ *
+ * Bill Forster, https://github.com/billforsternz/retro-sargon
+ ****************************************************************************/
 
 #ifndef SARGON_PV_H_INCLUDED
 #define SARGON_PV_H_INCLUDED

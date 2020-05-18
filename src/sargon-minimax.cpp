@@ -1,12 +1,13 @@
-/*
-
-  This program tests a Windows port of the classic program Sargon, as
-  presented in the book "Sargon a Z80 Computer Chess Program" by Dan and
-  Kathe Spracklen (Hayden Books 1978). Another program in this suite converts
-  the Z80 code to working X86 assembly language. A third program wraps the
-  Sargon X86 code in a simple standard Windows UCI engine interface.
-  
-  */
+/****************************************************************************
+ * This project is a Windows port of the classic program Sargon, as
+ * presented in the book "Sargon a Z80 Computer Chess Program" by Dan
+ * and Kathe Spracklen (Hayden Books 1978).
+ *
+ * File: sargon-minimax.cpp
+ *       Minimax regression tests executable documentation
+ *
+ * Bill Forster, https://github.com/billforsternz/retro-sargon
+ ****************************************************************************/
 
 #include <stdio.h>
 #include <stdlib.h>

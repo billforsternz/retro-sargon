@@ -1,10 +1,13 @@
-/*
-
-    Utility functions
-                                                        Bill Forster, October 2018
-
-*/
-
+/****************************************************************************
+ * This project is a Windows port of the classic program Sargon, as
+ * presented in the book "Sargon a Z80 Computer Chess Program" by Dan
+ * and Kathe Spracklen (Hayden Books 1978).
+ *
+ * File: util.cpp
+ *       Simple C++ utility functions
+ *
+ * Bill Forster, https://github.com/billforsternz/retro-sargon
+ ****************************************************************************/
 
 #include <iostream>
 #include <string>

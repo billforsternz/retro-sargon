@@ -1,12 +1,13 @@
-/*
-
-  This program tests a Windows port of the classic program Sargon, as
-  presented in the book "Sargon a Z80 Computer Chess Program" by Dan and
-  Kathe Spracklen (Hayden Books 1978). Another program in this suite converts
-  the Z80 code to working X86 assembly language. A third program wraps the
-  Sargon X86 code in a simple standard Windows UCI engine interface.
-  
-  */
+/****************************************************************************
+ * This project is a Windows port of the classic program Sargon, as
+ * presented in the book "Sargon a Z80 Computer Chess Program" by Dan
+ * and Kathe Spracklen (Hayden Books 1978).
+ *
+ * File: sargon-tests.cpp
+ *       Position and game regression tests and invoke executable documentation
+ *
+ * Bill Forster, https://github.com/billforsternz/retro-sargon
+ ****************************************************************************/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -465,6 +466,27 @@ bool sargon_position_tests( bool quiet, int comprehensive )
         //  solves this, but needs PLYMAX 7, takes about 5 mins 45 secs
         { "2rq1r1k/3npp1p/3p1n1Q/pp1P2N1/8/2P4P/1P4P1/R4R1K w - - 0 1", 7, "f1f6",
           -250, "Rxf6 Nxf6 Rf1 Rxc3 bxc3 Qc8 Rxf6" }
+            // Interestingly Sargon still thinks 1.Rxf6 is losing, (score -250 centipawns). It only
+            // even plays the final 4.Rxf6 in the PV because it banks the material (takes a knight
+            // on the last move of the PV and it doesn't fully acknowledge it's going to lose the
+            // rook it's just invested). But when you look deeply at what's going on (I did) it
+            // sort of makes sense. The defensive half of minimax is working hard to survive until
+            // ply 7, so Black has jettisoned material in the PV. The truth is Sargon doesn't quite
+            // realise how good 1.Rxf6 is but it does sort of understand it, seeing as it has mated
+            // in other lines and black is jettisoning material in the PV.  Sargon is behind in
+            // material right from the start so it's PV is at least holding things together (it
+            // thinks).
+            //
+            // I ran it further, to depth 8 and 9 (9 takes several hours) and it was only at depth
+            // 9 that Sargon really understands it is winning (Black has jettisoned more material,
+            // it is mate next move in the PV). At depth 8 Sargon doesn't play 4.Rxf6 any more
+            // because it's not the last move of the PV so Sargon fully appreciates it would be
+            // investing a rook and it doesn't see the payoff. Note that the line extends an
+            // extra ply at depth 9 because of white's final check.
+            //
+            //  depth 8 score cp -325; Rxf6 Nxf6 Rf1 Rxc3 bxc3 Kg8 Rb1 Qd7
+            //  depth 9 score cp 300;  Rxf6 Nxf6 Rf1 Rc4 Rxf6 Rh4 Qxh4 Kg7 Qh6+ Kg8
+
     };
 
 

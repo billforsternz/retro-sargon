@@ -1,8 +1,13 @@
-/*
-
-  Sargon interfacing functions
-  
-  */
+/****************************************************************************
+ * This project is a Windows port of the classic program Sargon, as
+ * presented in the book "Sargon a Z80 Computer Chess Program" by Dan
+ * and Kathe Spracklen (Hayden Books 1978).
+ *
+ * File: sargon-interface.cpp
+ *       Interfacing functions to the Sargon X86 assembler module
+ *
+ * Bill Forster, https://github.com/billforsternz/retro-sargon
+ ****************************************************************************/
 
 #include <string>
 #include <vector>

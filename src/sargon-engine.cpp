@@ -1,11 +1,13 @@
-/*
-
-  A primitive Windows UCI chess engine interface around the classic program Sargon,
-  as presented in the book "Sargon a Z80 Computer Chess Program" by Dan and Kathe
-  Spracklen (Hayden Books 1978). Another program in this suite converts the Z80 code
-  to working X86 assembly language.
-  
-  */
+/****************************************************************************
+ * This project is a Windows port of the classic program Sargon, as
+ * presented in the book "Sargon a Z80 Computer Chess Program" by Dan
+ * and Kathe Spracklen (Hayden Books 1978).
+ *
+ * File: sargon-engine.cpp
+ *       A simple Windows UCI chess engine interface
+ *
+ * Bill Forster, https://github.com/billforsternz/retro-sargon
+ ****************************************************************************/
 
 #include <stdio.h>
 #include <stdarg.h>
