@@ -719,7 +719,7 @@ public:
     }
 
     // Asterisk the PV nodes in ascii art, calculate pv_key and convert to readable PV
-    std::string CalculatePV( const PV &pv )
+    std::string AsteriskPV( const PV &pv )
     {
         pv_key = "";
         for( thc::Move mv: pv.variation )
@@ -970,7 +970,7 @@ void sargon_minimax_main()
         example.Annotate();
 
         // Asterisk the PV nodes
-        example.CalculatePV(pv);
+        example.AsteriskPV(pv);
 
         // Print ascii-art
         example.PrintDiagram();
@@ -1246,7 +1246,7 @@ bool sargon_minimax_regression_test( bool quiet)
         running_example = &example;
         PV pv;
         example.Run( pv );
-        std::string spv = example.CalculatePV( pv );
+        std::string spv = example.AsteriskPV( pv );
         std::string s =  example.DetailedLog();
         std::string t;
         switch( example_nbr )
