@@ -634,7 +634,7 @@ public:
     }
 
     // Run the example
-    void Run()
+    void Run( PV &pv )
     {
         progress.clear();
         callback_minimax_mods_active = true;
@@ -656,7 +656,6 @@ public:
         //  effects node traversal and generates a best move.
         thc::ChessPosition cp;
         cp.Forsyth(pos_probe);
-        PV pv;
         sargon_run_engine( cp, 3, pv, true );
         callback_minimax_mods_active = false;
     }
@@ -720,43 +719,19 @@ public:
         }
     }
 
-    // Run PV algorithm, asterisk the PV nodes in ascii art
-    std::string CalculatePV()
+    // Asterisk the PV nodes in ascii art, calculate pv_key and convert to readable PV
+    std::string CalculatePV( const PV &pv )
     {
-        // To avoid assuming Annotate() has run and copied eval key to bestmove_yes key
-        std::string eval_key;
-        for( Progress &prog: progress )
+        pv_key = "";
+        for( thc::Move mv: pv.variation )
         {
-            switch( prog.pt )
-            {
-                case eval:
-                    eval_key = prog.key;
-                    break;
-                case bestmove_yes:
-                    prog.key = eval_key;
-                    break;
-            }
+            std::string s;
+            char file = thc::get_file(mv.src);  // eg square b3 -> 'b'
+            s = file;
+            pv_key += util::toupper(s);         // eg "AG" -> "AGB"
+            ascii_art.Asterisk(pv_key);
         }
-
-        // Loop in reverse order, scanning for best move choices at level 1 (then 2 then 3)
-        int target = 1;
-        for( std::vector<Progress>::reverse_iterator it=progress.rbegin();  it!=progress.rend(); ++it )
-        {
-            if( it->pt == bestmove_yes )
-            {
-                std::string key = it->key;
-                if( target == it->key.length() )
-                {
-                    target++;
-
-                    // Found, note that last key found handily encodes the whole PV, eg if PV is
-                    // "B", "BG", "BGH", then last pv_key will be "BGH"
-                    pv_key = key;
-                    ascii_art.Asterisk(key);
-                }
-            }
-        }
-        return lines[pv_key];
+        return lines[pv_key]; // eg "AGB" -> "1.Qg8+ Nxg8 2.Nxg8#"
     }
 
     // Print ascii art diagram
@@ -986,14 +961,15 @@ void sargon_minimax_main()
     {
         Example example(*model);
         running_example = &example;
-        example.Run();
+        PV pv;
+        example.Run( pv );
         example.PrintIntro( example_nbr++ );
 
         // Annotate lines with progress through minimax calculation
         example.Annotate();
 
         // Run PV algorithm, asterisk the PV nodes
-        example.CalculatePV();
+        example.CalculatePV(pv);
 
         // Print ascii-art
         example.PrintDiagram();
@@ -1267,8 +1243,9 @@ bool sargon_minimax_regression_test( bool quiet)
     {
         Example example(*model);
         running_example = &example;
-        example.Run();
-        std::string pv = example.CalculatePV();
+        PV pv;
+        example.Run( pv );
+        std::string spv = example.CalculatePV( pv );
         std::string s =  example.DetailedLog();
         std::string t;
         switch( example_nbr )
@@ -1279,7 +1256,7 @@ bool sargon_minimax_regression_test( bool quiet)
             case 4: t = model4_detailed_log; break;
             case 5: t = model5_detailed_log; break;
         }
-        bool pass = (pv==model->pv && s==t);
+        bool pass = (spv==model->pv && s==t);
         std::string result = util::sprintf( "Model %d: %s %s", example_nbr, pass?"PASS":"FAIL", model->comment1.c_str() );
         //auto offset = result.find('\n');
         //if( offset != std::string::npos )
@@ -1290,12 +1267,12 @@ bool sargon_minimax_regression_test( bool quiet)
             ok = false;
             if( !quiet )
             {
-                if( pv != model->pv )
+                if( spv != model->pv )
                 {
                     printf( "Expected PV: " );
                     printf( "%s ", model->pv.c_str() );
                     printf( "Actual PV: " );
-                    printf( "%s\n", pv.c_str() );
+                    printf( "%s\n", spv.c_str() );
                 }
                 else
                 {
@@ -1381,6 +1358,7 @@ extern "C" {
         //  managable levels.)
         else if( std::string(msg) == "end of POINTS()" )
         {
+            sargon_pv_callback_end_of_points();
             std::string key = get_key();
             Progress prog;
             prog.pt  = create;
@@ -1478,6 +1456,7 @@ extern "C" {
         }
         else if( std::string(msg) == "Yes! Best move" )
         {
+            sargon_pv_callback_yes_best_move();
             Progress prog;
             prog.pt  = bestmove_confirmed;
             prog.msg = "(Confirming best move)";
