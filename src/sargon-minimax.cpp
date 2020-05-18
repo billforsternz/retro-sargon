@@ -1301,7 +1301,6 @@ extern "C" {
         uint32_t ret_addr = *sp;
         const unsigned char *code = (const unsigned char *)ret_addr;
         const char *msg = (const char *)(code+2);   // ASCIIZ text should come after that
-
         if( 0 == strcmp(msg,"LDAR") )
         {
             // For testing purposes, make LDAR output increment, results in
@@ -1310,31 +1309,17 @@ extern "C" {
             a_reg++;
             volatile uint32_t *peax = &reg_eax;
             *peax = a_reg;
-            return;
         }
+        else if( std::string(msg) == "end of POINTS()" )
+            sargon_pv_callback_end_of_points();
+        else if( std::string(msg) == "Yes! Best move" )
+            sargon_pv_callback_yes_best_move();
+
+        // Remaining Callbacks only apply when we are running our minimax tests and
+        //  heavily manipulating Sargon's operations
         if( !callback_minimax_mods_active )
-        {
-#if 0
-            if( 0 == strcmp(msg,"MATERIAL") )
-            {
-            //  sargon_pv_callback_material(reg_eax);
-                const unsigned char *sargon_board = peek(BOARDA);
-                if( (sargon_board[76]&0x87) == 4 )  // White rook on f6?
-                {
-                    thc::ChessPosition cp;
-                    sargon_export_position(cp);
-                    std::string s = cp.ForsythPublish();
-                    if( s.substr(0,41) == "2q2r1k/4pp1p/3p1R1Q/pp1P2N1/8/2P4P/6P1/7K" ) // " b - - 0 4"
-                        printf( "***** Debug hit *****\n");
-                }
-            }
-#endif
-            if( std::string(msg) == "end of POINTS()" )
-                sargon_pv_callback_end_of_points();
-            else if( std::string(msg) == "Yes! Best move" )
-                sargon_pv_callback_yes_best_move();
             return;
-        }
+
         // For purposes of minimax tracing experiment, we only want two possible
         //  moves in each position - achieved by suppressing King moves
         if( std::string(msg) == "Suppress King moves" )
@@ -1356,7 +1341,6 @@ extern "C" {
         //  managable levels.)
         else if( std::string(msg) == "end of POINTS()" )
         {
-            sargon_pv_callback_end_of_points();
             std::string key = get_key();
             Progress prog;
             prog.pt  = create;
@@ -1454,7 +1438,6 @@ extern "C" {
         }
         else if( std::string(msg) == "Yes! Best move" )
         {
-            sargon_pv_callback_yes_best_move();
             Progress prog;
             prog.pt  = bestmove_confirmed;
             prog.msg = "(Confirming best move)";
