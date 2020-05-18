@@ -1127,7 +1127,7 @@
 1106:	0EC0  213A01  	        LD      hl,PLISTA       ; Pin list address
 1107:	0EC3  EDB1    	PC1:    CPIR                    ; Search list for position
 1108:	0EC5  C0      	        RET     NZ              ; Return if not found
-1109:	0EC6  08      	        EX      af,af'          ; Save search paramenters
+1109:	0EC6  08      	        EX      af,af'          ; Save search parameters
 1110:	0EC7  CB43    	        BIT     0,e             ; Is this the first find ?
 1111:	0EC9  2015    	        JR      NZ,PC5          ; No - jump
 1112:	0ECB  CBC3    	        SET     0,e             ; Set first find flag
@@ -1340,7 +1340,7 @@
 1319:	1003  B8      	        CP      a,b             ; At end of list ?
 1320:	1004  2809    	        JR      Z,NX6           ; Yes - jump
 1321:	1006  05      	        DEC     b               ; Decrement list count
-1322:	1007  23      	back03: INC     hl              ; Increment list inter
+1322:	1007  23      	back03: INC     hl              ; Increment list pointer
 1323:	1008  BE      	        CP      a,(hl)          ; Check next item in list
 1324:	1009  28FC    	        JR      Z,back03        ; Jump if empty
 1325:	100B  ED67    	        RRD                     ; Get value from list

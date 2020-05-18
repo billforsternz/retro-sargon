@@ -1106,7 +1106,7 @@ PNCK:   LD      d,c             ; Save attack direction
         LD      hl,PLISTA       ; Pin list address
 PC1:    CPIR                    ; Search list for position
         RET     NZ              ; Return if not found
-        EX      af,af'          ; Save search paramenters
+        EX      af,af'          ; Save search parameters
         BIT     0,e             ; Is this the first find ?
         JR      NZ,PC5          ; No - jump
         SET     0,e             ; Set first find flag
@@ -1319,7 +1319,7 @@ NEXTAD: INC     c               ; Increment side flag
         CP      a,b             ; At end of list ?
         JR      Z,NX6           ; Yes - jump
         DEC     b               ; Decrement list count
-back03: INC     hl              ; Increment list inter
+back03: INC     hl              ; Increment list pointer
         CP      a,(hl)          ; Check next item in list
         JR      Z,back03        ; Jump if empty
         RRD                     ; Get value from list
