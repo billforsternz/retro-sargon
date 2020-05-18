@@ -1398,7 +1398,7 @@ PNCK:   MOV     D,C             ; Save attack direction
         LXI     H,PLISTA        ; Pin list address
 PC1:    CCIR                    ; Search list for position
         RNZ                     ; Return if not found
-        EXAF                    ; Save search paramenters
+        EXAF                    ; Save search parameters
         BIT     0,E             ; Is this the first find ?
         JRNZ    PC5             ; No - jump
         SET     0,E             ; Set first find flag
@@ -1611,12 +1611,48 @@ NEXTAD: INR     C               ; Increment side flag
         CMP     B               ; At end of list ?
         JRZ     NX6             ; Yes - jump
         DCR     B               ; Decrement list count
-back03: INX     H               ; Increment list inter
+back03: INX     H               ; Increment list pointer
         CMP     M               ; Check next item in list
         JRZ     back03          ; Jump if empty
         RRD                     ; Get value from list
         ADD     A               ; Double it
+        .IF_X86
+        ; The Sargon source code conversion tools support a
+        ; -relax flag. When this flag is asserted, the tools
+        ; generate X86 code which lacks LAHF/SAHF pairs around
+        ; some assembly instructions that modify flags on the
+        ; X86 but don't on the Z80. A manual inspection of the
+        ; Sargon code reveals only one spot where using -relax
+        ; causes a potential problem, you're looking at it right
+        ; here.
+        ;
+        ; Function NEXTAD: returns its status in the Z flag. If
+        ; Z no more attackers/defenders were found. If NZ the
+        ; value of the next attacker/defender is in register
+        ; A/al. The potential problem is the DEC HL/dec bx
+        ; instruction below that does not affect the Z flag on
+        ; the Z80 but does on the X86.
+        ;
+        ; In fact it's only a *potential* problem, which
+        ; presumably is why it didn't cause any regression
+        ; failures once we started applying the -relax flag.
+        ;
+        ; Reason: The bx register is pointing to a table in page
+        ; 1 of our 64K of emulation memory, a very long way from
+        ; 0, and so dec bx always results in NZ. At this point
+        ; in NEXTAD: the value of the next attacker/defender has
+        ; been calculated and it should be non-zero, with NZ
+        ; reflecting that.
+        ;
+        ; As a matter of principle, I have manually added a
+        ; LAHF/SAHF pair anyway, to more faithfully reproduce
+        ; the intent of the original Z80 flow of control.
+        lahf
+        dec     bx              ; Decrement list pointer
+        sahf
+        .ELSE
         DCX     H               ; Decrement list pointer
+        .ENDIF
 NX6:    EXX                     ; Restore regs.
         RET                     ; Return
 
