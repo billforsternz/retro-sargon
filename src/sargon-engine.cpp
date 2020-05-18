@@ -7,8 +7,8 @@
   
   */
 
-#include <windows.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <setjmp.h>
 #include <io.h>
@@ -154,20 +154,15 @@ int main( int argc, char *argv[] )
     return 0;
 }
 
-static unsigned long base_time_sargon_execution, max_gap_so_far, max_variance_so_far;
+// Emulate the simple and very useful Windows GetTickCount() with more elaborate and flexible C++
+//  std library calls, at least we can give our function a better name that the misleading
+//  GetTickCount() which fails to mention milliseconds in its name
 static std::chrono::time_point<std::chrono::steady_clock> base = std::chrono::steady_clock::now();
-static unsigned long bios_base = GetTickCount();
 static unsigned long elapsed_milliseconds()
 {
     std::chrono::time_point<std::chrono::steady_clock> now = std::chrono::steady_clock::now();
     std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - base);
     unsigned long ret = static_cast<unsigned long>(ms.count());
-    unsigned long bios_now = GetTickCount();
-    unsigned long bios_ret = bios_now-bios_base;
-    if( bios_ret > ret && bios_ret-ret > max_variance_so_far )
-        max_variance_so_far = bios_ret-ret;
-    else if( ret > bios_ret && ret-bios_ret > max_variance_so_far )
-        max_variance_so_far = ret-bios_ret;
     return ret;
 }
 
@@ -289,10 +284,7 @@ static bool RunSargon( int plymax, bool avoid_book )
     if( val )
         aborted = true;
     else
-    {
-        base_time_sargon_execution = elapsed_milliseconds();
         sargon_run_engine(the_position,plymax,the_pv,avoid_book); // the_pv updated only if not aborted
-    }
     return aborted;
 }
 
@@ -336,15 +328,11 @@ static bool process( const std::string &s )
     log( "function process() returns, cmd=%s\n"
          "total callbacks=%lu\n"
          "bestmove callbacks=%lu\n"
-         "end of points callbacks=%lu\n"
-         "max_variance_so_far=%lu\n"
-         "max time between bestmove callbacks=%lu\n",
+         "end of points callbacks=%lu\n",
             cmd.c_str(),
             total_callbacks,
             bestmove_callbacks,
-            end_of_points_callbacks,
-            max_variance_so_far,
-            max_gap_so_far );
+            end_of_points_callbacks );
     log( "%s\n", sargon_pv_report_stats().c_str() );
     return quit;
 }
@@ -960,25 +948,11 @@ extern "C" {
         if( 0 == strcmp(msg,"end of POINTS()") )
         {
             end_of_points_callbacks++;
-            unsigned long now = elapsed_milliseconds();
-            unsigned long elapsed = now - base_time_sargon_execution;
-            base_time_sargon_execution = now;
-            if( elapsed > max_gap_so_far )
-                max_gap_so_far = elapsed;
             sargon_pv_callback_end_of_points();
         }
         else if( 0 == strcmp(msg,"Yes! Best move") )
         {
             bestmove_callbacks++;
-            unsigned long now = elapsed_milliseconds();
-            unsigned long elapsed = now - base_time_sargon_execution;
-            base_time_sargon_execution = now;
-            if( elapsed > max_gap_so_far )
-                max_gap_so_far = elapsed;
-            //if( position_of_interest )
-            //{
-            //    log( "Yes! Best move=0x%02x from=%d, to=%d\n", value, from, to );
-            //}   
             sargon_pv_callback_yes_best_move();
         }
 
