@@ -63,9 +63,9 @@ static void        cmd_position( const std::string &whole_cmd_line, const std::v
 // Misc
 static bool is_new_game();
 static int log( const char *fmt, ... );
-static bool RunSargon( int plymax, bool avoid_book );
-static void ProgressReport();
-static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long ms_inc, int depth );
+static bool run_sargon( int plymax, bool avoid_book );
+static void generate_progress_report();
+static thc::Move calculate_next_move( bool new_game, unsigned long ms_time, unsigned long ms_inc, int depth );
 
 // A threadsafe-queue. (from https://stackoverflow.com/questions/15278343/c11-thread-safe-queue )
 template <class T>
@@ -112,9 +112,9 @@ static SafeQueue<std::string> async_queue;
 static void timer_thread();
 static void read_stdin();
 static void write_stdout();
-static void TimerClear();          // Clear the timer
-static void TimerEnd();            // End the timer subsystem system
-static void TimerSet( int ms );    // Set a timeout event, ms millisecs into the future (0 and -1 are special values)
+static void timer_clear();          // Clear the timer
+static void timer_end();            // End the timer subsystem system
+static void timer_set( int ms );    // Set a timeout event, ms millisecs into the future (0 and -1 are special values)
 
 // main()
 int main( int argc, char *argv[] )
@@ -149,7 +149,7 @@ int main( int argc, char *argv[] )
     second.join();               // pauses until second finishes
 
     // Tell timer thread to finish, then kill it immediately
-    TimerEnd();
+    timer_end();
     third.detach();
     return 0;
 }
@@ -166,7 +166,7 @@ static unsigned long elapsed_milliseconds()
     return ret;
 }
 
-// Very simple timer thread, controlled by TimerSet(), TimerClear(), TimerEnd() 
+// Very simple timer thread, controlled by timer_set(), timer_clear(), timer_end() 
 static std::mutex timer_mtx;
 static long future_time;
 static void timer_thread()
@@ -193,19 +193,19 @@ static void timer_thread()
 }
 
 // Clear the timer
-static void TimerClear()
+static void timer_clear()
 {
-    TimerSet(0);  // set sentinel value 0
+    timer_set(0);  // set sentinel value 0
 }
 
 // End the timer subsystem system
-static void TimerEnd()
+static void timer_end()
 {
-    TimerSet(-1);  // set sentinel value -1
+    timer_set(-1);  // set sentinel value -1
 }
 
 // Set a timeout event, ms millisecs into the future (0 and -1 are special values)
-static void TimerSet( int ms )
+static void timer_set( int ms )
 {
     std::lock_guard<std::mutex> lck(timer_mtx);
 
@@ -227,11 +227,11 @@ static void TimerSet( int ms )
         async_queue.enqueue(s);
     }
 
-    // Check for TimerEnd()
+    // Check for timer_end()
     if( ms == -1 )
         future_time = -1;
 
-    // Schedule a new "TIMEOUT" event (unless 0 = TimerClear())
+    // Schedule a new "TIMEOUT" event (unless 0 = timer_clear())
     else if( ms != 0 )
     {
         long now_time = elapsed_milliseconds();	
@@ -276,7 +276,7 @@ static void write_stdout()
 
 // Run Sargon analysis, until completion or timer abort (see callback() for timer abort)
 static jmp_buf jmp_buf_env;
-static bool RunSargon( int plymax, bool avoid_book )
+static bool run_sargon( int plymax, bool avoid_book )
 {
     bool aborted = false;
     int val;
@@ -433,7 +433,7 @@ static std::string cmd_go( const std::vector<std::string> &fields )
         }
     }
     bool new_game = is_new_game();
-    thc::Move bestmove = CalculateNextMove( new_game, ms_time, ms_inc, depth );
+    thc::Move bestmove = calculate_next_move( new_game, ms_time, ms_inc, depth );
     return util::sprintf( "bestmove %s\n", bestmove.TerseOut().c_str() );
 }
 
@@ -449,9 +449,9 @@ static void cmd_go_infinite()
     end_of_points_callbacks = 0;
     while( !aborted && plymax<=20 )
     {
-        aborted = RunSargon(plymax++,true);  // note avoid_book = true
+        aborted = run_sargon(plymax++,true);  // note avoid_book = true
         if( !aborted )
-            ProgressReport();   
+            generate_progress_report();   
     }
 }
 
@@ -553,7 +553,7 @@ static void cmd_position( const std::string &whole_cmd_line, const std::vector<s
     prev_position = the_position;
 }
 
-static void ProgressReport()
+static void generate_progress_report()
 {
     int     score_cp   = the_pv.value;
     int     depth      = the_pv.depth;
@@ -675,7 +675,7 @@ static void ProgressReport()
 
 */
 
-static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsigned long ms_inc, int depth )
+static thc::Move calculate_next_move( bool new_game, unsigned long ms_time, unsigned long ms_inc, int depth )
 {
     log( "Input ms_time=%lu, ms_inc=%lu, depth=%d\n", ms_time, ms_inc, depth );
     static int plymax_target;
@@ -696,7 +696,7 @@ static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsign
     }
     bool fixed_depth = (depth>0);
     if( fixed_depth )
-        TimerClear();
+        timer_clear();
 
     // Otherwise set a cutoff timer
     else
@@ -714,14 +714,14 @@ static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsign
         if( new_game || plymax_target == 0 )
         {
             plymax_target = 0;
-            TimerSet( ms_med );
+            timer_set( ms_med );
         }
 
         // Else the cut off timer is more of an emergency brake, and normally
         //  we just re-run Sargon until we hit plymax_target
         else
         {
-            TimerSet( ms_hi );
+            timer_set( ms_hi );
         }
     }
     int plymax = 3;     // Set plymax=3 as a baseline, it's more or less instant
@@ -735,7 +735,7 @@ static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsign
     unsigned long base = elapsed_milliseconds();
     for(;;)
     {
-        bool aborted = RunSargon(plymax,false);
+        bool aborted = run_sargon(plymax,false);
         unsigned long now = elapsed_milliseconds();
         unsigned long elapsed = (now-base);
         if( aborted  || the_pv.variation.size()==0 )
@@ -747,7 +747,7 @@ static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsign
 
         // Report on each normally concluded iteration
         if( !aborted )
-            ProgressReport();
+            generate_progress_report();
 
         // Check for situations where Sargon minimax never ran
         if( the_pv.variation.size() == 0 )    
@@ -818,7 +818,7 @@ static thc::Move CalculateNextMove( bool new_game, unsigned long ms_time, unsign
     }
     if( !fixed_depth )
     {
-        TimerClear();
+        timer_clear();
         plymax_target = plymax;
     }
     thc::Move bestmove;
@@ -889,7 +889,7 @@ extern "C" {
             sargon_pv_callback_yes_best_move();
         }
 
-        // Abort RunSargon() if new event in queue (and not PLYMAX<=3 which is
+        // Abort run_sargon() if new event in queue (and not PLYMAX<=3 which is
         //  effectively instantaneous, finds a baseline move)
         if( !async_queue.empty() && peekb(PLYMAX)>3 )
         {

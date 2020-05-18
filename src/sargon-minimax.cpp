@@ -968,7 +968,7 @@ void sargon_minimax_main()
         // Annotate lines with progress through minimax calculation
         example.Annotate();
 
-        // Run PV algorithm, asterisk the PV nodes
+        // Asterisk the PV nodes
         example.CalculatePV(pv);
 
         // Print ascii-art

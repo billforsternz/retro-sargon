@@ -34,7 +34,7 @@ struct NODE
 static thc::ChessRules pv_base_position;
 static std::vector< NODE > nodes;
 static unsigned long max_len_so_far;
-static void BuildPV( PV &pv );
+static void calculate_pv( PV &pv );
 static PV provisional;
 
 void sargon_pv_clear( const thc::ChessPosition &current_position )
@@ -180,7 +180,7 @@ void sargon_pv_callback_yes_best_move()
         max_len_so_far = nodes.size();
     if( level == 1 )
     {
-        BuildPV( provisional );
+        calculate_pv( provisional );
         nodes.clear();
     } 
 }
@@ -188,7 +188,7 @@ void sargon_pv_callback_yes_best_move()
 // Use our knowledge for the way Sargon does minimax/alpha-beta to build a PV
 // When a node is indicated as 'BEST' at level one, we can look back through
 //  previously indicated nodes at higher level and construct a PV
-static void BuildPV( PV &pv )
+static void calculate_pv( PV &pv )
 {
     pv.variation.clear();
 
