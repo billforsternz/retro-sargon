@@ -8,7 +8,7 @@ Release\convert-z80-to-x86.exe -z80_only stages\sargon-z80-and-x86.asm temp-sarg
 REM Assemble the Z80 code with ZMAC cross assembler to stages\sargon-z80.lst
 zmac.exe --oo lst -c --od stages stages\sargon-z80.asm
 
-REM Check whether anything has changed, also use git status
+REM Check both routes generate same X86 code, and also whether anything has changed, (suggest also using git status)
 fc stages\sargon-x86.asm temp-sargon-x86.asm
 fc stages\sargon-asm-interface.h temp-sargon-asm-interface.h
 fc stages\sargon-x86.asm src\sargon-x86.asm
