@@ -18,14 +18,12 @@ struct NODE
     unsigned int level;
     unsigned char from;
     unsigned char to;
-    unsigned char flags;
-    unsigned char value;
     char adjusted_material;
     char brdc;
-    NODE() : level(0), from(0), to(0), flags(0), value(0), adjusted_material(0), brdc(0) {}
+    NODE() : level(0), from(0), to(0), adjusted_material(0), brdc(0) {}
     NODE( unsigned int l, unsigned char f, unsigned char t,
-          unsigned char fs, unsigned char v, char a, char b ) :
-                level(l), from(f), to(t), flags(fs), value(v), adjusted_material(a), brdc(b) {}
+          char a, char b ) :
+                level(l), from(f), to(t), adjusted_material(a), brdc(b) {}
 };
 
 //
@@ -95,8 +93,8 @@ void sargon_pv_callback_yes_best_move()
     unsigned int level  = peekb(NPLY);
     unsigned char from  = peekb(p+2);
     unsigned char to    = peekb(p+3);
-    unsigned char flags = peekb(p+4);
-    unsigned char value = peekb(p+5);
+    //unsigned char flags = peekb(p+4);
+    //unsigned char value = peekb(p+5);
 
     // In this 'value' is used by Sargon for minimax. It is the value
     //  we convert to and from centipawns in sargon_import_value()
@@ -165,29 +163,10 @@ void sargon_pv_callback_yes_best_move()
     //   was that sometimes (but not always) Sargon's COLOR had toggled
     //   since the POINTS() function ran, so now we save the value
     //   of COLOR in POINTS() [which we have a callback for].
-#if 0
-//extern "C" {
-//extern char gbl_adjusted_material;
-//};
-    if( adjusted_material != gbl_adjusted_material )
-    {
-        printf( "***** WHOOP WHOOP PULL UP *****\n" );
-        printf( "ptsl = %d\n", ptsl );
-        printf( "ptsw1 = %d\n", ptsw1 );
-        printf( "ptsw2 = %d\n", ptsw2 );
-        printf( "val = %d\n", val );
-        printf( "color = 0x%02x\n", color );
-        printf( "end_of_points_color = 0x%02x\n", end_of_points_color );
-        printf( "mtrl = %d\n", mtrl );
-        printf( "adjusted_material = %d\n", adjusted_material );
-        printf( "gbl_adjusted_material = %d\n", gbl_adjusted_material );
-        printf( "***** WHOOP WHOOP PULL UP *****\n" );
-    }
-#endif // 0
     char brdc = static_cast<char>(peekb(BRDC));
     if( peekb(PTSCK) )
         brdc = 0;
-    NODE n(level,from,to,flags,value,adjusted_material,brdc);
+    NODE n(level,from,to,adjusted_material,brdc);
     nodes.push_back(n);
     if( nodes.size() > max_len_so_far )
         max_len_so_far = nodes.size();
@@ -224,7 +203,6 @@ static void BuildPV( PV &pv )
         if( p->level == target )
         {
             nodes_pv.push_back( *p );
-            double fvalue = sargon_export_value(p->value);
             //if( target == plymax ) // commented out to allow extra depth nodes in case of checks - see below *
             //    break;
             target++;
@@ -273,30 +251,7 @@ static void BuildPV( PV &pv )
                 thc::Move mv;
                 bool legal = mv.TerseIn( &cr, buf );
                 if( !legal )
-                {
-                    /*
-                    log( "Unexpected illegal move=%s, Position=%s\n", buf, cr.ToDebugStr().c_str() );
-                    log( "Extra info: Starting position leading to unexpected illegal move FEN=%s, position=\n%s\n",
-                        pv_base_position.ForsythPublish().c_str(), pv_base_position.ToDebugStr().c_str() );
-                    std::string the_moves = "Moves leading to unexpected illegal move";
-                    for( int j=0; j<=i; j++ )
-                    {
-                        NODE *q = &nodes_pv[j];
-                        thc::Square qsrc, qdst;
-                        sargon_export_square( q->from, qsrc );
-                        sargon_export_square( q->to, qdst );
-                        char buff[5];
-                        buff[0] = thc::get_file(qsrc);
-                        buff[1] = thc::get_rank(qsrc);
-                        buff[2] = thc::get_file(qdst);
-                        buff[3] = thc::get_rank(qdst);
-                        buff[4] = '\0';
-                        the_moves += " ";
-                        the_moves += std::string(buff);
-                    }
-                    log( "Extra info: %s\n", the_moves.c_str() ); */
                     break;
-                }
                 else
                 {
                     cr.PlayMove(mv);
@@ -311,47 +266,6 @@ static void BuildPV( PV &pv )
     nbr = nodes_pv.size();
     pv.depth = plymax;
     NODE *nptr = &nodes_pv[nbr-1];
-    double fvalue = sargon_export_value( nptr->value );
-
-    // Sargon's values are negated at alternate levels, transforming minimax to maximax.
-    //  If White to move, maximise conventional values at level 0,2,4
-    //  If Black to move, maximise negated values at level 0,2,4
-    bool odd = ((nbr-1)%2 == 1);
-    bool negate = pv_base_position.WhiteToPlay() ? odd : !odd;
-    double centipawns = (negate ? -100.0 : 100.0) * fvalue;
-
-    // Values are calculated as a weighted combination of net material plus net mobility
-    //  plus an adjustment for possible exchanges in the terminal position. The value is
-    //  also *relative* to the ply0 score
-    //  We want to present the *absolute* value in centipawns, so we need to know the
-    //  ply0 score. It is the same weighted combination of net material plus net mobility.
-    //  The actual ply0 score is available, but since it also adds the possible exchanges
-    //  adjustment and we don't want that, calculate the weighted combination of net
-    //  material and net mobility at ply0 instead.
-    //  We no long use the results calculated from this code. Instead of getting an
-    //  RELATIVE value and working backwards to get an ABSOLUTE value, we calculate an
-    //  ABSOLUTE value directly and use that. Search for ABSOLUTE (in caps) in comments
-    //  in this file for more information.
-    char mv0 = peekb(MV0);      // net ply 0 material (pawn=2, knight/bishop=6, rook=10...)
-    if( mv0 > 30 )              // Sargon limits this to +-30 (so 15 pawns) to avoid overflow
-        mv0 = 30;
-    if( mv0 < -30 )
-        mv0 = -30;
-    char bc0 = peekb(BC0);      // net ply 0 mobility
-    if( bc0 > 6 )               // also limited to +-6
-        bc0 = 6;
-    if( bc0 < -6 )
-        bc0 = -6;
-    int ply0 = mv0*4 + bc0;     // Material gets 4 times weight as mobility (4*30 + 6 = 126 doesn't overflow signed char)
-    double centipawns_ply0 = ply0 * 100.0/8.0;   // pawn is 2*4 = 8 -> 100 centipawns 
-
-    // Don't use this, we don't want exchange adjustment at ply 0
-    //double fvalue_ply0 = sargon_export_value( peekb(5) ); //Where root node value ends up if MLPTRJ=0, which it does initially
-
-    // So actual value is ply0 + score relative to ply0
-    pv.value2 = static_cast<int>(centipawns_ply0+centipawns);   // pv.value2 is deprecated, we use pv.value based on ABSOLUTE calculation
-    //printf( "End of PV position is %s\n", cr.ToDebugStr().c_str() );
-    //printf( "Old value=%d, centipawns=%f, centipawns_ply0=%f, plymax=%d\n", pv.value2, centipawns, centipawns_ply0, plymax );
 
     // Simplified and improved ABSOLUTE value calculation
     int limit_brdc = nptr->brdc;
@@ -364,10 +278,8 @@ static void BuildPV( PV &pv )
         limit_material = 30;
     else if( limit_material < -30 )
         limit_material = -30;
-    centipawns = (4*limit_material + limit_brdc) * 100.0/8.0;
-    pv.value = static_cast<int>(centipawns);   // the old pv.value calculation is still available as pv.value2 but is deprecated
-                                               // the new pv.value is now based on the improved ABSOLUTE calculation
-    //printf( "New value=%d, centipawns=%f, material=%d brdc=%d\n", pv.value, centipawns, nptr->adjusted_material, nptr->brdc );
+    double centipawns = (4*limit_material + limit_brdc) * 100.0/8.0;
+    pv.value = static_cast<int>(centipawns);
 }
 
 std::string sargon_pv_report_stats()
