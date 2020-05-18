@@ -36,8 +36,7 @@ int main( int argc, const char *argv[] )
     const char *test_args[] =
     {
         "Debug/sargon-tests.exe",
-        "p",
-        "-3",
+        "m",
         "-v"
     };
     argc = sizeof(test_args) / sizeof(test_args[0]);
