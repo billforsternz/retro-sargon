@@ -1040,7 +1040,7 @@ PNCK:   MOV     D,C             ; Save attack direction
         LXI     H,PLISTA        ; Pin list address
 PC1:    CCIR                    ; Search list for position
         RNZ                     ; Return if not found
-        EXAF                    ; Save search paramenters
+        EXAF                    ; Save search parameters
         BIT     0,E             ; Is this the first find ?
         JRNZ    PC5             ; No - jump
         SET     0,E             ; Set first find flag
@@ -1253,7 +1253,7 @@ NEXTAD: INR     C               ; Increment side flag
         CMP     B               ; At end of list ?
         JRZ     NX6             ; Yes - jump
         DCR     B               ; Decrement list count
-        INX     H               ; Increment list inter
+        INX     H               ; Increment list pointer
         CMP     M               ; Check next item in list
         JRZ     .-2             ; Jump if empty
         RRD                     ; Get value from list

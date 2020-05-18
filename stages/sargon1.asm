@@ -1253,7 +1253,7 @@ NEXTAD: INR     C               ; Increment side flag
         CMP     B               ; At end of list ?
         JRZ     NX6             ; Yes - jump
         DCR     B               ; Decrement list count
-        INX     H               ; Increment list inter
+        INX     H               ; Increment list pointer
         CMP     M               ; Check next item in list
         JRZ     .-2             ; Jump if empty
         RRD                     ; Get value from list
