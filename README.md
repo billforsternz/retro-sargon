@@ -106,7 +106,7 @@ so I don't imagine many users set the search depth to maximum!
 
 One improvement I have been able to make without changing any of
 Sargon's core code is to extend the maximum search depth from 6 to 20
-(because I am not limited to a few K of memory) and make the search
+(because I am not limited to a few K of memory) and to make the search
 depth dynamic rather than fixed. I use an iterative approach. When the
 GUI asks the engine to analyse a position I start with depth=3 (which is
 essentially instantaneous), present the results, then move to depth=4,
@@ -122,8 +122,8 @@ never be absolutely solved unless we can somehow turn every atom in the
 universe into a computer co-operating on solving the problem (and not
 even then). This is why we can't have nice things.
 
-During human v engine or engine v engine operation the GUI tells sargon-
-engine the time left for the game and I use a simple adaptive algorithm
+During human v engine or engine v engine operation the GUI tells
+sargon-engine the time left for the game and I use a simple adaptive algorithm
 to decide when to stop iterating and present the best move discovered to
 date.
 
