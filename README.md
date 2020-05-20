@@ -1,17 +1,194 @@
-Introduction
-============
+What is this?
+=============
 
 The book "Sargon, a computer chess program", by Dan and Kathe Spracklen
-published by Hayden 1978 presents the source code to the classic early
-chess program Sargon in Z80 assembly language. This is a project to
-bring the code presented in the book back to life in the modern era.
+published by Hayden in 1978 presents the source code to the classic
+early chess program Sargon in Z80 assembly language. This is a project
+to bring the code presented in the book back to life in the modern era.
 
-The project comprises four subprojects, two of which do source code
-transformation to ultimately produce an x86 assembly language version of
-Sargon, and two of which run the resulting Sargon code.
+Why would you do that?
+======================
 
-Sargon Executables
-==================
+Why not? It was a fun challenge for a start. I love chess, I love chess
+software in general and retro chess software in particular. Not many
+people these days have familiarity and facility with Z80 assembly
+language, and it's nice to practise those skills and remember the good
+old days. The final result is fun to play with, it celebrates the
+pioneers and adds some twists and interest I didn't expect when I
+started (more on that later). Plus it's a pleasure to work on some
+software from a time when software could be important and significant
+without sprawling and metastasizing beyond the means of a single person
+to understand it in depth in a reasonable amount of time.
+
+How can I try it out?
+=====================
+
+It's easy on Windows, even if you're not a developer. First download
+Sargon as a [Windows executable](https://github.com/billforsternz/retro-sargon/releases/download/V1.00/sargon-engine.exe)
+then run it under your favourite Chess GUI. If you don't have a chess
+GUI (or know what one is), I will respectfully recommend my own
+[Tarrasch Chess GUI](http://triplehappy.com/). Once you've installed
+Tarrasch, use the Options > Engine menu to point Tarrasch at the Sargon
+engine executable and you're off to the races.
+
+On Linux or Mac it's probably possible to get the code running, but
+you're going to need some developer skills. One difficulty is that the
+project works by transforming the Z80 original assembly language to
+Intel x86 32 bit assembly language, and 32 bit (as opposed to 64 bit) is
+becoming problematic on Linux and Mac. Sorry. One day I might do a 64
+bit version.
+
+I estimate this very early version of Sargon to have chess strength
+of about 1200 Elo. Competitive players might enjoy beating up a computer
+engine, for fun and a dose of nostalgia (if you don't know much about
+chess - computers overtook humans in the 1990s and are now vastly stronger).
+If you're just starting out on your chess journey, Sargon will probably
+beat you but beating it is a realistic challenge. You'll probably have to
+put at least a little serious effort into improving your game though.
+
+Developers, Developers, Developers
+==================================
+
+The Zilog Z80 is a legendary microprocessor and there's a niche internet
+community that celebrates it. One of the nice things about this project
+is that a byproduct of my development pipeline is a version of the original
+assembly language transformed into standard Z80 mnemonics. The orginal
+Sargon Z80 code was somewhat tainted (I think) by a rather puzzling
+decision to use a kind of hybrid 8080 assembly language instead of real
+Z80 assembly language. (More about that later). It's not inconceivable
+that there might be someone out there that wants to hack on the
+Z80 code and run it on a Z80 or a Z80 emulator, and if that's the case
+sargon-z80.asm will be of interest to you.
+
+It's slightly more likely that there might be someone who is interested
+in working on the new Intel x86 version of the Sargon code. The file
+sargon-x86.asm (and associated sargon-asm-interface.h) is for you. I
+have added a C language callable interface to Sargon. The interface
+includes a kind of API (for calling into Sargon), facilities for
+setting and inspecting registers and memory before and after Sargon
+runs, and a flexible mechanism for Sargon to callback into your code
+as it runs (again with full access to registers and memory). To check
+these things out, there's no other way other than digging in to the
+code. I think it's well commented and I hope you agree.
+
+I've also implemented a kind of "window into Sargon" that animates
+(using the word loosely) Sargon's chess calculations. People who are
+interested in chess programming might be interested in watching
+Sargon execute the standard minimax and alpha-beta algorithms, in the
+context of a simple model that eliminates the usual problem of being
+being overwhelmed by the size and complexity of the tree of analysis.
+This is one of the unexpected twists and benefits I spoke of earlier.
+(The other one was unexpectedly finding that I could tease the PV [principle
+variation] out of Sargon - enabling it to present its analysis like
+a modern chess engine).
+
+How Well does it Work?
+======================
+
+Potential users/tinkerers should have realistic expectations, the
+program dates from an era when the humblest club player could beat chess
+programs running on consumer grade hardware. This was the very first
+version of Sargon, a project that went through many more versions,
+becoming much stronger during the product's lifecycle. Sargon was an
+important product in computer chess history, and I still think the
+surprising decision the Spracklen's made to make the source code of
+their nascent commercial product available is important and worth
+celebrating (by bringing that code back to life).
+
+This version of Sargon used fixed depth, full width search. In other
+words it did not prune its search tree, considering every single move
+out to a fixed depth. The depth was a user selectable option, with 6
+(ply) being the maximum setting. On my (cheap, aging) commodity laptop,
+sargon-engine.exe might take something like 30 seconds to perform the 6
+ply search in a typical middlegame position. I expect this to be between
+two and three orders of magnitude faster than the original Z80 machine,
+so I don't imagine many users set the search depth to maximum!
+
+One improvement I have been able to make without changing any of
+Sargon's core code is to extend the maximum search depth from 6 to 20
+(because I am not limited to a few K of memory) and make the search
+depth dynamic rather than fixed. I use an iterative approach. When the
+GUI asks the engine to analyse a position I start with depth=3 (which is
+essentially instantaneous), present the results, then move to depth=4,
+and so on. If the GUI wants the engine to analyse indefinitely
+(kibitzing) I just continue iterating all the way up to depth=20. It's
+important to understand though that the time required increases
+exponentially. Seconds for depth 4, minutes by depth 7, hours by depth
+9, days (10), weeks (11), years probably (13 or so). Basically it will
+never get to 20. Theoretically the minimax algorithm (which Sargon
+implements effectively - not quite perfectly because it doesn't consider
+under-promotion) can 'solve chess perfectly'. But in fact chess will
+never be absolutely solved unless we can somehow turn every atom in the
+universe into a computer co-operating on solving the problem (and not
+even then). This is why we can't have nice things.
+
+During human v engine or engine v engine operation the GUI tells sargon-
+engine the time left for the game and I use a simple adaptive algorithm
+to decide when to stop iterating and present the best move discovered to
+date.
+
+I have implemented a FixedDepth engine parameter which allows
+emulation of the original Sargon program's behaviour. If FixedDepth is
+set to a non-zero number then sargon-engine doesn't iterate at all when
+playing a game, it just goes straight to the assigned depth. This
+actually has some efficiency advantages, since iterating from depth 5
+(say) to depth 6 was not contemplated in the original Sargon code at
+all, so when I do that I am in effect discarding all of the depth 5
+information and starting again. That sounds terrible, but remember the
+exponential growth means that the depth 6 required time will far exceed
+the sum of depth 3,4 and 5 required time, so relatively speaking it's
+not wasting that much time. Iteration works well and is very pragmatic
+and effective in this Sargon implementation.
+
+It might sound that extending Sargon's search depth well beyond 6 hasn't
+been very useful because the exponential growth makes levels beyond 8 or
+so inaccessible in practice. This would be true if chess stopped in the
+middlegame, but as more and more pieces come off the board, there are
+less moves to look at in each position, and Sargon can see deeper in a
+reasonable time. This is the real beauty of adaptive rather than fixed
+depth. As a simple example consider the position with White (to play)
+king on e4, pawn on d4, Black king on d7. A serious human player will
+instantaneously play Kd5 here, knowing that this is the only way to
+eventually force pawn promotion. Sargon, with absolutely no chess
+knowledge, just the ability to calculate variations in search of extra
+material or board control, plays Kd5 at depth 13 (or more). The PV
+associated with this move features the pawn queening triumphantly right
+at the end of the line. It takes 3 minutes and 30 seconds to make the
+calculation on my computer. It's hardly world shattering but it's vastly
+beyond the capacity of the original Z80 implementation, and shows what a
+faster CPU and more memory can do to an otherwise fixed chess
+calculation algorithm.
+
+However there's no doubt that in general the horizon effect, as it is
+called, is a massive limitation on the strength of an engine that does a
+full width, fixed depth search with no pruning. Sargon runs well enough.
+It plays ugly anti-positional chess, but it does try to mobilise it's
+pieces and it's pretty decent at tactics and will sometimes tear you
+apart in a complex middlegame if you don't pay attention. But then it
+might not be able to finish you off. Despite being able to search deeper
+it still doesn't understand endgames because promoting pawns takes so
+many ply. And even winning with say K+Q v K is beyond its horizon unless
+the opponent's king is already corralled with Sargon's king nearby. I am
+tempted to add a simple "king in a decreasing sized box" type heuristic
+to the scoring function to fix that - but that's not really software
+archaeology is it? A similar problem, probably fixable in the same way
+is that Sargon will sometimes drift and concede a draw by repeating
+moves even in an overwhelming position. This is a reflection of Sargon's
+scoring function, which doesn't have any positional knowledge. Sargon
+just tries to win material, and if that's not possible control more
+squares than the opponent. This was typical of the era, in the early
+days of chess programming the pioneers were delighted to find that
+minimax plus alpha beta and a simple material plus board control scoring
+function was sufficient to play at least reasonable chess. But it was
+only a starting point for real progress.
+
+Project Organisation
+====================
+
+This project comprises four subprojects, two of which do source code
+transformation to ultimately produce the x86 assembly language version of
+Sargon, and two of which run the resulting Sargon code. Let's start
+with running the Sargon code.
 
 Project sargon-engine is a standard UCI chess engine. UCI is a
 standardised chess engine interface. Project sargon-engine allows any
@@ -22,30 +199,32 @@ move, but the modern translation peers into the Sargon implementation
 and extracts the PV (Principle Variation - the follow up Sargon expects
 to its calculated best move), and Sargon's numerical evaluation of the
 position. These latter elements weren't required by Sargon's original
-user interface, but make for much more interesting user experience when
-using a modern chess GUI.
+user interface, but make for a much more interesting user experience
+when using a modern chess GUI.
 
-Project sargon-tests is not only a set of unit tests to exercise the
-translated Sargon code and make sure it works as intended, but also an
-ambitious attempt to open a window into the Sargon implementation to
-allow observation of exactly how it works. I anticipate this view into
-Sargon's heart could be of interest to programmers starting out on
-computer chess even today. After all, Sargon is by necessity much
-simpler than modern computer chess implementations, but it uses the
-minimax and alpha-beta algorithms that underpin the whole field.
+Project sargon-tests includes a collection of regression tests which
+initially helped me get the Sargon port working, and then kept the
+development firmly on track. More interesting perhaps is some
+'executable documentation' built into the sargon-tests.exe program. This
+is an attempt to open a window into Sargon's implementation of minimax
+and alpha-beta, the fundamental chess algorithms. Originally this was
+all about validating that the Sargon code was really running correctly
+on the modern platform, but I refined it with the idea that a developer
+starting out in chess programming might find it very interesting to see
+a simple working model of these algorithms in action. The executable
+documentation can be executed by running sargon-tests.exe with a -doc
+command line flag. The resulting output is available in the repository
+as sargon-tests-doc-output.txt
 
-Unless you are interested in the technology story, it's probably best to
-skip ahead from here to section "How Well Does it Work?".
-
-Source Code Translation
-=======================
+Details, Details
+================
 
 Project convert-8080-to-z80-or-x86 is the fundamental source code
 translation tool that converts Sargon into something we can run today.
 The reference to the older Intel 8080 processor might be confusing. The
 Zilog Z80 microprocessor that Sargon 1978 ran on was upwardly compatible
 with the older Intel 8080 microprocessor. The Z80 implemented all of the
-8080's instruction, plus a whole lot of new ones. In a software
+8080's instructions, plus a whole lot of new ones. In a software
 engineering masterstroke, Zilog made life easy for programmers by
 designing a much better, more consistent and orthogonal assembly
 language than the Intel original for the new, more capable machine. The
@@ -54,8 +233,8 @@ all the Z80 extensions too in a smooth and consistent way. As an
 example, the original 8080 assembly language has different instructions
 for all the different types of ADD operations it can do, depending on
 where the operands come from. In contrast the Z80 assembly language
-replaces them all with just a single ADD mnemonic. The assembler itself
-infers which actual machine code ADD instruction (including new ADD
+replaces them all with just a single ADD mnemonic. The assembler program
+itself infers which actual machine code ADD instruction (including new ADD
 instructions introduced with the Z80) is required from the parameters to
 the mnemonic, which are organised in a systematic and consistent way.
 
@@ -93,8 +272,8 @@ code directly to X86 code (8080 -> X86) and via the two step process
 (8080 -> Z80 -> X86) and checks that exactly the same sargon-x86.asm
 file is created by both routes.
 
-Converting to x86
-=================
+Yet More Details
+================
 
 Intel chose not to provide an 8080 machine code level compatibility mode
 for their original 16 bit 8086. (Interesting diversion: One of the
@@ -108,8 +287,10 @@ company's history. Their massively successful X86 family has provided
 direct machine level compatibility all the way back to late 1970s 8086
 processor ever since.
 
-Amusingly translation was required rather than direct source code
-compatibility not only because of some instruction quirks (eg 8086
+Not only was machine code compatibility not provided, even source code
+level compatibiliy was denied and instead Intel suggested translating
+8080 code to 8086 code. Amusingly translation was required not only
+because of some instruction quirks (eg 8086
 instructions affecting flags differently to the 8080 equivalents), but
 because Intel pulled a Zilog and made the assembly language for the new
 chip more consistent and orthogonal. Of course even machine code
@@ -168,145 +349,6 @@ convert some other 8080 or Z80 program into a working x86 program. Apart
 from anything else, instructions that Sargon never uses are not
 necessarily converted.
 
-How Well does it Work?
-======================
-
-Potential users/tinkerers should have realistic expectations, the
-program dates from an era when the humblest club player could beat chess
-programs running on consumer grade hardware. I am not an expert on
-engine v engine chess, but I did run some matches with my own primitive
-engine and I'd estimate sargon-engine.exe's strength at about 1200 Elo.
-This was the very first version of Sargon, a project that went through
-many more versions, becoming much stronger during the product's
-lifecycle. Sargon was an important product in computer chess history,
-and I still think the surprising decision the Spracklen's made to make
-the source code of their nascent commercial product available is
-important and worth celebrating (by bringing that code back to life).
-
-This version of Sargon used fixed depth, full width search. In other
-words it did not prune its search tree, considering every single move
-out to a fixed depth. The depth was a user selectable option, with 6
-(ply) being the maximum setting. On my cheap, aging commodity laptop,
-sargon-engine.exe might take something like 20 seconds to perform the 6
-ply search in a typical middlegame position. I expect this to be between
-two and three orders of magnitude faster than the original Z80 machine,
-so I don't imagine many users set the search depth to maximum!
-
-One improvement I have been able to make without changing any of
-Sargon's core code is to extend the maximum search depth from 6 to 20
-(because I am not limited to a few K of memory) and make the search
-depth dynamic rather than fixed. I use an iterative approach. When the
-GUI asks the engine to analyse a position I start with depth=3 (which is
-essentially instantaneous), present the results, then move to depth=4,
-and so on. If the GUI wants the engine to analyse indefinitely
-(kibitzing) I just continue iterating all the way up to depth=20. It's
-important to understand though that the time required increases
-exponentially. Seconds for depth 4, minutes by depth 7, hours by depth
-9, days (10), weeks (11), years probably (13 or so). Basically it will
-never get to 20. Theoretically the minimax algorithm (which Sargon
-implements effectively - not quite perfectly because it doesn't consider
-under-promotion) can 'solve chess perfectly'. But in fact chess will
-never be absolutely solved unless we can somehow turn every atom in the
-universe into a computer co-operating on solving the problem (and not
-even then). This is why we can't have nice things.
-
-During human v engine or engine v engine operation the GUI tells sargon-
-engine the time left for the game and I use a simple adaptive algorithm
-to decide when to stop iterating and present the best move discovered to
-date.
-
-The UCI interface allows the user to use the GUI to set engine
-parameters, and I have implemented a FixedDepth parameter which allows
-emulation of the original Sargon program's behaviour. If FixedDepth is
-set to a non-zero number then sargon-engine doesn't iterate at all when
-playing a game, it just goes straight to the assigned depth. This
-actually has some efficiency advantages, since iterating from depth 5
-(say) to depth 6 was not contemplated in the original Sargon code at
-all, so when I do that I am in effect discarding all of the depth 5
-information and starting again. That sounds terrible, but remember the
-exponential growth means that the depth 6 required time will far exceed
-the sum of depth 3,4 and 5 required time, so relatively speaking it's
-not wasting that much time. Iteration works well and is very pragmatic
-and effective in this Sargon implementation.
-
-It might sound that extending Sargon's search depth well beyond 6 hasn't
-been very useful because the exponential growth makes levels beyond 8 or
-so inaccessible in practice. This would be true if chess stopped in the
-middlegame, but as more and more pieces come off the board, there are
-less moves to look at in each position, and Sargon can see deeper in a
-reasonable time. This is the real beauty of adaptive rather than fixed
-depth. As a simple example consider the position with White (to play)
-king on e4, pawn on d4, Black king on d7. A serious human player will
-instantaneously play Kd5 here, knowing that this is the only way to
-eventually force pawn promotion. Sargon, with absolutely no chess
-knowledge, just the ability to calculate variations in search of extra
-material or board control, plays Kd5 at depth 13 (or more). The PV
-associated with this move features the pawn queening triumphantly right
-at the end of the line. It takes 3 minutes and 30 seconds to make the
-calculation on my computer. It's hardly world shattering but it's vastly
-beyond the capacity of the original Z80 implementation, and shows what a
-faster CPU and more memory can do to an otherwise fixed chess
-calculation algorithm.
-
-However there's no doubt that in general the horizon effect, as it is
-called, is a massive limitation on the strength of an engine that does a
-full width, fixed depth search with no pruning. Sargon runs well enough.
-It plays ugly anti-positional chess, but it does try to mobilise it's
-pieces and it's pretty decent at tactics and will sometimes tear you
-apart in a complex middlegame if you don't pay attention. But then it
-might not be able to finish you off. Despite being able to search deeper
-it still doesn't understand endgames because promoting pawns takes so
-many ply. And even winning with say K+Q v K is beyond its horizon unless
-the opponent's king is already corralled with Sargon's king nearby. I am
-tempted to add a simple "king in a decreasing sized box" type heuristic
-to the scoring function to fix that - but that's not really software
-archaeology is it? A similar problem, probably fixable in the same way
-is that Sargon will sometimes drift and concede a draw by repeating
-moves even in an overwhelming position. This is a reflection of Sargon's
-scoring function, which doesn't have any positional knowledge. Sargon
-just tries to win material, and if that's not possible control more
-squares than the opponent. This was typical of the era, in the early
-days of chess programming the pioneers were delighted to find that
-minimax plus alpha beta and a simple material plus board control scoring
-function was sufficient to play at least reasonable chess. But it was
-only a starting point for real progress.
-
-How do I run it?
-================
-
-I have used Windows as my development platform and target, so ideally
-you use or have access to a Windows computer. I imagine it would be
-relatively straightforward to use Linux, although I am not sure about
-the 32 bit development story on Linux with modern distributions. MacOS
-is definitely problematice since Apple recently decided to no longer
-support 32 bit code at all.
-
-To run sargon-engine.exe effectively it is best to use a Chess GUI. The
-Chess GUI serves to provide a user interface to sargon-engine.exe or any
-other chess engine equipped with a standard chess engine interface. The
-original Z80 Sargon came with its own simple user interface, but I have
-elected not to bring that part of the code over, a modern chess GUI
-provides a much better experience and the real interest in the Sargon
-code is the inner chess calculation code.
-
-I have used two Chess GUIs with sargon-engine.exe, my own Tarrasch Chess
-GUI and Arena. I used Arena to run sargon-engine.exe against other chess
-engines (Tarrasch unfortunately does not support engine versus engine
-operation).
-
-The other Sargon executable in this project is sargon-tests.exe. It
-includes a collection of regression tests which initially helped me get
-the Sargon port working, and then kept the development firmly on track.
-More interesting perhaps is some 'executable documentation' built into
-the sargon-tests.exe program. This is an attempt to open a window into
-Sargon's implementation of minimax and alpha-beta, the fundamental chess
-algorithms. The idea is that a developer starting out in chess
-programming might find it very interesting to see a simple working model
-of these algorithms in action. The executable documentation can be
-executed by running sargon-tests.exe with a -doc command line flag. The
-resulting output is available in the repository as sargon-tests-doc-
-output.txt
-
 Development Environment
 =======================
 
@@ -339,12 +381,12 @@ Further Reading
 
 - [Background information](https://www.chessprogramming.org/Sargon)
 There's lots of background information on Sargon here. I hope this page
-will soon have a link to this project
+will soon have a link back to this project.
 
 - [Scan of original book](http://web.archive.org/web/20070614114334/http://madscientistroom.org/chm/Sargon.html)
 I have a paper copy of the book I picked up from abebooks.com, but I am
 happy to have access to this electronic copy as well, particularly since
-my paper copy of the book has had the TDL assembler reference material
+my paper copy of the book turned out to have had the TDL assembler reference material
 at the end ripped out!
 
 - [Stack Overflow Discussion with Andre Adrian](https://stackoverflow.com/questions/2038929/where-can-i-find-a-8080-to-x86-assembler-conversion-tool)
@@ -352,7 +394,7 @@ I first contemplated this project around 2010, and asked for advice on
 Z80 conversion tools in this Stackoverflow post. The page includes quite
 a lot of background information about the project. I mention Andre
 Adrian, a German programmer who gave me the idea for the project and who
-contributes to the discussion. Inevitably and sadly, the discussion was
+the arrives to contribute to the discussion. Inevitably and sadly, the discussion was
 closed as not meeting Stackoverflow guidelines. It makes me happy to
 contemplate that I have finally written my own conversion tools and got
 this project done after putting it on the back burner for so many years.
@@ -374,8 +416,9 @@ with a CP/M emulator. Now I have in turn improved his project (I think)
 in the same way he improved mine by replacing the original user
 interface with a modern chess engine interface.
 
-A google search should find my earlier Microchess project. I should
-really bring it over to Github.
+There's more information on my earlier 6502 Microchess project on Peter
+Jennings [Microchess history page](http://www.benlo.com/microchess/). I
+should really bring my source code conversion over to Github.
 
 Conversion Pipeline
 ===================
@@ -403,4 +446,3 @@ motive of incentive for anyone in this project. As I wrote on Twitter "I
 am porting a 70s chess program written in Z80 assembly to run on modern
 machines with a standard chess engine interface. Never has a project
 been more guaranteed not to generate a single cent of revenue."
-
