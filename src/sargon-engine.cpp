@@ -125,6 +125,16 @@ int main( int argc, char *argv[] )
 #ifdef _DEBUG
     static const std::vector<std::string> test_sequence =
     {
+#if 1
+        "uci\n",
+        "isready\n",
+        "setoption name FixedDepth value 1\n",           // go straight to depth 1 without iterating
+        "setoption name LogFileName value c:\\windows\\temp\\sargon-log-file.txt\n",
+        "position fen 7k/2pp2pp/4q3/4b3/4R3/4Q3/6PP/7K w - - 0 1\n",   // can take the bishop 425 centipawns
+        "go\n",
+        "position fen 7k/2pp2pp/4q3/4b3/4R3/3Q4/6PP/7K w - - 0 1\n",   // can't take the bishop 175 centipawns 
+        "go\n"
+#else
         "uci\n",
         "isready\n",
         "setoption name FixedDepth value 5\n",           // go straight to depth 5 without iterating
@@ -133,6 +143,7 @@ int main( int argc, char *argv[] )
         "go depth 6\n",                                  // will override fixed depth option, iterates
         "position fen 7k/8/8/8/8/8/8/N5Kq w - - 0 1\n",  // an extra knight only after capturing queen
         "go\n"                                           // will go straight to depth 5, no iteration
+#endif
     };
     for( std::string s: test_sequence )
     {
