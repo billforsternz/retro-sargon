@@ -545,3 +545,48 @@ bool sargon_position_tests( bool quiet, int comprehensive )
     return ok;
 }
 
+
+static void show()
+{
+    unsigned char nply = peekb(NPLY);
+    if( nply == 1 )
+    {
+        thc::ChessPosition cp;
+        sargon_export_position(cp);
+        std::string s = cp.ToDebugStr();
+        printf( "%s\n", s.c_str() );
+        printf( "NPLY = %02x\n", nply );
+        unsigned int addr = PLYIX;
+        unsigned int ptr  = peekw(addr);
+        printf( "Ply ptrs;\n" );
+        for( int i=0; i<4; i++ )
+        {
+            printf( "%04x", ptr );
+            addr += 2;
+            ptr  = peekw(addr);
+            printf( i+1<4 ? " " : "\n" );
+        }
+        printf( "MLPTRI=%04x\n", peekw(MLPTRI) );
+        printf( "MLPTRJ=%04x\n", peekw(MLPTRJ) );
+        printf( "MLLST=%04x\n",  peekw(MLLST) );
+        printf( "MLNXT=%04x\n",  peekw(MLNXT) );
+        addr = 0x400;
+        unsigned int mlnxt = peekw(MLNXT);
+        for( int i=0; i<256; i++ )
+        {
+            ptr  = peekw(addr);
+            printf( "%04x: %04x ", addr, ptr );
+            printf( "%02x %02x %02x %02x ", peekb(addr+2), peekb(addr+3), peekb(addr+4), peekb(addr+5) );
+            printf( "%s\n", sargon_export_move(addr,false).c_str() );
+            if( addr == mlnxt )
+                break;
+            addr += 6;
+        }
+    }
+}
+
+void after_genmov()
+{
+    //printf( "\nafter genmov()\n" );
+    //show();
+}
