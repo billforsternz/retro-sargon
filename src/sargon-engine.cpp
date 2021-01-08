@@ -38,7 +38,7 @@
 static unsigned long base_time;
 
 // Misc
-#define VERSION "1978 V1.00"
+#define VERSION "1978 V1.01 beta"
 #define ENGINE_NAME "Sargon"
 static int depth_option;    // 0=auto, other values for fixed depth play
 static std::string logfile_name;
@@ -51,6 +51,9 @@ static thc::ChessRules the_position;
 
 // The current 'Master' PV
 static PV the_pv;
+
+// The list of repetition moves to avoid, normally empty
+static std::vector<thc::Move> the_repetition_moves;
 
 // Command line interface
 static bool process( const std::string &s );
@@ -68,6 +71,10 @@ static int log( const char *fmt, ... );
 static bool run_sargon( int plymax, bool avoid_book );
 static void generate_progress_report();
 static thc::Move calculate_next_move( bool new_game, unsigned long ms_time, unsigned long ms_inc, int depth );
+static void repetition_calculate( thc::ChessRules &cr, std::vector<thc::Move> &repetition_moves );
+static bool test_whether_move_repeats( thc::ChessRules &cr, thc::Move mv );
+static void repetition_remove_moves( const std::vector<thc::Move> &repetition_moves );
+static bool repetition_test();
 
 // A threadsafe-queue. (from https://stackoverflow.com/questions/15278343/c11-thread-safe-queue )
 template <class T>
@@ -126,6 +133,25 @@ int main( int argc, char *argv[] )
     static const std::vector<std::string> test_sequence =
     {
 #if 1
+        "isready\n",
+        "position fen rnbqkb1r/pppppppp/5n2/8/2P5/5N2/PP1PPPPP/RNBQKB1R b KQkq c3 0 2 moves c7c6 d2d4 d7d5 b1c3 d5c4 a2a4 b8a6 e2e4 c8g4 f1c4 e7e6 c1e3 f8b4 e4e5 f6d5 d1c2 g4f5 c2d2 e8g8 e1g1 d5e3 f2e3 b4c3 b2c3 a6c7 a1e1 b7b5 a4b5 c6b5 c4d3 f5d3 d2d3 f7f5 e3e4 f5e4 d3e4 c7d5 e4d3 a8c8 d3b5 d5c3 b5a6 d8d7 f3g5 d7d4 g1h1 f8f1 e1f1 d4c4 a6e6 c4e6 g5e6 c8e8 e6c5 e8e5 c5d3 e5d5 d3b4 d5d6 h2h3 a7a5 b4c2 d6d2 c2e3 d2d4 f1c1 d4d3 e3c4 a5a4 c4b6 a4a3 b6c4 a3a2 c1a1 d3d1 a1d1 c3d1 h1h2 a2a1q c4d2 a1e5 h2g1 e5d4 g1h2 d4d2 h2g3 d2f2 g3g4 d1e3 g4g5 f2f5 g5h4 g7g5 h4h5 g5g4 h5h4 g8g7 h4g3 g4h3 g2h3\n",
+        "go depth 6\n",
+        "isready\n",
+        "position fen rnbqkb1r/pp1ppppp/2p2n2/8/2PP4/5N2/PP2PPPP/RNBQKB1R b KQkq d3 0 3 moves d7d5 b1c3 d5c4 a2a4 b8a6 e2e4 c8g4 f1c4 e7e6 c1e3 f8b4 e4e5 f6d5 d1c2 g4f5 c2d2 e8g8 e1g1 d5e3 f2e3 b4c3 b2c3 a6c7 a1e1 b7b5 a4b5 c6b5 c4d3 f5d3 d2d3 f7f5 e3e4 f5e4 d3e4 c7d5 e4d3 a8c8 d3b5 d5c3 b5a6 d8d7 f3g5 d7d4 g1h1 f8f1 e1f1 d4c4 a6e6 c4e6 g5e6 c8e8 e6c5 e8e5 c5d3 e5d5 d3b4 d5d6 h2h3 a7a5 b4c2 d6d2 c2e3 d2d4 f1c1 d4d3 e3c4 a5a4 c4b6 a4a3 b6c4 a3a2 c1a1 d3d1 a1d1 c3d1 h1h2 a2a1q c4d2 a1e5 h2g1 e5d4 g1h2 d4d2 h2g3 d2f2 g3g4 d1e3 g4g5 f2f5 g5h4 g7g5 h4h5 g5g4 h5h4 g8g7 h4g3 g4h3 g2h3 h7h5 g3h2\n",
+        "go depth 7\n",
+        "isready\n",
+        "position fen rnbqkb1r/pp2pppp/2p2n2/3p4/2PP4/2N2N2/PP2PPPP/R1BQKB1R b KQkq - 1 4 moves d5c4 a2a4 b8a6 e2e4 c8g4 f1c4 e7e6 c1e3 f8b4 e4e5 f6d5 d1c2 g4f5 c2d2 e8g8 e1g1 d5e3 f2e3 b4c3 b2c3 a6c7 a1e1 b7b5 a4b5 c6b5 c4d3 f5d3 d2d3 f7f5 e3e4 f5e4 d3e4 c7d5 e4d3 a8c8 d3b5 d5c3 b5a6 d8d7 f3g5 d7d4 g1h1 f8f1 e1f1 d4c4 a6e6 c4e6 g5e6 c8e8 e6c5 e8e5 c5d3 e5d5 d3b4 d5d6 h2h3 a7a5 b4c2 d6d2 c2e3 d2d4 f1c1 d4d3 e3c4 a5a4 c4b6 a4a3 b6c4 a3a2 c1a1 d3d1 a1d1 c3d1 h1h2 a2a1q c4d2 a1e5 h2g1 e5d4 g1h2 d4d2 h2g3 d2f2 g3g4 d1e3 g4g5 f2f5 g5h4 g7g5 h4h5 g5g4 h5h4 g8g7 h4g3 g4h3 g2h3 h7h5 g3h2 f5e5 h2g1\n",
+        "go depth 7\n",
+        "isready\n",
+        "position fen rnbqkb1r/pp2pppp/2p2n2/8/P1pP4/2N2N2/1P2PPPP/R1BQKB1R b KQkq a3 0 5 moves b8a6 e2e4 c8g4 f1c4 e7e6 c1e3 f8b4 e4e5 f6d5 d1c2 g4f5 c2d2 e8g8 e1g1 d5e3 f2e3 b4c3 b2c3 a6c7 a1e1 b7b5 a4b5 c6b5 c4d3 f5d3 d2d3 f7f5 e3e4 f5e4 d3e4 c7d5 e4d3 a8c8 d3b5 d5c3 b5a6 d8d7 f3g5 d7d4 g1h1 f8f1 e1f1 d4c4 a6e6 c4e6 g5e6 c8e8 e6c5 e8e5 c5d3 e5d5 d3b4 d5d6 h2h3 a7a5 b4c2 d6d2 c2e3 d2d4 f1c1 d4d3 e3c4 a5a4 c4b6 a4a3 b6c4 a3a2 c1a1 d3d1 a1d1 c3d1 h1h2 a2a1q c4d2 a1e5 h2g1 e5d4 g1h2 d4d2 h2g3 d2f2 g3g4 d1e3 g4g5 f2f5 g5h4 g7g5 h4h5 g5g4 h5h4 g8g7 h4g3 g4h3 g2h3 h7h5 g3h2 f5e5 h2g1 e5f5 g1h2\n",
+        "go depth 7\n",
+        "isready\n",
+        "position fen r1bqkb1r/pp2pppp/n1p2n2/8/P1pPP3/2N2N2/1P3PPP/R1BQKB1R b KQkq e3 0 6 moves c8g4 f1c4 e7e6 c1e3 f8b4 e4e5 f6d5 d1c2 g4f5 c2d2 e8g8 e1g1 d5e3 f2e3 b4c3 b2c3 a6c7 a1e1 b7b5 a4b5 c6b5 c4d3 f5d3 d2d3 f7f5 e3e4 f5e4 d3e4 c7d5 e4d3 a8c8 d3b5 d5c3 b5a6 d8d7 f3g5 d7d4 g1h1 f8f1 e1f1 d4c4 a6e6 c4e6 g5e6 c8e8 e6c5 e8e5 c5d3 e5d5 d3b4 d5d6 h2h3 a7a5 b4c2 d6d2 c2e3 d2d4 f1c1 d4d3 e3c4 a5a4 c4b6 a4a3 b6c4 a3a2 c1a1 d3d1 a1d1 c3d1 h1h2 a2a1q c4d2 a1e5 h2g1 e5d4 g1h2 d4d2 h2g3 d2f2 g3g4 d1e3 g4g5 f2f5 g5h4 g7g5 h4h5 g5g4 h5h4 g8g7 h4g3 g4h3 g2h3 h7h5 g3h2 f5e5 h2g1 e5f5 g1h2 f5e5 h2g1\n",
+        "go depth 7\n",
+        "isready\n",
+        "quit\n"
+#endif
+#if 0
         "uci\n",
         "isready\n",
         "setoption name FixedDepth value 1\n",           // go straight to depth 1 without iterating
@@ -134,7 +160,8 @@ int main( int argc, char *argv[] )
         "go\n",
         "position fen 7k/2pp2pp/4q3/4b3/4R3/3Q4/6PP/7K w - - 0 1\n",   // can't take the bishop 175 centipawns 
         "go\n"
-#else
+#endif
+#if 0
         "uci\n",
         "isready\n",
         "setoption name FixedDepth value 5\n",           // go straight to depth 5 without iterating
@@ -145,6 +172,8 @@ int main( int argc, char *argv[] )
         "go\n"                                           // will go straight to depth 5, no iteration
 #endif
     };
+    bool ok = repetition_test();
+    printf( "repetition test %s\n", ok?"passed":"failed" );
     for( std::string s: test_sequence )
     {
         util::rtrim(s);
@@ -694,6 +723,7 @@ static thc::Move calculate_next_move( bool new_game, unsigned long ms_time, unsi
     static int plymax_target;
     unsigned long ms_lo=0;
     bool go_straight_to_fixed_depth = false;
+    the_repetition_moves.clear();
 
     // There are multiple reasons why we would run fixed depth, without a timer
     if( depth == 0 )
@@ -737,8 +767,9 @@ static thc::Move calculate_next_move( bool new_game, unsigned long ms_time, unsi
             timer_set( ms_hi );
         }
     }
-    int plymax = 3;     // Set plymax=3 as a baseline, it's more or less instant
-    if( go_straight_to_fixed_depth )
+    int plymax = 1;     // V1.00 Set plymax=3 as a baseline, it's more or less instant
+                        // V1.01 Start from plymax=1 to support ultra bullet for example
+    if( fixed_depth )
     {
         plymax = depth;  // It's more efficient but less informative (no progress reports)
                          //  to go straight to the final depth without iterating
@@ -746,6 +777,8 @@ static thc::Move calculate_next_move( bool new_game, unsigned long ms_time, unsi
     int stalemates = 0;
     std::string bestmove_terse;
     unsigned long base = elapsed_milliseconds();
+    bool repetition_avoid = false;
+    PV repetition_fallback_pv;
     for(;;)
     {
         bool aborted = run_sargon(plymax,false);
@@ -759,7 +792,7 @@ static thc::Move calculate_next_move( bool new_game, unsigned long ms_time, unsi
         }
 
         // Report on each normally concluded iteration
-        if( !aborted )
+        if( !aborted && !repetition_avoid )
             generate_progress_report();
 
         // Check for situations where Sargon minimax never ran
@@ -773,11 +806,34 @@ static thc::Move calculate_next_move( bool new_game, unsigned long ms_time, unsi
         else
         {
 
+            // If attempts to avoid repetition leave us worse, fall back
+            if( repetition_avoid && !aborted )
+            {
+                bool fallback=false;
+                int score_after_repetition_avoid = the_pv.value;
+                if( the_position.white )
+                    fallback = (score_after_repetition_avoid <= 0);
+                else
+                    fallback = (score_after_repetition_avoid >= 0);
+                if( fallback )
+                    the_pv = repetition_fallback_pv;
+                else
+                    generate_progress_report();
+                log( "After repetition avoidance, new value=%d, so %s\n", score_after_repetition_avoid, fallback ? "did fallback" : "didn't fallback" );
+            }
+
             // Best move found
             bestmove_terse = the_pv.variation[0].TerseOut();
             std::string bestm = sargon_export_move(BESTM);
             if( !aborted && bestmove_terse.substr(0,4) != bestm )
                 log( "Unexpected event: BESTM=%s != PV[0]=%s\n%s", bestm.c_str(), bestmove_terse.c_str(), the_position.ToDebugStr().c_str() );
+
+            // Repetition avoidance always ends looping
+            if( repetition_avoid )
+            {
+                plymax++;   // repetition avoidance run used decremented plymax, restore it
+                break;
+            }
 
             // If we have a move, and it checkmates opponent, don't iterate further!
             thc::TERMINAL score_terminal;
@@ -824,9 +880,39 @@ static thc::Move calculate_next_move( bool new_game, unsigned long ms_time, unsi
                     keep_going = true;  // try one more ply if we stalemate opponent!
                 log( "elapsed=%lu, ms_lo=%lu, plymax=%d, plymax_target=%d, keep_going=%s\n", elapsed, ms_lo, plymax, plymax_target, keep_going?"true":"false @@" );  // @@ marks move in log
             }
+
+            // If we are about to play move, and we're better; consider whether to kick in repetition avoidance
+            if( !keep_going && (the_position.white? the_pv.value>0 : the_pv.value<0) )
+            {
+                thc::Move mv = the_pv.variation[0];
+                if( test_whether_move_repeats(the_position,mv) )
+                {
+                    log( "Repetition avoidance, %s repeats\n", bestmove_terse.c_str() );
+                    repetition_calculate( the_position, the_repetition_moves );
+                    repetition_avoid = true;
+                    repetition_fallback_pv = the_pv;
+                    keep_going = true;
+                    timer_clear();
+                }
+            }
+
+            // Either keep going or end now
             if( !keep_going )
-                break;
-            plymax++;
+                break;  // end now
+            else
+            {
+                if( !fixed_depth )
+                {
+                    if( !repetition_avoid )
+                        plymax++;   // normal iteration
+                    else
+                    {
+                        // have already used a full quota of time, so use less for the recalc
+                        if( plymax > 0 )
+                            plymax--; 
+                    }
+                }
+            }
         }
     }
     if( !fixed_depth )
@@ -877,6 +963,324 @@ static int log( const char *fmt, ... )
     return 0;
 }
 
+// Calculate a list of moves that cause the position to repeat
+static void repetition_calculate( thc::ChessRules &cr, std::vector<thc::Move> &repetition_moves )
+{
+    repetition_moves.clear();
+    std::vector<thc::Move> v;
+    cr.GenLegalMoveList(v);
+    for( thc::Move mv: v )
+    {
+        if( test_whether_move_repeats(cr,mv) )
+            repetition_moves.push_back(mv);
+    }
+}
+
+static bool test_whether_move_repeats( thc::ChessRules &cr, thc::Move mv )
+{
+    // Unfortunately we can't PushMove() / PopMove() because PushMove()
+    //  doesn't update the history buffer and the counts. PlayMove() does
+    //  but we have to take care to restore the history buffer and the
+    //  counts so that the change is temporary.
+    // The need for this complication is a bit of a flaw in our thc
+    //  library unfortunately and even needed a change; history_idx from
+    //  protected to public.
+    int restore_history = cr.history_idx;
+    int restore_full    = cr.full_move_count;
+    int restore_half    = cr.half_move_clock;
+    cr.PlayMove(mv);
+    int repetition_count = cr.GetRepetitionCount();
+    cr.PopMove(mv);
+    cr.history_idx      = restore_history;
+    cr.full_move_count  = restore_full;
+    cr.half_move_clock  = restore_half;
+    return (repetition_count > 1);
+}
+
+struct NativeMove
+{
+    unsigned char ptr_lo;
+    unsigned char ptr_hi;
+    unsigned char square_src;
+    unsigned char square_dst;
+    unsigned char flags;
+    unsigned char value;
+};
+
+static void show()
+{
+    unsigned char nply = peekb(NPLY);
+    thc::ChessPosition cp;
+    sargon_export_position(cp);
+    std::string s = cp.ToDebugStr();
+    printf( "%s\n", s.c_str() );
+    printf( "NPLY = %02x\n", nply );
+    unsigned int addr = PLYIX;
+    unsigned int ptr  = peekw(addr);
+    printf( "Ply ptrs;\n" );
+    for( int i=0; i<4; i++ )
+    {
+        printf( "%04x", ptr );
+        addr += 2;
+        ptr  = peekw(addr);
+        printf( i+1<4 ? " " : "\n" );
+    }
+    printf( "MLPTRI=%04x\n", peekw(MLPTRI) );
+    printf( "MLPTRJ=%04x\n", peekw(MLPTRJ) );
+    printf( "MLLST=%04x\n",  peekw(MLLST) );
+    printf( "MLNXT=%04x\n",  peekw(MLNXT) );
+    addr = 0x400;
+    unsigned int mlnxt = peekw(MLNXT);
+    for( int i=0; i<256; i++ )
+    {
+        ptr  = peekw(addr);
+        printf( "%04x: %04x ", addr, ptr );
+        printf( "%02x %02x %02x %02x ", peekb(addr+2), peekb(addr+3), peekb(addr+4), peekb(addr+5) );
+        printf( "%s\n", sargon_export_move(addr,false).c_str() );
+        if( addr == mlnxt )
+            break;
+        addr += 6;
+    }
+}
+
+
+
+// Returns book okay
+static bool repetition_test()
+{
+    // Test function repetition_calculate()
+    //  After 1. Nf3 Nf6 2. Ng1 the move 2... Nf6-g8 repeats the initial position
+    thc::ChessRules cr;
+    thc::Move mv;
+    mv.TerseIn(&cr,"g1f3");
+    cr.PlayMove(mv);
+    mv.TerseIn(&cr,"g8f6");
+    cr.PlayMove(mv);
+    mv.TerseIn(&cr,"f3g1");
+    cr.PlayMove(mv);
+    std::vector<thc::Move> w;
+    repetition_calculate(cr,w);
+    bool ok = true;
+    if( w.size() != 1 )
+        ok = false;
+    else
+    {
+        if( w[0].src != thc::f6 )
+            ok = false;
+        if( w[0].dst != thc::g8 )
+            ok = false;
+    }
+
+    // Non destructive test of function  repetition_remove_moves()
+    unsigned int plyix = peekw(PLYIX);
+    unsigned int mllst = peekw(MLLST);
+    unsigned int mlnxt = peekw(MLNXT);
+    const unsigned char *q = peek(0x400);
+    unsigned char buf[18];
+    memcpy(buf,q,18);
+
+    // Calculate some Sargon squares (no sargon_import_square() unfortunately)
+    unsigned int f3, e5, e1, f1, g1, h1;
+    for( unsigned int j=0; j<256; j++ )
+    {
+        thc::Square sq;
+        if( sargon_export_square(j,sq) )
+        {
+            if( sq == thc::f3 )
+                f3 = j;
+            else if( sq == thc::e5 )
+                e5 = j;
+            else if( sq == thc::e1 )
+                e1 = j;
+            else if( sq == thc::f1 )
+                f1 = j;
+            else if( sq == thc::g1 )
+                g1 = j;
+            else if( sq == thc::h1 )
+                h1 = j;
+        }
+    }
+
+    // Write 2 candidate moves into Sargon, with ptrs; First move is f3e5
+    pokew(PLYIX,0x400);
+    unsigned char *p = poke(0x400);
+    *p++ = 6;
+    *p++ = 4;
+    *p++ = f3;
+    *p++ = e5;
+    *p++ = 0;
+    *p++ = 0;
+    pokew(MLLST,0x406);
+
+    // O-O
+    *p++ = 0;
+    *p++ = 0;
+    *p++ = e1;
+    *p++ = g1;
+    *p++ = 0x40;
+    *p++ = 0;
+
+    // O-O second byte
+    *p++ = 0;
+    *p++ = 0;
+    *p++ = h1;
+    *p++ = f1;
+    *p++ = 0;
+    *p++ = 0;
+    pokew(MLNXT,0x412);
+    //show();
+
+    // Remove f3e5
+    std::vector<thc::Move> v;
+    mv.src = thc::f3;
+    mv.dst = thc::e5;
+    v.push_back(mv);
+    repetition_remove_moves(v);
+    //show();
+
+    // Check whether it matches our expectations
+    if( 0x400 != peekw(MLLST) )
+        ok = false;
+    if( 0x40c != peekw(MLNXT) )
+        ok = false;
+    q = peek(0x400);
+    if( *q++ != 0 )
+        ok = false;
+    if( *q++ != 0 )
+        ok = false;
+    if( *q++ != e1 )
+        ok = false;
+    if( *q++ != g1 )
+        ok = false;
+    if( *q++ != 0x40 )
+        ok = false;
+    if( *q++ != 0 )
+        ok = false;
+    if( *q++ != 0 )
+        ok = false;
+    if( *q++ != 0 )
+        ok = false;
+    if( *q++ != h1 )
+        ok = false;
+    if( *q++ != f1 )
+        ok = false;
+    if( *q++ != 0 )
+        ok = false;
+    if( *q++ != 0 )
+        ok = false;
+
+    // Undo all changes
+    p = poke(0x400);
+    memcpy(p,buf,18);
+    pokew(PLYIX,plyix);
+    pokew(MLLST,mllst);
+    pokew(MLNXT,mlnxt);
+    return ok;
+}
+
+// Remove candidate moves that will cause the position to repeat
+static void repetition_remove_moves(  const std::vector<thc::Move> &repetition_moves  )
+{
+    //show();
+
+    // Locate the list of candidate moves (ptr ends up being 0x400 always)
+    unsigned int addr = PLYIX;
+    unsigned int base = peekw(addr);
+    unsigned int ptr  = base;
+
+    // Read a vector of NativeMove
+    unsigned int mlnxt = peekw(MLNXT);
+    if( ptr!=0x400 || mlnxt<=ptr || ((mlnxt-ptr)%6)!=0 || ((mlnxt-ptr)/6>250) )
+        return; // sanity checks
+    std::vector<NativeMove> vin;
+    while( ptr < mlnxt )
+    {
+        NativeMove nm;
+        nm.ptr_lo = peekb(ptr++);
+        nm.ptr_hi = peekb(ptr++);
+        nm.square_src = peekb(ptr++);
+        nm.square_dst = peekb(ptr++);
+        nm.flags = peekb(ptr++);
+        nm.value = peekb(ptr++);
+        vin.push_back(nm);
+    }
+
+    // Create an edited (reduced) vector
+    std::vector<NativeMove> vout;
+    bool second_byte=false;
+    bool copy_move_and_second_byte_if_present = true;
+    for( NativeMove nm: vin )
+    {
+        if( second_byte )
+            second_byte = false;
+        else
+        {
+            if( nm.flags & 0x40 )
+                second_byte = true;
+            thc::Square src, dst;
+            copy_move_and_second_byte_if_present = true;
+            if( sargon_export_square(nm.square_src,src) && sargon_export_square(nm.square_dst,dst) )
+            {
+                for( thc::Move mv: repetition_moves )
+                {
+                    if( mv.src==src && mv.dst==dst )
+                    {
+                        copy_move_and_second_byte_if_present = false;
+                        break;
+                    }
+                }
+            }
+        }
+        if( copy_move_and_second_byte_if_present )
+            vout.push_back(nm);
+    }
+
+    // Fixup ptr fields
+    ptr = base;
+    unsigned int ptr_final_move = ptr;
+    unsigned int ptr_end = ptr + 6*vout.size();
+    second_byte=false;
+    for( NativeMove &nm: vout )
+    {
+        if( second_byte )
+        {
+            second_byte = false;
+            nm.ptr_lo = 0;
+            nm.ptr_hi = 0;
+        }
+        else
+        {
+            if( nm.flags & 0x40 )
+                second_byte = true;
+            ptr_final_move = ptr;
+            unsigned int ptr_next = (second_byte ? ptr+12 : ptr+6);
+            if( ptr_next == ptr_end )
+                ptr_next = 0;
+            nm.ptr_lo = ((ptr_next)&0xff);
+            nm.ptr_hi = (((ptr_next)>>8)&0xff);
+        }
+        ptr += 6;
+    }
+
+    // Write vector back
+    if( vout.size() )  // but if no moves left, make no changes
+    {
+        pokew( MLLST, ptr_final_move );
+        pokew( MLNXT, ptr_end );
+        ptr = base;
+        for( NativeMove nm: vout )
+        {
+            pokeb( ptr++, nm.ptr_lo );
+            pokeb( ptr++, nm.ptr_hi );
+            pokeb( ptr++, nm.square_src );
+            pokeb( ptr++, nm.square_dst );
+            pokeb( ptr++, nm.flags );
+            pokeb( ptr++, nm.value );
+        }
+    }
+
+    //show();
+}
 
 extern "C" {
     void callback( uint32_t reg_edi, uint32_t reg_esi, uint32_t reg_ebp, uint32_t reg_esp,
@@ -891,7 +1295,12 @@ extern "C" {
         const unsigned char *code = (const unsigned char *)ret_addr;
         const char *msg = (const char *)(code+2);   // ASCIIZ text should come after that
         total_callbacks++;
-        if( 0 == strcmp(msg,"end of POINTS()") )
+        if( 0 == strcmp(msg,"after GENMOV()") )
+        {
+            if( peekb(NPLY)==1 && the_repetition_moves.size()>0 )
+                repetition_remove_moves( the_repetition_moves );
+        }
+        else if( 0 == strcmp(msg,"end of POINTS()") )
         {
             end_of_points_callbacks++;
             sargon_pv_callback_end_of_points();
