@@ -150,11 +150,11 @@ bool sargon_export_square( unsigned int sargon_square, thc::Square &sq )
 
 // Read a chess move out of Sargon (returns "Terse" form - eg "e1g1" for White O-O, note
 //  that Sargon always promotes to Queen, so four character form is sufficient)
-std::string sargon_export_move( unsigned int sargon_move_ptr )
+std::string sargon_export_move( unsigned int sargon_move_ptr, bool indirect )
 {
     char buf[5];
     buf[0] = '\0';
-    unsigned int  p    = peekw(sargon_move_ptr);
+    unsigned int  p    = indirect ? peekw(sargon_move_ptr) : sargon_move_ptr;
     unsigned char from = peekb(p+2);
     unsigned char to   = peekb(p+3);
     thc::Square f, t;
@@ -638,7 +638,7 @@ unsigned int peekw(int offset)
     const unsigned char lo = *addr++;
     const unsigned char hi = *addr++;
     unsigned int ret = hi;
-    ret = ret <<8;
+    ret = ret << 8;
     ret += lo;
     return ret;
 }
@@ -654,6 +654,15 @@ void pokeb( int offset, unsigned char b )
 {
     unsigned char *addr = poke(offset);
     *addr = b;
+}
+
+void pokew( int offset, unsigned int w )
+{
+    unsigned char *addr = poke(offset);
+    unsigned char lo = w&0xff;
+    unsigned char hi = (w>>8)&0xff;
+    *addr++ = lo;
+    *addr++ = hi;
 }
 
 std::string algebraic( unsigned int sq )

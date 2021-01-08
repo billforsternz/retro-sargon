@@ -21,7 +21,7 @@ bool sargon_export_square( unsigned int sargon_square, thc::Square &sq );
 
 // Read a chess move out of Sargon (returns "Terse" form - eg "e1g1" for White O-O, note
 //  that Sargon always promotes to Queen, so four character form is sufficient)
-std::string sargon_export_move( unsigned int sargon_move_ptr );
+std::string sargon_export_move( unsigned int sargon_move_ptr, bool indirect=true );
 
 // Play a move inside Sargon (i.e. update Sargon's representation with a legal
 //  played move)
@@ -49,5 +49,6 @@ unsigned char peekb(int offset);
 unsigned int peekw(int offset);
 unsigned char *poke(int offset);
 void pokeb( int offset, unsigned char b );
+void pokew( int offset, unsigned int w );
 
 #endif // SARGON_INTERFACE_H_INCLUDED
