@@ -1289,6 +1289,9 @@ bool sargon_minimax_regression_test( bool quiet)
     return ok;
 }
 
+extern void after_genmov();
+
+
 // Sargon calls back into this function as it runs, we can monitor what's going on by
 //  reading registers and peeking at memory, and influence it by modifying registers
 //  and poking at memory.
@@ -1313,6 +1316,8 @@ extern "C" {
             volatile uint32_t *peax = &reg_eax;
             *peax = a_reg;
         }
+        else if( std::string(msg) == "after GENMOV()" )
+            after_genmov();
         else if( std::string(msg) == "end of POINTS()" )
             sargon_pv_callback_end_of_points();
         else if( std::string(msg) == "Yes! Best move" )
