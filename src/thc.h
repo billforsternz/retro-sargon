@@ -613,6 +613,10 @@ public:
     // Test fundamental internal assumptions and operations
     void TestInternals();
 
+    // Move this from protected, needed to write a routine to calculate all
+    //  repetition moves
+    unsigned char history_idx;
+
 // Private stuff
 protected:
 
@@ -642,7 +646,7 @@ protected:
 
     // Move history is a ring array
     Move history[256];                 // must be 256 ..
-    unsigned char history_idx;          // .. so this loops around naturally
+//  unsigned char history_idx;          // .. so this loops around naturally
 
     // Detail stack is a ring array
     DETAIL detail_stack[256];           // must be 256 ..
