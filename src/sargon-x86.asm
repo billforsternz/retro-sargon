@@ -2207,6 +2207,7 @@ FM5:    MOV     bx,NPLY                         ; Address of ply counter
         XOR     al,al                           ; Initialize mate flag
         MOV     byte ptr [ebp+MATEF],al
         CALL    GENMOV                          ; Generate list of moves
+        CALLBACK "after GENMOV()"
         MOV     al,byte ptr [ebp+NPLY]          ; Current ply counter
         MOV     bx,PLYMAX                       ; Address of maximum ply number
         CMP     al,byte ptr [ebp+ebx]           ; At max ply ?
