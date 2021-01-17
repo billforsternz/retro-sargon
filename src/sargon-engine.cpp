@@ -43,6 +43,7 @@ static unsigned long base_time;
 static int depth_option;    // 0=auto, other values for fixed depth play
 static std::string logfile_name;
 static unsigned long total_callbacks;
+static unsigned long genmov_callbacks;
 static unsigned long bestmove_callbacks;
 static unsigned long end_of_points_callbacks;
 
@@ -51,6 +52,17 @@ static thc::ChessRules the_position;
 
 // The current 'Master' PV
 static PV the_pv;
+
+// Play down mating sequence without recalculation if possible
+struct MATING
+{
+    bool                   active;
+    thc::ChessRules        position;    // start position
+    std::vector<thc::Move> variation;   // leads to mate
+    unsigned int           idx;         // idx into variation
+    int                    nbr;         // nbr of moves left to mate
+};
+static MATING mating;
 
 // The list of repetition moves to avoid, normally empty
 static std::vector<thc::Move> the_repetition_moves;
@@ -69,9 +81,9 @@ static void        cmd_position( const std::string &whole_cmd_line, const std::v
 static bool is_new_game();
 static int log( const char *fmt, ... );
 static bool run_sargon( int plymax, bool avoid_book );
-static void generate_progress_report();
+static std::string generate_progress_report( bool &we_are_forcing_mate, bool &we_are_stalemating_now );
 static thc::Move calculate_next_move( bool new_game, unsigned long ms_time, unsigned long ms_inc, int depth );
-static void repetition_calculate( thc::ChessRules &cr, std::vector<thc::Move> &repetition_moves );
+static bool repetition_calculate( thc::ChessRules &cr, std::vector<thc::Move> &repetition_moves );
 static bool test_whether_move_repeats( thc::ChessRules &cr, thc::Move mv );
 static void repetition_remove_moves( const std::vector<thc::Move> &repetition_moves );
 static bool repetition_test();
@@ -133,6 +145,39 @@ int main( int argc, char *argv[] )
     static const std::vector<std::string> test_sequence =
     {
 #if 1
+        "position fen 7K/5k1P/8/8/8/8/8/8 b - - 0 1\n",
+        "go depth wtime 1000 btime 1000 winc 1000 binc 5000\n",
+        "isready\n",
+        "quit\n"
+#endif
+#if 0
+        "position startpos moves e2e4 c7c5 b1c3 a7a6 d1h5 e7e6 g1f3 b7b5 f3e5 g7g6 h5f3 g8f6 f1e2 f8g7 e5d3 d7d6 e4e5 f6d5 c3d5 e6d5 f3d5 a8a7 e5d6 e8g8 d5c5 a7d7 a2a4 d7d6 a4b5 a6b5 c5b5 c8d7 b5c5 d7c6 e1g1 f8e8 e2f3 c6f3 g2f3 d6d5 c5c4 d5d4 c4b5 d4d5 b5a4 d5d4 a4a5 d4d5 a5d8 e8d8 f1e1 b8c6 a1a3 d5g5 g1h1 g5h5 h1g2 d8d5 e1e8 g7f8 a3a8 d5g5 g2h1 c6e5 e8f8 g8g7 f3f4 h5h2 h1h2 e5f3 h2h3 f3g1 h3h4 g1f3 h4h3 f3g1 h3h2 g1f3\n",
+        "go depth 5 wtime 88428 btime 883250 winc 1000 binc 5000\n",
+        "isready\n",
+        "quit\n"
+#endif
+#if 0
+        "position startpos moves e2e4 c7c5 b1c3 a7a6 d1h5 e7e6 g1f3 b7b5 f3e5 g7g6 h5f3 g8f6 f1e2 f8g7 e5d3 d7d6 e4e5 f6d5 c3d5 e6d5 f3d5 a8a7 e5d6 e8g8 d5c5 a7d7 a2a4 d7d6 a4b5 a6b5 c5b5 c8d7 b5c5 d7c6 e1g1 f8e8 e2f3 c6f3 g2f3 d6d5 c5c4 d5d4 c4b5 d4d5 b5a4 d5d4 a4a5 d4d5 a5d8 e8d8 f1e1 b8c6 a1a3 d5g5 g1h1 g5h5 h1g2 d8d5 e1e8 g7f8 a3a8 d5g5 g2h1 c6e5 e8f8 g8g7 f3f4 h5h2 h1h2 e5f3 h2h3 f3g1 h3h4 g1f3\n",
+        "go depth 5 wtime 55068 btime 889329 winc 1000 binc 5000\n",
+        "isready\n",
+        "quit\n"
+#endif
+#if 0
+        "position fen 1br4k/6pp/1q6/1r4N1/8/7P/Q5P1/7K w - - 0 1\n",
+        "go wtime 3599100 btime 900000 winc 2000 binc 5000\n",
+        "isready\n",
+        "position fen 1br4k/6pp/1q6/1r4N1/8/7P/Q5P1/7K w - - 0 1 moves g5f7 h8g8\n",
+        "go wtime 3569100 btime 899203 winc 2000 binc 5000\n",
+        "isready\n",
+        "position fen 1br4k/6pp/1q6/1r4N1/8/7P/Q5P1/7K w - - 0 1 moves g5f7 h8g8 f7h6 g8h8\n",
+        "go wtime 3568100 btime 901125 winc 2000 binc 5000\n",
+        "isready\n",
+        "position fen 1br4k/6pp/1q6/1r4N1/8/7P/Q5P1/7K w - - 0 1 moves g5f7 h8g8 f7h6 g8h8 a2g8 c8g8\n",
+        "go wtime 3569490 btime 903235 winc 2000 binc 5000\n",
+        "isready\n",
+        "quit\n"
+#endif
+#if 0
         "isready\n",
         "position fen rnbqkb1r/pppppppp/5n2/8/2P5/5N2/PP1PPPPP/RNBQKB1R b KQkq c3 0 2 moves c7c6 d2d4 d7d5 b1c3 d5c4 a2a4 b8a6 e2e4 c8g4 f1c4 e7e6 c1e3 f8b4 e4e5 f6d5 d1c2 g4f5 c2d2 e8g8 e1g1 d5e3 f2e3 b4c3 b2c3 a6c7 a1e1 b7b5 a4b5 c6b5 c4d3 f5d3 d2d3 f7f5 e3e4 f5e4 d3e4 c7d5 e4d3 a8c8 d3b5 d5c3 b5a6 d8d7 f3g5 d7d4 g1h1 f8f1 e1f1 d4c4 a6e6 c4e6 g5e6 c8e8 e6c5 e8e5 c5d3 e5d5 d3b4 d5d6 h2h3 a7a5 b4c2 d6d2 c2e3 d2d4 f1c1 d4d3 e3c4 a5a4 c4b6 a4a3 b6c4 a3a2 c1a1 d3d1 a1d1 c3d1 h1h2 a2a1q c4d2 a1e5 h2g1 e5d4 g1h2 d4d2 h2g3 d2f2 g3g4 d1e3 g4g5 f2f5 g5h4 g7g5 h4h5 g5g4 h5h4 g8g7 h4g3 g4h3 g2h3\n",
         "go depth 6\n",
@@ -172,8 +217,8 @@ int main( int argc, char *argv[] )
         "go\n"                                           // will go straight to depth 5, no iteration
 #endif
     };
-    bool ok = repetition_test();
-    printf( "repetition test %s\n", ok?"passed":"failed" );
+    //bool ok = repetition_test();
+    //printf( "repetition test %s\n", ok?"passed":"failed" );
     for( std::string s: test_sequence )
     {
         util::rtrim(s);
@@ -370,10 +415,12 @@ static bool process( const std::string &s )
     log( "function process() returns, cmd=%s\n"
          "total callbacks=%lu\n"
          "bestmove callbacks=%lu\n"
+         "genmov callbacks=%lu\n"
          "end of points callbacks=%lu\n",
             cmd.c_str(),
             total_callbacks,
             bestmove_callbacks,
+            genmov_callbacks,
             end_of_points_callbacks );
     log( "%s\n", sargon_pv_report_stats().c_str() );
     return quit;
@@ -398,7 +445,9 @@ static std::string cmd_isready()
 static std::string stop_rsp;
 static std::string cmd_stop()
 {
-    return stop_rsp;
+    std::string ret = stop_rsp;
+    stop_rsp.clear();
+    return ret;
 }
 
 static void cmd_setoption( const std::vector<std::string> &fields )
@@ -430,6 +479,7 @@ static std::string cmd_go( const std::vector<std::string> &fields )
     base_time = elapsed_milliseconds();
     total_callbacks = 0;
     bestmove_callbacks = 0;
+    genmov_callbacks = 0;
     end_of_points_callbacks = 0;
 
     // Work out our time and increment
@@ -483,17 +533,36 @@ static void cmd_go_infinite()
 {
     the_pv.clear();
     stop_rsp = "";
-    int plymax=3;
+    int plymax=1;
     bool aborted = false;
     base_time = elapsed_milliseconds();
     total_callbacks = 0;
     bestmove_callbacks = 0;
+    genmov_callbacks = 0;
     end_of_points_callbacks = 0;
-    while( !aborted && plymax<=20 )
+    while( !aborted )
     {
-        aborted = run_sargon(plymax++,true);  // note avoid_book = true
+        aborted = run_sargon(plymax,true);  // note avoid_book = true
+        if( plymax < 20 )
+            plymax++;
         if( !aborted )
-            generate_progress_report();   
+        {
+            bool we_are_forcing_mate, we_are_stalemating_now;
+            std::string out = generate_progress_report( we_are_forcing_mate, we_are_stalemating_now );
+            if( out.length() > 0 )
+            {
+                fprintf( stdout, out.c_str() );
+                fflush( stdout );
+                log( "rsp>%s\n", out.c_str() );
+                stop_rsp = util::sprintf( "bestmove %s\n", the_pv.variation[0].TerseOut().c_str() ); 
+            }
+        }
+    }
+    if( stop_rsp == "" )    // Shouldn't actually ever happen as callback polling doesn't abort
+    {                       //  run_sargon() if plymax is 1
+        run_sargon(1,false);
+        std::string bestmove = sargon_export_move(BESTM);
+        stop_rsp = util::sprintf( "bestmove %s\n", bestmove.c_str() ); 
     }
 }
 
@@ -595,8 +664,11 @@ static void cmd_position( const std::string &whole_cmd_line, const std::vector<s
     prev_position = the_position;
 }
 
-static void generate_progress_report()
+// Return true if PV has us (the engine) forcing mate
+static std::string generate_progress_report( bool &we_are_forcing_mate, bool &we_are_stalemating_now )
 {
+    we_are_forcing_mate    = false;
+    we_are_stalemating_now = false;
     int     score_cp   = the_pv.value;
     int     depth      = the_pv.depth;
     thc::ChessRules ce = the_position;
@@ -634,6 +706,8 @@ static void generate_progress_report()
             {
                 overide = true;
                 score_overide = 0;
+                if( i == 0 )
+                    we_are_stalemating_now = true;
             }
         }
         if( !okay || overide )
@@ -644,11 +718,26 @@ static void generate_progress_report()
         if( overide ) 
         {
             if( score_overide > 0 ) // are we mating ?
-                buf_score = util::sprintf( "mate %d", score_overide );
+            {
+                mating.active    = true;
+                mating.position  = the_position;
+                mating.variation = the_pv.variation;
+                mating.idx       = 0;
+                mating.nbr       = score_overide;
+                buf_score = util::sprintf( "mate %d", mating.nbr );
+                we_are_forcing_mate = true;
+                the_pv.value = 120;
+            }
             else if( score_overide < 0 ) // are me being mated ?
+            {
                 buf_score = util::sprintf( "mate -%d", (0-score_overide) );
+                the_pv.value = -120;
+            }
             else if( score_overide == 0 ) // is it a stalemate draw ?
+            {
                 buf_score = util::sprintf( "cp 0" );
+                the_pv.value = 0;
+            }
         }
         else
         {
@@ -660,31 +749,44 @@ static void generate_progress_report()
         if( overide ) 
         {
             if( score_overide < 0 ) // are we mating ?
-                buf_score = util::sprintf( "mate %d", 0-score_overide );
+            {
+                mating.active    = true;
+                mating.position  = the_position;
+                mating.variation = the_pv.variation;
+                mating.idx       = 0;
+                mating.nbr       = 0-score_overide;
+                buf_score = util::sprintf( "mate %d", mating.nbr );
+                we_are_forcing_mate = true;
+                the_pv.value = -120;
+            }
             else if( score_overide > 0 ) // are me being mated ?        
+            {
                 buf_score = util::sprintf( "mate -%d", score_overide );
+                the_pv.value = 120;
+            }
             else if( score_overide == 0 ) // is it a stalemate draw ?
+            {
                 buf_score = util::sprintf( "cp 0" );
+                the_pv.value = 0;
+            }
         }
         else
         {
             buf_score = util::sprintf( "cp %d", 0-score_cp );
         }
     }
+    std::string out;
     if( the_pv.variation.size() > 0 )
     {
-        std::string out = util::sprintf( "info depth %d score %s hashfull 0 time %lu nodes %lu nps %lu pv%s\n",
+        out = util::sprintf( "info depth %d score %s time %lu nodes %lu nps %lu pv%s\n",
                     depth,
                     buf_score.c_str(),
                     (unsigned long) elapsed_time,
                     (unsigned long) nodes,
                     1000L * ((unsigned long) nodes / (unsigned long)elapsed_time ),
                     buf_pv.c_str() );
-        fprintf( stdout, out.c_str() );
-        fflush( stdout );
-        log( "rsp>%s\n", out.c_str() );
-        stop_rsp = util::sprintf( "bestmove %s\n", the_pv.variation[0].TerseOut().c_str() ); 
     }
+    return out;
 }
 
 /*
@@ -715,10 +817,706 @@ static void generate_progress_report()
         if we are cut
           decrement target
 
+     HOWEVER: We don't always loop, and we don't always use the timer
+
+     1) Once a PV leading to Sargon mating is calculated, play out the mate
+        without further ado, always. Terminate looping on discovery and
+        don't loop as the moves are played out. If opponent deviates from
+        the mating PV though, normal service is resumed. (But see 3)).
+     2) In fixed depth mode, (either the FixedDepth engine option is set
+        or the depth parameter to the go command is set, don't loop and don't
+        use the timer.
+     3) Exception to 2), if normal service is resumed after Sargon has
+        identified a forced mate always loop.
+     4) Repetition avoidance: If Sargon repeats the position when it thinks
+        it's better, loop once more (even if we aren't otherwise looping) in
+        a special mode with all repeating moves excluded. Play the new best
+        move or fallback if we are worse. Use one lower depth unless we are
+        using fixed depth.
+
+
+     Pseudo code
+
+     States
+
+     ADAPTIVE_NO_TARGET_YET
+     ADAPTIVE_WITH_TARGET
+     FIXED
+     FIXED_WITH_LOOPING
+     PLAYING_OUT_MATE_ADAPTIVE
+     PLAYING_OUT_MATE_FIXED
+     REPEATING_ADAPTIVE
+     REPEATING_FIXED
+     REPEATING_FIXED_WITH_LOOPING
+
+     if new_game
+         calculate initial state
+     state_machine_initial
+     loop
+         aborted,elapsed,mating,pv = run sargon
+         if mating
+            state = PLAYING_OUT_MATE_ADAPTIVE or PLAYING_OUT_MATE_FIXED
+            return mating_move
+         ready = state_machine_loop(aborted,elapsed,pv)
+         if ready and repeats and we are better
+             state = REPEATING_ADAPTIVE or REPEATING_FIXED or REPEATING_FIXED_WITH_LOOPING
+             if state == REPEATING_ADAPTIVE
+                level--
+                clear timer
+             not ready
+         if ready
+            return best move
+
+     state_machine_initial:
+     PLAYING_OUT_MATE_ADAPTIVE
+        if opponent follows line
+            play move and exit
+        else
+            state = ADAPTIVE_WITH_NO_TARGET_YET fall through
+     ADAPTIVE_NO_TARGET_YET
+        set cutoff timer to MEDIUM time
+        plymax = 1
+     PLAYING_OUT_MATE_FIXED
+        if opponent follows line
+            play move and exit
+        else
+            state = FIXED_WITH_LOOPING fall through
+     FIXED_WITH_LOOPING
+        plymax  = 1
+        target = FIXED_DEPTH
+     ADAPTIVE_WITH_TARGET
+        set cutoff timer to HIGH time
+        plymax = 1
+     FIXED
+        plymax = 1,2,3 then FIXED_DEPTH
+        (1,2 and 3 are almost instantaneous and will pick up quick mates)
+     REPEATING_ADAPTIVE
+     REPEATING_FIXED
+     REPEATING_FIXED_WITH_LOOPING
+
+     state_machine_loop:
+     ADAPTIVE_NO_TARGET_YET
+        if aborted
+            target = plymax-1
+            state = ADAPTIVE_WITH_TARGET
+            return ready
+        else
+            plymax++
+            return not ready
+     ADAPTIVE_WITH_TARGET
+        if aborted
+            target = plymax-1
+            return ready
+        else if plymax < target
+            plymax++
+            return not ready
+        else if plymax >= target && elapsed < lo_timer
+            plymax++
+            target++
+            return not ready
+        else
+            return ready
+     FIXED
+        set plymax = 1,2,3 then FIXED_DEPTH
+        return ready after FIXED_DEPTH
+     FIXED_WITH_LOOPING
+        if plymax >= target
+            state = FIXED (forcing mate hasn't worked)
+            return ready
+        else
+            plymax++
+            return not ready
+     REPEATING_ADAPTIVE
+        if we are not better
+            revert
+        state = ADAPTIVE_WITH_TARGET
+        return ready
+     REPEATING_FIXED
+        if we are not better
+            revert
+        state = FIXED
+        return ready
+     REPEATING_FIXED_WITH_LOOPING
+        if we are not better
+            revert
+        state = FIXED_WITH_LOOPING
+        return ready
+
 */
+
+// States
+enum PlayingState
+{
+    ADAPTIVE_NO_TARGET_YET,
+    ADAPTIVE_WITH_TARGET,
+    FIXED,
+    FIXED_WITH_LOOPING,
+    PLAYING_OUT_MATE_ADAPTIVE,
+    PLAYING_OUT_MATE_FIXED,
+    REPEATING_ADAPTIVE,
+    REPEATING_FIXED,
+    REPEATING_FIXED_WITH_LOOPING
+};
+
+static void log_state_changes( const std::string &msg, PlayingState old_state, PlayingState state )
+{
+    const char *txt=NULL, *old_txt=NULL, *new_txt=NULL;
+    for( int i=0; i<2; i++ )
+    {
+        PlayingState temp = (i==0 ? old_state : state );
+        switch( temp )
+        {
+            case ADAPTIVE_NO_TARGET_YET:        txt = "ADAPTIVE_NO_TARGET_YET";       break;
+            case ADAPTIVE_WITH_TARGET:          txt = "ADAPTIVE_WITH_TARGET";         break;
+            case FIXED:                         txt = "FIXED";                        break;
+            case FIXED_WITH_LOOPING:            txt = "FIXED_WITH_LOOPING";           break;
+            case PLAYING_OUT_MATE_ADAPTIVE:     txt = "PLAYING_OUT_MATE_ADAPTIVE";    break;
+            case PLAYING_OUT_MATE_FIXED:        txt = "PLAYING_OUT_MATE_FIXED";       break;
+            case REPEATING_ADAPTIVE:            txt = "REPEATING_ADAPTIVE";           break;
+            case REPEATING_FIXED:               txt = "REPEATING_FIXED";              break;
+            case REPEATING_FIXED_WITH_LOOPING:  txt = "REPEATING_FIXED_WITH_LOOPING"; break;
+        }
+        if( i == 0 )
+            old_txt = txt;
+        else
+            new_txt = txt;
+    }
+    if( state == old_state )
+        log( "%s, state = %s\n", msg.c_str(), old_txt );
+    else
+        log( "%s, state = %s -> %s\n", msg.c_str(), old_txt, new_txt );
+}
 
 static thc::Move calculate_next_move( bool new_game, unsigned long ms_time, unsigned long ms_inc, int depth )
 {
+    // Timers
+    const unsigned long LO =100;
+    const unsigned long MED=30;
+    const unsigned long HI =16;
+    unsigned long ms_lo  = ms_time / LO;
+    unsigned long ms_med = ms_time / MED;
+    unsigned long ms_hi  = ms_time / HI;
+    bool timer_running = false;
+
+    // States
+    static PlayingState state = ADAPTIVE_NO_TARGET_YET;
+    PlayingState old_state;
+
+    // Misc
+    static int plymax_target;
+    int plymax = 1;
+    int stalemates = 0;
+    unsigned long base = elapsed_milliseconds();
+    PV repetition_fallback_pv;
+    the_repetition_moves.clear();
+
+    //  if new_game
+    //     calculate initial state
+    if( depth_option > 0 )
+        depth = depth_option;
+    if( new_game )
+    {
+        state = depth>0 ? FIXED : ADAPTIVE_NO_TARGET_YET;
+    }
+
+    // else sanity check on states
+    // (sadly new_game == false is not entirely reliable - eg if we run
+    //  kibiter before starting game new_game will be false, even though
+    //  for our purposes it is really true)
+    else
+    {
+        if( depth > 0 )
+        {
+            switch( state )
+            {
+                case ADAPTIVE_NO_TARGET_YET:        state = FIXED;  break;
+                case ADAPTIVE_WITH_TARGET:          state = FIXED;  break;
+                case REPEATING_ADAPTIVE:            state = FIXED;  break;
+                case REPEATING_FIXED:               state = FIXED;  break;
+                case REPEATING_FIXED_WITH_LOOPING:  state = FIXED;  break;
+            }
+        }
+        else
+        {
+            switch( state )
+            {
+                case FIXED:                         state = ADAPTIVE_NO_TARGET_YET; break;
+                case FIXED_WITH_LOOPING:            state = ADAPTIVE_NO_TARGET_YET; break;
+                case REPEATING_ADAPTIVE:            state = ADAPTIVE_NO_TARGET_YET; break;
+                case REPEATING_FIXED:               state = ADAPTIVE_NO_TARGET_YET; break;
+                case REPEATING_FIXED_WITH_LOOPING:  state = ADAPTIVE_NO_TARGET_YET; break;
+            }
+        }
+    }
+
+    // Initial state machine
+    old_state = state;
+    switch( state )
+    {
+        //  PLAYING_OUT_MATE_ADAPTIVE
+        //      if opponent follows line
+        //          play move and exit
+        //      else
+        //          state = ADAPTIVE_WITH_NO_TARGET_YET fall through
+        //  PLAYING_OUT_MATE_FIXED
+        //      if opponent follows line
+        //          play move and exit
+        //      else
+        //          state = FIXED_WITH_LOOPING fall through
+        case PLAYING_OUT_MATE_ADAPTIVE:
+        case PLAYING_OUT_MATE_FIXED:
+        {
+            // Play out a mating sequence
+            bool opponent_follows_line = false;
+            if( mating.active && mating.idx+2 < mating.variation.size() )
+            {
+                mating.position.PlayMove(mating.variation[mating.idx++]);
+                mating.position.PlayMove(mating.variation[mating.idx++]);
+                if( mating.position == the_position )
+                    opponent_follows_line = true;
+            }
+            if( opponent_follows_line )
+            {
+                thc::ChessRules cr = mating.position;
+                thc::Move mating_move = mating.variation[mating.idx];
+                std::string buf_pv;
+                for( unsigned int i=0; mating.idx+i<mating.variation.size(); i++ )
+                {
+                    thc::Move move=mating.variation[mating.idx+i];
+                    cr.PlayMove( move );
+                    buf_pv += " ";
+                    buf_pv += move.TerseOut();
+                }
+                std::string out = util::sprintf( "info score mate %d pv%s\n",
+                    --mating.nbr,
+                    buf_pv.c_str() );
+                if( mating.nbr <= 1 )
+                {
+                    mating.active = false;
+                    state = (state==PLAYING_OUT_MATE_ADAPTIVE ? ADAPTIVE_NO_TARGET_YET : FIXED);
+                }
+                fprintf( stdout, out.c_str() );
+                fflush( stdout );
+                log( "rsp>%s\n", out.c_str() );
+                log( "(%s mating line)\n", mating.nbr<=1 ? "Finishing" : "Continuing" );
+                stop_rsp = util::sprintf( "bestmove %s\n", mating_move.TerseOut().c_str() ); 
+                return mating_move;
+            }
+            else
+            {
+                // If the opponent chooses an alternative path, we still have forced mate (if we trust
+                //  Sargon's fundamental chess algorithms), so used FIXED_WITH_LOOPING rather than
+                //  FIXED, in order to find it quickly and efficiently (this is why we have
+                //  FIXED_WITH_LOOPING)
+                mating.active = false;
+                state = (state==PLAYING_OUT_MATE_ADAPTIVE ? ADAPTIVE_NO_TARGET_YET : FIXED_WITH_LOOPING);
+
+                // Simulate fall through to ADAPTIVE_NO_TARGET_YET / FIXED_WITH_LOOPING
+                if( state == ADAPTIVE_NO_TARGET_YET )
+                {
+                    timer_set( ms_med );
+                    timer_running = true;
+                    plymax = 1;
+                }
+                else // if( state == FIXED_WITH_LOOPING )
+                {
+                    plymax_target = depth;
+                    plymax  = 1;
+                }
+            }
+            break;
+        }
+
+        //  ADAPTIVE_NO_TARGET_YET
+        //      set cutoff timer to MEDIUM time
+        //      plymax = 1
+        case ADAPTIVE_NO_TARGET_YET:
+        {
+            timer_set( ms_med );
+            timer_running = true;
+            plymax = 1;
+            break;
+        }
+
+        //  ADAPTIVE_WITH_TARGET
+        //      set cutoff timer to HIGH time
+        //      plymax = 1
+        case ADAPTIVE_WITH_TARGET:
+        {
+            timer_set( ms_hi );
+            timer_running = true;
+            plymax = 1;
+            break;
+        }
+
+        //  FIXED_WITH_LOOPING
+        //      plymax  = 1
+        //      target = FIXED_DEPTH
+        case FIXED_WITH_LOOPING:
+        {
+            plymax = 1;
+            plymax_target = depth;
+            break;
+        }
+
+        //  FIXED
+        //      plymax = 1,2,3 then FIXED_DEPTH
+        //      (1,2 and 3 are almost instantaneous and will pick up quick mates)
+        case FIXED:
+        {
+            plymax = 1;
+            break;
+        }
+    }   // end switch
+    log_state_changes( "Initial state machine:", old_state, state );
+
+    //  loop
+    //      aborted,elapsed,mating,pv = run sargon
+    bool we_are_stalemating_now = false;
+    //bool just_once = true;
+    for(;;)
+    {
+        bool aborted = run_sargon(plymax,false);
+        unsigned long now = elapsed_milliseconds();
+        unsigned long elapsed = (now-base);
+
+        // The special case, where Sargon minimax never ran should only be book move
+        if( the_pv.variation.size() == 0 )    
+        {
+            std::string bestmove_terse = sargon_export_move(BESTM);
+            thc::Move bestmove;
+            bestmove.Invalid();
+            bool have_move = bestmove.TerseIn( &the_position, bestmove_terse.c_str() );
+            if( have_move )
+                log( "No PV, expect Sargon is playing book move - %s\n%s", bestmove_terse.c_str(), the_position.ToDebugStr().c_str() );
+            else
+                log( "Sargon doesn't find move - %s\n%s", bestmove_terse.c_str(), the_position.ToDebugStr().c_str() );
+            stop_rsp = util::sprintf( "bestmove %s\n", bestmove_terse.c_str() );
+            if( timer_running )
+                timer_clear();
+            return bestmove;
+        }
+
+        // Report on each normally concluded iteration
+        bool we_are_forcing_mate = false;
+        std::string info;
+        if( aborted )
+        {
+            log( "aborted=%s, elapsed=%lu, ms_lo=%lu, plymax=%d, plymax_target=%d\n",
+                    aborted?"true @@":"false", //@@ marks move in log
+                    elapsed, ms_lo, plymax, plymax_target );
+        }
+        else
+        {
+            std::string s = the_pv.variation[0].TerseOut();
+            std::string bestm = sargon_export_move(BESTM);
+            if( s.substr(0,4) != bestm )
+                log( "Unexpected event: BESTM=%s != PV[0]=%s\n%s", bestm.c_str(), s.c_str(), the_position.ToDebugStr().c_str() );
+            info = generate_progress_report( we_are_forcing_mate, we_are_stalemating_now );
+            bool repeating = (state==REPEATING_ADAPTIVE || state==REPEATING_FIXED || state==REPEATING_FIXED_WITH_LOOPING);
+            if( (!repeating||we_are_forcing_mate) && info.length() > 0 )
+            {
+                fprintf( stdout, info.c_str() );
+                fflush( stdout );
+                log( "rsp>%s\n", info.c_str() );
+                stop_rsp = util::sprintf( "bestmove %s\n", the_pv.variation[0].TerseOut().c_str() ); 
+                info.clear();
+            }
+        }
+
+        //  if mating
+        //     state = PLAYING_OUT_MATE_ADAPTIVE or PLAYING_OUT_MATE_FIXED
+        //     return mating_move
+        if( we_are_forcing_mate )
+        {
+            if( mating.variation.size() == 1 )
+            {
+                log( "(Immediate mate in one available, play it)\n" );
+                mating.active = false;
+            }
+            else
+            {
+                log( "(Starting mating line)\n" );
+                switch(state)
+                {
+                    case ADAPTIVE_NO_TARGET_YET:        state = PLAYING_OUT_MATE_ADAPTIVE;  break;
+                    case ADAPTIVE_WITH_TARGET:          state = PLAYING_OUT_MATE_ADAPTIVE;  break;
+                    case FIXED:                         state = PLAYING_OUT_MATE_FIXED;     break;
+                    case FIXED_WITH_LOOPING:            state = PLAYING_OUT_MATE_FIXED;     break;
+                    case PLAYING_OUT_MATE_ADAPTIVE:     state = PLAYING_OUT_MATE_ADAPTIVE;  break;
+                    case PLAYING_OUT_MATE_FIXED:        state = PLAYING_OUT_MATE_FIXED;     break;
+                    case REPEATING_ADAPTIVE:            state = PLAYING_OUT_MATE_ADAPTIVE;  break;
+                    case REPEATING_FIXED:               state = PLAYING_OUT_MATE_FIXED;     break;
+                    case REPEATING_FIXED_WITH_LOOPING:  state = PLAYING_OUT_MATE_FIXED;     break;
+                }
+            }
+            if( timer_running )
+                timer_clear();
+            return mating.variation[mating.idx];
+        }
+
+        // ready = state_machine_loop(aborted,elapsed,pv)
+        bool ready = false;
+        bool after_repetition_avoidance = false;
+
+        // Loop state machine
+        old_state = state;
+        switch(state)
+        {
+            //  ADAPTIVE_NO_TARGET_YET
+            //      if aborted
+            //          target = plymax-1
+            //          state = ADAPTIVE_WITH_TARGET
+            //          return ready
+            //      else
+            //          plymax++
+            //          return not ready
+            case ADAPTIVE_NO_TARGET_YET:
+            {
+                if( aborted )
+                {
+                    plymax_target = (plymax>=2 ? plymax-1 : 1);
+                    state  = ADAPTIVE_WITH_TARGET;
+                    ready = true;
+                }
+                else
+                {
+                    plymax++;
+                }
+                break;
+            }
+
+            //  ADAPTIVE_WITH_TARGET
+            //      if aborted
+            //          target = plymax-1
+            //          return ready
+            //      else if plymax < target
+            //          plymax++
+            //          return not ready
+            //      else if plymax >= target && elapsed < lo_timer
+            //          plymax++
+            //          target++
+            //          return not ready
+            //      else
+            //          return ready
+            case ADAPTIVE_WITH_TARGET:          
+            {
+                if( !aborted && plymax>=plymax_target )
+                    log( "Reached adaptive target, increase target if elapsed=%lu < ms_lo=%lu\n", elapsed, ms_lo );
+                if( aborted )
+                {
+                    plymax_target = (plymax>=2 ? plymax-1 : 1);
+                    ready = true;
+                }
+                else if( plymax < plymax_target )
+                {
+                    plymax++;
+                }
+                else if( plymax>=plymax_target && elapsed<ms_lo )
+                {
+                    plymax++;
+                    plymax_target++;
+                    log( "Increase adaptive target\n" );
+                }
+                //else if( plymax>=plymax_target && we_are_stalemating_now && just_once )
+                //{
+                //    just_once = false;
+                //    plymax++;  // try one higher depth if we are stalemating
+                //}
+                else
+                {
+                    ready = true;
+                }
+                break;
+            }
+
+            //  FIXED
+            //      set plymax = 1,2,3 then FIXED_DEPTH
+            //      return ready after FIXED_DEPTH
+            case FIXED:                         
+            {
+                if( 1<=plymax && plymax<3 && plymax<depth )
+                {
+                    plymax++;
+                }
+                else if( plymax < depth )
+                {
+                    plymax = depth;
+                }
+                else
+                {
+                    ready = true;
+                }
+                break;
+            }
+
+            //  FIXED_WITH_LOOPING
+            //      if plymax >= target
+            //          state = FIXED (forcing mate hasn't worked)
+            //          return ready
+            //      else
+            //          plymax++
+            //          return not ready
+            case FIXED_WITH_LOOPING:            
+            {
+                if( plymax >= plymax_target )
+                {
+                    state = FIXED;
+                    ready = true;
+                }
+                else
+                {
+                    plymax++;
+                }
+                break;
+            }
+            case PLAYING_OUT_MATE_ADAPTIVE:     
+            {
+                break;
+            }
+            case PLAYING_OUT_MATE_FIXED:        
+            {
+                break;
+            }
+
+            //  REPEATING_ADAPTIVE
+            //  REPEATING_FIXED
+            //  REPEATING_FIXED_WITH_LOOPING
+            //      if we are not better
+            //          revert
+            //      state = ADAPTIVE_WITH_TARGET / FIXED / FIXED_WITH_LOOPING
+            //      return ready
+            case REPEATING_ADAPTIVE:            
+            case REPEATING_FIXED:               
+            case REPEATING_FIXED_WITH_LOOPING:  
+            {
+                // If attempts to avoid repetition leave us worse, fall back
+                after_repetition_avoidance = true;
+                bool fallback=false;
+                int score_after_repetition_avoid = the_pv.value;
+                if( the_position.white )
+                    fallback = (score_after_repetition_avoid <= 0);
+                else
+                    fallback = (score_after_repetition_avoid >= 0);
+                if( aborted )
+                    fallback = true;
+                if( fallback )
+                    the_pv = repetition_fallback_pv;
+                else if( info.length() > 0 )
+                {
+                    fprintf( stdout, info.c_str() );
+                    fflush( stdout );
+                    log( "rsp>%s\n", info.c_str() );
+                    stop_rsp = util::sprintf( "bestmove %s\n", the_pv.variation[0].TerseOut().c_str() ); 
+                    info.clear();
+                }
+                log( "After repetition avoidance, new value=%d, so %s\n", score_after_repetition_avoid, fallback ? "did fallback" : "didn't fallback" );
+                ready = true;
+                switch(state)
+                {
+                    case REPEATING_ADAPTIVE:            state = ADAPTIVE_WITH_TARGET;  break;
+                    case REPEATING_FIXED:               state = FIXED;                 break;
+                    case REPEATING_FIXED_WITH_LOOPING:  state = FIXED_WITH_LOOPING;    break;
+                }
+                break;
+            }
+        }
+        log_state_changes( "Loop state machine:", old_state, state );
+
+
+        //  if ready and repeats and we are better
+        //      state = REPEATING_ADAPTIVE or REPEATING_FIXED or REPEATING_FIXED_WITH_LOOPING
+        //      if state == REPEATING_ADAPTIVE
+        //         level--
+        //         clear timer
+        //      not ready
+        // If we are about to play move, and we're better; consider whether to kick in repetition avoidance
+        if( !after_repetition_avoidance && ready && (the_position.white? the_pv.value>0 : the_pv.value<0) )
+        {
+            thc::Move mv = the_pv.variation[0];
+            if( test_whether_move_repeats(the_position,mv) )
+            {
+                log( "Repetition avoidance, %s repeats\n", mv.TerseOut().c_str() );
+                bool ok = repetition_calculate( the_position, the_repetition_moves );
+                if( !ok )
+                {
+                    the_repetition_moves.clear();   // don't do repetition avoidance - all moves repeat
+                }
+                else
+                {
+                    repetition_fallback_pv = the_pv;
+                    switch(state)
+                    {
+                        case ADAPTIVE_NO_TARGET_YET:        state = REPEATING_ADAPTIVE;             break;
+                        case ADAPTIVE_WITH_TARGET:          state = REPEATING_ADAPTIVE;             break;
+                        case FIXED:                         state = REPEATING_FIXED;                break;
+                        case FIXED_WITH_LOOPING:            state = REPEATING_FIXED_WITH_LOOPING;   break;
+                        case PLAYING_OUT_MATE_ADAPTIVE:     state = REPEATING_ADAPTIVE;             break;
+                        case PLAYING_OUT_MATE_FIXED:        state = REPEATING_FIXED;                break;
+                        case REPEATING_ADAPTIVE:            state = REPEATING_ADAPTIVE;             break;
+                        case REPEATING_FIXED:               state = REPEATING_FIXED;                break;
+                        case REPEATING_FIXED_WITH_LOOPING:  state = REPEATING_FIXED_WITH_LOOPING;   break;
+                    }
+                    if( state == REPEATING_ADAPTIVE )
+                    {
+                        if( plymax > 1 )
+                            plymax--;
+                        if( timer_running )
+                        {
+                            timer_running = false;
+                            timer_clear();
+                        }
+                    }
+                    ready = false;
+                }
+            }
+        }
+
+        //  if ready
+        //     return best move
+        if( ready )
+            break;
+    }
+    thc::Move mv = the_pv.variation[0];
+    if( timer_running )
+        timer_clear();
+    return mv;
+}
+
+#if 0
+static thc::Move calculate_next_move( bool new_game, unsigned long ms_time, unsigned long ms_inc, int depth )
+{
+    // Play out a mating sequence
+    if( mating.active && mating.idx+2 < mating.variation.size() )
+    {
+        mating.position.PlayMove(mating.variation[mating.idx++]);
+        mating.position.PlayMove(mating.variation[mating.idx++]);
+        if( mating.position != the_position )
+            mating.active = false;
+        else
+        {
+            thc::ChessRules cr = mating.position;
+            thc::Move mating_move = mating.variation[mating.idx];
+            std::string buf_pv;
+            for( unsigned int i=0; mating.idx+i<mating.variation.size(); i++ )
+            {
+                thc::Move move=mating.variation[mating.idx+i];
+                cr.PlayMove( move );
+                buf_pv += " ";
+                buf_pv += move.TerseOut();
+            }
+            std::string out = util::sprintf( "info score mate %d pv%s\n",
+                --mating.nbr,
+                buf_pv.c_str() );
+            fprintf( stdout, out.c_str() );
+            fflush( stdout );
+            log( "rsp>%s\n", out.c_str() );
+            stop_rsp = util::sprintf( "bestmove %s\n", mating_move.TerseOut().c_str() ); 
+            return mating_move;
+        }
+    }
+
+    // If not playing out a mate, start normal algorithm
     log( "Input ms_time=%lu, ms_inc=%lu, depth=%d\n", ms_time, ms_inc, depth );
     static int plymax_target;
     unsigned long ms_lo=0;
@@ -927,6 +1725,7 @@ static thc::Move calculate_next_move( bool new_game, unsigned long ms_time, unsi
         log( "Sargon doesn't find move - %s\n%s", bestmove_terse.c_str(), the_position.ToDebugStr().c_str() );
     return bestmove;
 }
+#endif
 
 // Simple logging facility gives us some debug capability when running under control of a GUI
 static int log( const char *fmt, ... )
@@ -964,8 +1763,10 @@ static int log( const char *fmt, ... )
 }
 
 // Calculate a list of moves that cause the position to repeat
-static void repetition_calculate( thc::ChessRules &cr, std::vector<thc::Move> &repetition_moves )
+//  Returns bool ok. If not ok, all moves repeat
+static bool repetition_calculate( thc::ChessRules &cr, std::vector<thc::Move> &repetition_moves )
 {
+    bool ok=false;
     repetition_moves.clear();
     std::vector<thc::Move> v;
     cr.GenLegalMoveList(v);
@@ -973,7 +1774,10 @@ static void repetition_calculate( thc::ChessRules &cr, std::vector<thc::Move> &r
     {
         if( test_whether_move_repeats(cr,mv) )
             repetition_moves.push_back(mv);
+        else
+            ok = true;
     }
+    return ok;
 }
 
 static bool test_whether_move_repeats( thc::ChessRules &cr, thc::Move mv )
@@ -1297,6 +2101,7 @@ extern "C" {
         total_callbacks++;
         if( 0 == strcmp(msg,"after GENMOV()") )
         {
+            genmov_callbacks++;
             if( peekb(NPLY)==1 && the_repetition_moves.size()>0 )
                 repetition_remove_moves( the_repetition_moves );
         }
@@ -1311,9 +2116,9 @@ extern "C" {
             sargon_pv_callback_yes_best_move();
         }
 
-        // Abort run_sargon() if new event in queue (and not PLYMAX<=3 which is
+        // Abort run_sargon() if new event in queue (and not PLYMAX==1 which is
         //  effectively instantaneous, finds a baseline move)
-        if( !async_queue.empty() && peekb(PLYMAX)>3 )
+        if( !async_queue.empty() && peekb(PLYMAX)>1 )
         {
             longjmp( jmp_buf_env, 1 );
         }
