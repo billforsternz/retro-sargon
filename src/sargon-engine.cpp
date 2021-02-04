@@ -1924,7 +1924,7 @@ static bool repetition_test()
     *p++ = 0x40;
     *p++ = 0;
 
-    // O-O second byte
+    // O-O second move
     *p++ = 0;
     *p++ = 0;
     *p++ = h1;
