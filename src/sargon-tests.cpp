@@ -594,8 +594,8 @@ Level 6: ..................................   34 tests
 
 
     const char *intro_quiet =
-    "Use the -v (verbose) flag for more background information about the\n"
-    "following Sargon move calculation time measurements\n";
+    "Use the -v (verbose) flag for more background information about the following\n"
+    "Sargon 1978 move calculation time measurements.\n";
 
     const char *intro_verbose =
     "On the Talkchess computer chess forum, user mwyoung revealed some Sargon\n"
@@ -721,6 +721,7 @@ Level 6: ..................................   34 tests
         "to be a more reliable and better indicator.\n";
         printf( "\n%s", postscript );
     }
+    printf( "\n" );
     return ok;
 }
 
