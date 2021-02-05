@@ -20,11 +20,31 @@ software from a time when software could be important and significant
 without sprawling and metastasizing beyond the means of a single person
 to understand it in depth in a reasonable amount of time.
 
+Has it been done before?
+========================
+
+Yes. For example here is the same code as a [Translation to LUA](https://github.com/tosca07/Lua4chess).
+See also [this forum post](http://talkchess.com/forum3/viewtopic.php?f=2&t=74027&start=10#p845568).
+Andre Adrian has previously got the same Sargon source code running in the context of an emulated
+Z80 [here for example](http://www.andreadrian.de/schach/Jupiter-SARGON.zip).
+
+However this Sargon project does add some things that haven't been attempted before;
+
+- Converting the classic Z80 code to X86 with no emulation or simulation to allows us to really how quickly it can run on modern machines.
+- A full featured engine interface, with arbitrary position setup, optional dynamic depth, time management and most importantly and a real bonus ....
+- A complete PV and a centipawn evaluation! The original code makes no attempt to collect this information and provide it to the user in any way.
+- A window into the minimax and alpha-beta algorithms, [here](https://github.com/billforsternz/retro-sargon/blob/master/sargon-tests-doc-output.txt) demonstrating how they work with runtime ascii art "animation" (sort of).
+- A faithful conversion of the original Z80 code to genuine Z80 mnemonics as a side effect
+ [here](https://github.com/billforsternz/retro-sargon/blob/master/stages/sargon-z80.asm). Retro hackers should prefer using
+ this version to the extant Sargon code which uses odd non-standard third party mnemonics.
+
+Importantly all of these extra things are bonuses that do not require any changes to the core Sargon 1978 chess code.
+
 How can I try it out?
 =====================
 
 It's easy on Windows, even if you're not a developer. First download
-Sargon as a [Windows executable](https://github.com/billforsternz/retro-sargon/releases/download/V1.00/sargon-engine.exe)
+Sargon as a [Windows executable](https://github.com/billforsternz/retro-sargon/releases/download/V1.01/sargon-engine.exe)
 then run it under your favourite Chess GUI. If you don't have a chess
 GUI (or know what one is), I will respectfully recommend my own
 [Tarrasch Chess GUI](http://triplehappy.com/). Once you've installed
@@ -45,6 +65,35 @@ chess - computers overtook humans in the 1990s and are now vastly stronger).
 If you're just starting out on your chess journey, Sargon will probably
 beat you but beating it is a realistic challenge. You'll probably have to
 put at least a little serious effort into improving your game though.
+
+Version 1.01
+============
+
+(This section should probably be skipped on a first reading).
+
+After releasing the original V1.00 version of this project, it turned out that
+Sargon 1978 UCI engine became unexpectedly popular as a training partner.
+There were some complaints though, in particular people didn't understand
+why Sargon would often simply repeat and concede a draw in overwhelming positions.
+
+Version 1.01 was released to try and work around this problem, to some extent
+at least. The UCI wrapper now checks whether Sargon is repeating the position,
+and if so it asks Sargon to try again, with repeating moves eliminated from
+the candidate list. If Sargon can find a non-repeating move that still leaves
+it better (in its opinion) that move is played instead.
+
+Sargon will not magically become an aggressive finisher, it will just resist
+making an immediate draw. If its position is not overwhelming this might mean
+it just dithers, failing to make progress. It might make for a *worse* user
+experience as this could be more frustrating to experience than an immediate draw.
+
+There are some other tweaks to make Sargon V1.01 a little more efficient and
+effective as a chess engine. If you a fixed depth is specified, Sargon does
+no longer iterates to that depth (seemed a good idea at the time). Instead it
+goes directly to the depth, which is a significant speed up. Also if Sargon
+1978 calculates a forced mate it will play down the forced mate PV if given
+the opportunity. This will solve a different problem (to the repetition problem)
+where Sargon 1978 sometimes dallies even when it has a forced mate.
 
 Developers, Developers, Developers
 ==================================
@@ -173,7 +222,8 @@ tempted to add a simple "king in a decreasing sized box" type heuristic
 to the scoring function to fix that - but that's not really software
 archaeology is it? A similar problem, probably fixable in the same way
 is that Sargon will sometimes drift and concede a draw by repeating
-moves even in an overwhelming position. This is a reflection of Sargon's
+moves even in an overwhelming position. (But see Version 1.01 above).
+This is a reflection of Sargon's
 scoring function, which doesn't have any positional knowledge. Sargon
 just tries to win material, and if that's not possible control more
 squares than the opponent. This was typical of the era, in the early
