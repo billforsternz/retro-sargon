@@ -38,7 +38,7 @@
 static unsigned long base_time;
 
 // Misc
-#define VERSION "1978 V1.01 beta"
+#define VERSION "1978 V1.01"
 #define ENGINE_NAME "Sargon"
 static int depth_option;    // 0=auto, other values for fixed depth play
 static std::string logfile_name;
