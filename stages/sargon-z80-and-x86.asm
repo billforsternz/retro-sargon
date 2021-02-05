@@ -2142,6 +2142,7 @@ FM5:    LD      hl,NPLY         ; Address of ply counter
         XOR     a,a             ; Initialize mate flag
         LD      (MATEF),a
         CALL    GENMOV          ; Generate list of moves
+        CALLBACK "after GENMOV()"
         LD      a,(NPLY)        ; Current ply counter
         LD      hl,PLYMAX       ; Address of maximum ply number
         CP      a,(hl)          ; At max ply ?

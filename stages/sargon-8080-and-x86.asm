@@ -2142,6 +2142,7 @@ FM5:    LXI     H,NPLY          ; Address of ply counter
         XRA     A               ; Initialize mate flag
         STA     MATEF
         CALL    GENMOV          ; Generate list of moves
+        CALLBACK "after GENMOV()"
         LDA     NPLY            ; Current ply counter
         LXI     H,PLYMAX        ; Address of maximum ply number
         CMP     M               ; At max ply ?
