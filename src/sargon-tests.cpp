@@ -25,8 +25,12 @@
 bool sargon_position_tests( bool quiet, int comprehensive );
 bool sargon_timing_tests( bool quiet, int comprehensive );
 bool sargon_whole_game_tests( bool quiet, int comprehensive );
+bool sargon_timed_game_test( bool quiet );
 extern void sargon_minimax_main();
 extern bool sargon_minimax_regression_test( bool quiet);
+
+// Timing calibration game
+static std::string timing_calibration_game("e4 e5 Nf3 Nc6 Bb5 Qf6 Nc3 a6 Nd5 Qd6 Bc4 Nf6 O-O b5 Bb3 Nxe4 Re1 Nf6 d4 Nxd5 dxe5 Qg6 Nh4 Qe6 Bxd5 Qe7 Nf5 Qb4 c3 Qc5 Be3 g6 Bxc5 gxf5 e6 Bxc5 exf7+ Kf8 Qh5 Kg7 Qg5+ Kf8 Qh6#");
 
 // main()
 int main( int argc, const char *argv[] )
@@ -35,8 +39,7 @@ int main( int argc, const char *argv[] )
     const char *test_args[] =
     {
         "Debug/sargon-tests.exe",
-        "t",
-        "-3"
+        "c"
     };
     argc = sizeof(test_args) / sizeof(test_args[0]);
     argv = test_args;
@@ -48,7 +51,7 @@ int main( int argc, const char *argv[] )
     "sargon-tests tests [-1|-2|-3] [-v] [-doc]\n"
     "\n"
     "tests = combine 'p' for position tests, 'g' for whole game tests, 'm' for\n"
-    "        minimax tests, 't' for timing tests\n"
+    "        minimax tests, 't' for timing tests, 'c' for calibrated timing test\n"
     "\n"
     "-1|-2|-3 = fast, middling or comprehensive suite of tests respectively\n"
     "\n"
@@ -70,7 +73,7 @@ int main( int argc, const char *argv[] )
     for( int i=1; i<argc; i++ )
     {
         std::string s = argv[i];
-        if( i==1 && s.find_first_not_of("gptm") == std::string::npos )
+        if( i==1 && s.find_first_not_of("gptmc") == std::string::npos )
         {
             test_types = s;
             ok = true;
@@ -133,11 +136,39 @@ int main( int argc, const char *argv[] )
                 if( !passed )
                     ok = false;
             }
+            else if( c == 'c' )
+            {
+                passed = sargon_timed_game_test(quiet);
+                if( !passed )
+                    ok = false;
+            }
         }
         std::chrono::time_point<std::chrono::steady_clock> now = std::chrono::steady_clock::now();
         std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - base);
         double elapsed = static_cast<double>(ms.count());
-        printf( "%s tests passed. Elapsed time = %.3f seconds\n", ok?"All":"Not all", elapsed/1000.0 ); 
+        printf( "%s tests passed. Elapsed time = %.3f seconds\n", ok?"All":"Not all", elapsed/1000.0 );
+        if( ok && test_types.find('c') != std::string::npos )
+        {
+            if( test_types != "c" )
+                printf( "For timing calibration results, run only the calibration test, i.e.\n"
+                        " sargon-tests c\n" );
+            else
+            {
+                printf(
+                    "Hans W Kramer from Switzerland used the Z80 mnemonics assembly generated\n"
+                    "as a secondary output of this project to get Sargon running on his 1983\n"
+                    "vintage Microprofessor Z80 computer, running at 1.79Mhz. He played this\n"
+                    "level 2 game as White against the computer, then automated replays with\n"
+                    "an expect script to enable precise timing. On his system Sargon needed\n"
+                    "44 minutes and 34 seconds = 2674 seconds to play these moves;\n"
+                    "So the speed up ratio on this machine is 2674 / %.3f = %.0f\n"
+                    "For reference purposes the moves of the game (eg paste into a GUI, perhaps\n"
+                    "Tarrasch) were as follows %s.\n",
+                    elapsed/1000.0,
+                    (2674 * 1000.0) / elapsed,
+                    timing_calibration_game.c_str() );
+            }
+        }
     }
     return ok ? 0 : -1;
 }
@@ -179,8 +210,7 @@ bool sargon_whole_game_tests( bool quiet, int comprehensive )
                     printf( "Sargon doesn't find move - %s\n%s", terse.c_str(), cr.ToDebugStr().c_str() );
                     printf( "(After)\n%s",cr_after.ToDebugStr().c_str() );
                 }
-                if( !ok )
-                    break;
+                break;
             }
             std::string s = mv.NaturalOut(&cr);
             if( quiet )
@@ -256,6 +286,106 @@ bool sargon_whole_game_tests( bool quiet, int comprehensive )
     return ok;
 }
 
+bool sargon_timed_game_test( bool quiet )
+{
+    if( !quiet )
+    {
+        printf( "For timing calibration, an entire PLYMAX=2 game test from Hans W Kramer.\n" );
+        printf( "For best results, run this test alone, and don't use the -v flag.\n" );
+    }
+    std::string game = timing_calibration_game;
+    std::vector<thc::Move> moves;
+    size_t offset=0;
+    thc::ChessRules cr2;
+    for(;;)
+    {
+        std::string move;
+        size_t offset2 = game.find(' ',offset);
+        if( offset2 == std::string::npos )
+            move = game.substr(offset);
+        else
+        {
+            move = game.substr(offset, offset2-offset);
+            offset = offset2+1;
+        }
+        thc::Move mv;
+        mv.NaturalIn(&cr2,move.c_str() );
+        cr2.PlayMove(mv);
+        moves.push_back(mv);
+        if( offset2 == std::string::npos )
+            break;
+    }
+    thc::ChessRules cr;
+    sargon_import_position(cr);
+    unsigned char moveno=1;
+    pokeb(MOVENO,moveno);
+    pokeb(KOLOR,0x80); // Sargon is black
+    pokeb(PLYMAX,2);
+    std::string game_text;
+    int idx = 0;
+    bool ok = true;
+    for( thc::Move mv: moves )
+    {
+        if( !ok )
+            break;
+        bool white_to_move = ((idx++&1) == 0);
+        std::string natural_move = mv.NaturalOut(&cr);
+        thc::ChessRules cr_after;
+        if( white_to_move )
+        {
+            pokeb(COLOR,0); // White to move
+            ok = sargon_play_move(mv);
+            sargon_export_position(cr_after);
+        }
+        else
+        {
+            sargon(api_CPTRMV);
+            std::string terse = sargon_export_move(BESTM);
+            sargon_export_position(cr_after);
+            thc::Move mv;
+            ok = mv.TerseIn( &cr, terse.c_str() );
+            if( ok )
+                natural_move = mv.NaturalOut(&cr);
+            else
+            {
+                printf( "Sargon's move - %s is illegal?? in this position:\n%s", terse.c_str(), cr.ToDebugStr().c_str() );
+                printf( "(This is Sargon's position after its apparently bad move)\n%s",cr_after.ToDebugStr().c_str() );
+            }
+            if( moveno <= 254 )
+            {
+                moveno++;
+                pokeb(MOVENO,moveno);
+            }
+        }
+        if( ok )
+        {
+            if( quiet )
+                printf( "%s", white_to_move?"":"." );
+            else
+                printf( "%s plays %s\n", white_to_move?"Human":"Sargon",natural_move.c_str() );
+            if( game_text != "" )
+                game_text += " ";
+            game_text += natural_move;
+            cr.PlayMove(mv);
+            if( strcmp(cr.squares,cr_after.squares) != 0 )
+            {
+                printf( "Position mismatch after %s move ?!:\n%s", white_to_move?"Human":"Sargon", cr.ToDebugStr().c_str() );
+                printf( "(This is Sargon's view of the position)\n%s",cr_after.ToDebugStr().c_str() );
+                ok = false;
+            }
+        }
+    }
+    if( ok && game_text != game )
+    {
+        ok = false;
+        printf( "Game did not complete as expected\n"
+                "Expected: %s\n"
+                "Actual  : %s\n", game.c_str(), game_text.c_str() );
+    }
+    return ok;
+}
+
+
 struct TEST
 {
     const char *fen;
@@ -300,6 +430,10 @@ struct TEST
     */
 static TEST tests[]=
 {
+    // Position after 1.Nf3, Black to play book move
+    { "rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 1 1", 5, "d7d5",
+        0, "" },
+                   
     { "B6k/8/8/8/8/8/8/7K w - - 0 1", 2, "a8d5",
         375, "Bd5 Kg7" },
     { "B6k/8/8/8/8/8/8/7K w - - 0 1", 5, "a8d5",

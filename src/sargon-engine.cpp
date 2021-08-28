@@ -145,6 +145,32 @@ int main( int argc, char *argv[] )
     static const std::vector<std::string> test_sequence =
     {
 #if 1
+        "setoption name FixedDepth value 6",
+        "position fen 8/3R2pk/4Np1p/5r2/8/1P2PK2/5PPP/8 w - - 9 41 moves f3e2 h7h8 d7d8 h8h7\n",
+        "go\n"
+        "isready\n",
+        "quit\n"
+#endif
+#if 0
+        "setoption name FixedDepth value 6",
+        "position fen 8/3R2pk/4Np1p/5r2/8/1P2PK2/5PPP/8 w - - 9 41\n",
+        "go\n",
+        "isready\n",
+        "position fen 7k/3R2p1/4Np1p/5r2/8/1P2P3/4KPPP/8 w - - 11 42\n",
+        "go\n",
+        "isready\n",
+        "position fen 3R4/6pk/4Np1p/5r2/8/1P2P3/4KPPP/8 w - - 13 43\n",
+        "go\n",
+        "isready\n",
+        "quit\n"
+#endif
+#if 0
+        "position fen 8/3R2pk/4Np1p/5r2/8/1P2PK2/5PPP/8 w - - 9 41 moves f3e2 h7h8 d7d8 h8h7\n",
+        "go depth 6 wtime 55068 btime 889329 winc 1000 binc 5000\n",
+        "isready\n",
+        "quit\n"
+#endif
+#if 0
         "position fen 7K/5k1P/8/8/8/8/8/8 b - - 0 1\n",
         "go depth wtime 1000 btime 1000 winc 1000 binc 5000\n",
         "isready\n",
