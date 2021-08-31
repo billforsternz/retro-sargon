@@ -393,6 +393,22 @@ void sargon_import_position( const thc::ChessPosition &cp, bool avoid_book )
     thc::ChessRules init;
     thc::ChessPosition cp_work = cp;
 
+    // Special provision must be made for book moves after one White move from initial position
+    //  If moveno==1 and Black to play, Sargon plays either 1...e5 or 1...d5 depending on what
+    //  White's first move was. To reproduce that we must rewind the position by one move and
+    //  play White's move within Sargon. This is very similar to how we make en-passant work,
+    //  and in fact if White's first move was a double pawn advance we were doing just that.
+    //  However in V1.00 and V1.01 we weren't rewinding for other White first moves, which
+    //  meant the exact behaviour of Sargon 1978 wasn't being reproduced for these other moves.
+    //  In particular if 1.Nf3 the faulty book move logic was resulting in the bad choice 1...e5?
+    //  instead of the correct 1...d5 This bug was discovered by user AdminX on Talkchess May 4 2021
+    //  See https://talkchess.com/forum3/viewtopic.php?f=2&t=74027&start=160#p892001 text;
+    //  "I was wondering if this might be a bug. I noticed that when playing with black if
+    //   white opens with 1.Nf3 Sargon v1.01 has responded 1.e5. This has happened twice now
+    //   this morning playing some test games with Zeta 0.99m."
+    bool one_white_move_after_initial_position = false;
+    thc::Move one_white_move;
+
     // Get number of moved white and black pieces
     int black_count=0, white_count=0;
     for( int i=0; i<16; i++ )
@@ -421,7 +437,11 @@ void sargon_import_position( const thc::ChessPosition &cp, bool avoid_book )
         {
             init.PushMove(mv);
             if( cp_work.ToDebugStr() == init.ToDebugStr() )
+            {
                 moveno = 1;
+                one_white_move_after_initial_position = true;
+                one_white_move = mv;
+            }
             init.PopMove(mv);
         }
     }
@@ -442,10 +462,19 @@ void sargon_import_position( const thc::ChessPosition &cp, bool avoid_book )
     }
     cp_work.full_move_count = moveno;
 
+    // To support Black book moves, create initial position and play White's first
+    //  move
+    thc::Square sq = cp.enpassant_target;
+    if( one_white_move_after_initial_position )
+    {
+        thc::ChessRules cr_initial;
+        sargon_import_position_inner( cr_initial );
+        sargon_play_move( one_white_move );
+    }
+
     // To support en-passant, create position before double pawn advance
     //  then play double pawn advance
-    thc::Square sq = cp.enpassant_target;
-    if( sq == thc::SQUARE_INVALID )
+    else if( sq == thc::SQUARE_INVALID )
     {
         sargon_import_position_inner( cp_work );
     }

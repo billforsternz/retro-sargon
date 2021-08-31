@@ -39,8 +39,9 @@ int main( int argc, const char *argv[] )
     const char *test_args[] =
     {
         "Debug/sargon-tests.exe",
-        "c",
-        "-3"
+        "p",
+        "-2",
+        "-v"
     };
     argc = sizeof(test_args) / sizeof(test_args[0]);
     argv = test_args;
@@ -67,7 +68,7 @@ int main( int argc, const char *argv[] )
     " sargon-tests c -3\n"
     "    Run the calibration test, -3 specifies many iterations for accuracy\n"
     " sargon-tests t\n"
-    "    Run timing tests\n"
+    "    Run original timing tests (but note improved calibration timing test)\n"
     " sargon-tests -doc\n"        
     "    Run the minimax models and print out the results as documentation\n";
     bool ok = false, minimax_doc=false, quiet=true;
@@ -514,6 +515,22 @@ static TEST tests[]=
     { "rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 1 1", 5, "d7d5",
         0, "" },
                    
+    // Position after 1.f3, Black to play book move
+    { "rnbqkbnr/pppppppp/8/8/8/5P2/PPPPP1PP/RNBQKBNR b KQkq - 1 1", 5, "d7d5",
+        0, "" },
+                   
+    // Position after 1.e3, Black to play book move
+    { "rnbqkbnr/pppppppp/8/8/8/4P3/PPPP1PPP/RNBQKBNR b KQkq - 1 1", 5, "e7e5",
+        0, "" },
+                   
+    // Position after 1.d4, Black to play book move
+    { "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1", 5, "d7d5",
+        0, "" },
+                   
+    // Position after 1.c4, Black to play book move
+    { "rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq c3 0 1", 5, "e7e5",
+        0, "" },
+                   
     { "B6k/8/8/8/8/8/8/7K w - - 0 1", 2, "a8d5",
         375, "Bd5 Kg7" },
     { "B6k/8/8/8/8/8/8/7K w - - 0 1", 5, "a8d5",
@@ -578,14 +595,6 @@ static TEST tests[]=
     { "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 5, "e2e4",
         0, "" },
 
-    // Position after 1.d4, Black to play book move
-    { "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1", 5, "d7d5",
-        0, "" },
-                   
-    // Position after 1.c4, Black to play book move
-    { "rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq c3 0 1", 5, "e7e5",
-        0, "" },
-                   
     // Test en-passant, black to move
     { "7k/8/8/8/Pp6/4K3/8/8 b - a3 0 1", 5, "b4a3",
         -975, "bxa3 Kd4 a2 Kc5 a1=Q" },
@@ -932,7 +941,11 @@ Level 6: ..................................   34 tests
         "Assessment Tool (WinSAT) scores of 8.2 (both CPU and RAM).\n\n"
         "In summary we have considered two independent speedup ratios, on two different\n"
         "modest laptops. One is approx 1000, one is approx 6000. We consider the latter\n"
-        "to be a more reliable and better indicator.\n";
+        "to be a more reliable and better indicator.\n\n"
+        "Update 29th August 2021: We have now implemented a separate calibration test\n"
+        "(use -c to run it). It is based on a timed reference game played by Hans W.\n"
+        "Kramer in Switzerland on his real 1983 Microprofessor 1.79Mhz Z80. The speedup\n"
+        "factor on the Acer Aspire 5741G of that test is in fact close to exactly 6000.\n";
         printf( "\n%s", postscript );
     }
     printf( "\n" );
