@@ -795,15 +795,15 @@ PATH:   LD      hl,M2           ; Get previous position
         LD      (hl),a          ; Save new position
         LD      ix,(M2)         ; Load board index
         LD      a,(ix+BOARD)    ; Get contents of board
-        CP      a,-1            ; In border area ?
+        CP      -1              ; In border area ?
         JR      Z,PA2           ; Yes - jump
         LD      (P2),a          ; Save piece
-        AND     a,7             ; Clear flags
+        AND     7               ; Clear flags
         LD      (T2),a          ; Save piece type
         RET     Z               ; Return if empty
         LD      a,(P2)          ; Get piece encountered
         LD      hl,P1           ; Get moving piece address
-        XOR     a,(hl)          ; Compare
+        XOR     (hl)            ; Compare
         BIT     7,a             ; Do colors match ?
         JR      Z,PA1           ; Yes - jump
         LD      a,1             ; Set different color flag
@@ -828,12 +828,12 @@ PA2:    LD      a,3             ; Set off board flag
 ;
 ; ARGUMENTS:  The piece to be moved.
 ;***********************************************************
-MPIECE: XOR     a,(hl)          ; Piece to move
-        AND     a,87H           ; Clear flag bit
-        CP      a,BPAWN         ; Is it a black Pawn ?
+MPIECE: XOR     (hl)            ; Piece to move
+        AND     87H             ; Clear flag bit
+        CP      BPAWN           ; Is it a black Pawn ?
         JR      NZ,rel001       ; No-Skip
         DEC     a               ; Decrement for black Pawns
-rel001: AND     a,7             ; Get piece type
+rel001: AND     7               ; Get piece type
         LD      (T1),a          ; Save piece type
         LD      iy,(T1)         ; Load index to DCOUNT/DPOINT
         LD      b,(iy+DCOUNT)   ; Get direction count
@@ -845,38 +845,38 @@ MP5:    LD      c,(iy+DIRECT)   ; Get move direction
         LD      (M2),a          ; Initialize to position
 MP10:   CALL    PATH            ; Calculate next position
         CALLBACK "Suppress King moves"
-        CP      a,2             ; Ready for new direction ?
+        CP      2               ; Ready for new direction ?
         JR      NC,MP15         ; Yes - Jump
-        AND     a,a             ; Test for empty square
+        AND     a               ; Test for empty square
         EX      af,af'          ; Save result
         LD      a,(T1)          ; Get piece moved
-        CP      a,PAWN+1        ; Is it a Pawn ?
+        CP      PAWN+1          ; Is it a Pawn ?
         JR      C,MP20          ; Yes - Jump
         CALL    ADMOVE          ; Add move to list
         EX      af,af'          ; Empty square ?
         JR      NZ,MP15         ; No - Jump
         LD      a,(T1)          ; Piece type
-        CP      a,KING          ; King ?
+        CP      KING            ; King ?
         JR      Z,MP15          ; Yes - Jump
-        CP      a,BISHOP        ; Bishop, Rook, or Queen ?
+        CP      BISHOP          ; Bishop, Rook, or Queen ?
         JR      NC,MP10         ; Yes - Jump
 MP15:   INC     iy              ; Increment direction index
         DJNZ    MP5             ; Decr. count-jump if non-zerc
         LD      a,(T1)          ; Piece type
-        CP      a,KING          ; King ?
+        CP      KING            ; King ?
         CALL    Z,CASTLE        ; Yes - Try Castling
         RET                     ; Return
 ; ***** PAWN LOGIC *****
 MP20:   LD      a,b             ; Counter for direction
-        CP      a,3             ; On diagonal moves ?
+        CP      3               ; On diagonal moves ?
         JR      C,MP35          ; Yes - Jump
         JR      Z,MP30          ; -or-jump if on 2 square move
         EX      af,af'          ; Is forward square empty?
         JR      NZ,MP15         ; No - jump
         LD      a,(M2)          ; Get "to" position
-        CP      a,91            ; Promote white Pawn ?
+        CP      91              ; Promote white Pawn ?
         JR      NC,MP25         ; Yes - Jump
-        CP      a,29            ; Promote black Pawn ?
+        CP      29              ; Promote black Pawn ?
         JR      NC,MP26         ; No - Jump
 MP25:   LD      hl,P2           ; Flag address
         SET     5,(hl)          ; Set promote flag
@@ -894,9 +894,9 @@ MP31:   CALL    ADMOVE          ; Add to move list
 MP35:   EX      af,af'          ; Is diagonal square empty ?
         JR      Z,MP36          ; Yes - Jump
         LD      a,(M2)          ; Get "to" position
-        CP      a,91            ; Promote white Pawn ?
+        CP      91              ; Promote white Pawn ?
         JR      NC,MP37         ; Yes - Jump
-        CP      a,29            ; Black Pawn promotion ?
+        CP      29              ; Black Pawn promotion ?
         JR      NC,MP31         ; No- Jump
 MP37:   LD      hl,P2           ; Get flag address
         SET     5,(hl)          ; Set promote flag
@@ -923,9 +923,9 @@ ENPSNT: LD      a,(M1)          ; Set position of Pawn
         BIT     7,(hl)          ; Is it white ?
         JR      Z,rel002        ; Yes - skip
         ADD     a,10            ; Add 10 for black
-rel002: CP      a,61            ; On en passant capture rank ?
+rel002: CP      61              ; On en passant capture rank ?
         RET     C               ; No - return
-        CP      a,69            ; On en passant capture rank ?
+        CP      69              ; On en passant capture rank ?
         RET     NC              ; No - return
         LD      ix,(MLPTRJ)     ; Get pointer to previous move
         BIT     4,(ix+MLFLG)    ; First move for that piece ?
@@ -935,15 +935,15 @@ rel002: CP      a,61            ; On en passant capture rank ?
         LD      ix,(M4)         ; Load board index
         LD      a,(ix+BOARD)    ; Get piece moved
         LD      (P3),a          ; Save it
-        AND     a,7             ; Get piece type
-        CP      a,PAWN          ; Is it a Pawn ?
+        AND     7               ; Get piece type
+        CP      PAWN            ; Is it a Pawn ?
         RET     NZ              ; No - return
         LD      a,(M4)          ; Get "to" position
         LD      hl,M2           ; Get present "to" position
-        SUB     a,(hl)          ; Find difference
+        SUB     (hl)            ; Find difference
         JP      P,rel003        ; Positive ? Yes - Jump
         NEG                     ; Else take absolute value
-rel003: CP      a,10            ; Is difference 10 ?
+rel003: CP      10              ; Is difference 10 ?
         RET     NZ              ; No - return
         LD      hl,P2           ; Address of flags
         SET     6,(hl)          ; Set double move flag
@@ -1003,7 +1003,7 @@ CASTLE: LD      a,(P1)          ; Get King
         BIT     3,a             ; Has it moved ?
         RET     NZ              ; Yes - return
         LD      a,(CKFLG)       ; Fetch Check Flag
-        AND     a,a             ; Is the King in check ?
+        AND     a               ; Is the King in check ?
         RET     NZ              ; Yes - Return
         LD      bc,0FF03H       ; Initialize King-side values
 CA5:    LD      a,(M1)          ; King position
@@ -1012,31 +1012,31 @@ CA5:    LD      a,(M1)          ; King position
         LD      (M3),a          ; Store as board index
         LD      ix,(M3)         ; Load board index
         LD      a,(ix+BOARD)    ; Get contents of board
-        AND     a,7FH           ; Clear color bit
-        CP      a,ROOK          ; Has Rook ever moved ?
+        AND     7FH             ; Clear color bit
+        CP      ROOK            ; Has Rook ever moved ?
         JR      NZ,CA20         ; Yes - Jump
         LD      a,c             ; Restore Rook position
         JR      CA15            ; Jump
 CA10:   LD      ix,(M3)         ; Load board index
         LD      a,(ix+BOARD)    ; Get contents of board
-        AND     a,a             ; Empty ?
+        AND     a               ; Empty ?
         JR      NZ,CA20         ; No - Jump
         LD      a,(M3)          ; Current position
-        CP      a,22            ; White Queen Knight square ?
+        CP      22              ; White Queen Knight square ?
         JR      Z,CA15          ; Yes - Jump
-        CP      a,92            ; Black Queen Knight square ?
+        CP      92              ; Black Queen Knight square ?
         JR      Z,CA15          ; Yes - Jump
         CALL    ATTACK          ; Look for attack on square
-        AND     a,a             ; Any attackers ?
+        AND     a               ; Any attackers ?
         JR      NZ,CA20         ; Yes - Jump
         LD      a,(M3)          ; Current position
 CA15:   ADD     a,b             ; Next position
         LD      (M3),a          ; Save as board index
         LD      hl,M1           ; King position
-        CP      a,(hl)          ; Reached King ?
+        CP      (hl)            ; Reached King ?
         JR      NZ,CA10         ; No - jump
-        SUB     a,b             ; Determine King's position
-        SUB     a,b
+        SUB     b               ; Determine King's position
+        SUB     b
         LD      (M2),a          ; Save it
         LD      hl,P2           ; Address of flags
         LD      (hl),40H        ; Set double move flag
@@ -1044,16 +1044,16 @@ CA15:   ADD     a,b             ; Next position
         LD      hl,M1           ; Addr of King "from" position
         LD      a,(hl)          ; Get King's "from" position
         LD      (hl),c          ; Store Rook "from" position
-        SUB     a,b             ; Get Rook "to" position
+        SUB     b               ; Get Rook "to" position
         LD      (M2),a          ; Store Rook "to" position
-        XOR     a,a             ; Zero
+        XOR     a               ; Zero
         LD      (P2),a          ; Zero move flags
         CALL    ADMOVE          ; Put Rook move in list
         CALL    ADJPTR          ; Re-adjust move list pointer
         LD      a,(M3)          ; Restore King position
         LD      (M1),a          ; Store
 CA20:   LD      a,b             ; Scan Index
-        CP      a,1             ; Done ?
+        CP      1               ; Done ?
         RET     Z               ; Yes - return
         LD      bc,01FCH        ; Set Queen-side initial values
         JP      CA5             ; Jump
@@ -1073,7 +1073,7 @@ CA20:   LD      a,b             ; Scan Index
 ;***********************************************************
 ADMOVE: LD      de,(MLNXT)      ; Addr of next loc in move list
         LD      hl,MLEND        ; Address of list end
-        AND     a,a             ; Clear carry flag
+        AND     a               ; Clear carry flag
         SBC     hl,de           ; Calculate difference
         JR      C,AM10          ; Jump if out of space
         LD      hl,(MLLST)      ; Addr of prev. list area
@@ -1139,18 +1139,18 @@ GENMOV: CALL    INCHK           ; Test for King in check
 GM5:    LD      (M1),a          ; Save as index
         LD      ix,(M1)         ; Load board index
         LD      a,(ix+BOARD)    ; Fetch board contents
-        AND     a,a             ; Is it empty ?
+        AND     a               ; Is it empty ?
         JR      Z,GM10          ; Yes - Jump
-        CP      a,-1            ; Is it a border square ?
+        CP      -1              ; Is it a border square ?
         JR      Z,GM10          ; Yes - Jump
         LD      (P1),a          ; Save piece
         LD      hl,COLOR        ; Address of color of piece
-        XOR     a,(hl)          ; Test color of piece
+        XOR     (hl)            ; Test color of piece
         BIT     7,a             ; Match ?
         CALL    Z,MPIECE        ; Yes - call Move Piece
 GM10:   LD      a,(M1)          ; Fetch current board position
         INC     a               ; Incr to next board position
-        CP      a,99            ; End of board array ?
+        CP      99              ; End of board array ?
         JP      NZ,GM5          ; No - Jump
         RET                     ; Return
 
@@ -1170,7 +1170,7 @@ GM10:   LD      a,(M1)          ; Fetch current board position
 ;***********************************************************
 INCHK:  LD      a,(COLOR)       ; Get color
 INCHK1: LD      hl,POSK         ; Addr of white King position
-        AND     a,a             ; White ?
+        AND     a               ; White ?
         JR      Z,rel005        ; Yes - Skip
         INC     hl              ; Addr of black King position
 rel005: LD      a,(hl)          ; Fetch King position
@@ -1178,7 +1178,7 @@ rel005: LD      a,(hl)          ; Fetch King position
         LD      ix,(M3)         ; Load board index
         LD      a,(ix+BOARD)    ; Fetch board contents
         LD      (P1),a          ; Save
-        AND     a,7             ; Get piece type
+        AND     7               ; Get piece type
         LD      (T1),a          ; Save
         CALL    ATTACK          ; Look for attackers on King
         RET                     ; Return
@@ -1219,7 +1219,7 @@ rel005: LD      a,(hl)          ; Fetch King position
 ; ARGUMENTS:  --  None
 ;***********************************************************
 ATTACK: PUSH    bc              ; Save Register B
-        XOR     a,a             ; Clear
+        XOR     a               ; Clear
         LD      b,16            ; Initial direction count
         LD      (INDX2),a       ; Initial direction index
         LD      iy,(INDX2)      ; Load index
@@ -1229,18 +1229,18 @@ AT5:    LD      c,(iy+DIRECT)   ; Get direction
         LD      (M2),a          ; Save
 AT10:   INC     d               ; Increment scan count
         CALL    PATH            ; Next position
-        CP      a,1             ; Piece of a opposite color ?
+        CP      1               ; Piece of a opposite color ?
         JR      Z,AT14A         ; Yes - jump
-        CP      a,2             ; Piece of same color ?
+        CP      2               ; Piece of same color ?
         JR      Z,AT14B         ; Yes - jump
-        AND     a,a             ; Empty position ?
+        AND     a               ; Empty position ?
         JR      NZ,AT12         ; No - jump
         LD      a,b             ; Fetch direction count
-        CP      a,9             ; On knight scan ?
+        CP      9               ; On knight scan ?
         JR      NC,AT10         ; No - jump
 AT12:   INC     iy              ; Increment direction index
         DJNZ    AT5             ; Done ? No - jump
-        XOR     a,a             ; No attackers
+        XOR     a               ; No attackers
 AT13:   POP     bc              ; Restore register B
         RET                     ; Return
 AT14A:  BIT     6,d             ; Same color found already ?
@@ -1256,52 +1256,52 @@ AT14B:  BIT     5,d             ; Opposite color found already?
 AT14:   LD      a,(T2)          ; Fetch piece type encountered
         LD      e,a             ; Save
         LD      a,b             ; Get direction-counter
-        CP      a,9             ; Look for Knights ?
+        CP      9               ; Look for Knights ?
         JR      C,AT25          ; Yes - jump
         LD      a,e             ; Get piece type
-        CP      a,QUEEN         ; Is is a Queen ?
+        CP      QUEEN           ; Is is a Queen ?
         JR      NZ,AT15         ; No - Jump
         SET     7,d             ; Set Queen found flag
         JR      AT30            ; Jump
 AT15:   LD      a,d             ; Get flag/scan count
-        AND     a,0FH           ; Isolate count
-        CP      a,1             ; On first position ?
+        AND     0FH             ; Isolate count
+        CP      1               ; On first position ?
         JR      NZ,AT16         ; No - jump
         LD      a,e             ; Get encountered piece type
-        CP      a,KING          ; Is it a King ?
+        CP      KING            ; Is it a King ?
         JR      Z,AT30          ; Yes - jump
 AT16:   LD      a,b             ; Get direction counter
-        CP      a,13            ; Scanning files or ranks ?
+        CP      13              ; Scanning files or ranks ?
         JR      C,AT21          ; Yes - jump
         LD      a,e             ; Get piece type
-        CP      a,BISHOP        ; Is it a Bishop ?
+        CP      BISHOP          ; Is it a Bishop ?
         JR      Z,AT30          ; Yes - jump
         LD      a,d             ; Get flags/scan count
-        AND     a,0FH           ; Isolate count
-        CP      a,1             ; On first position ?
+        AND     0FH             ; Isolate count
+        CP      1               ; On first position ?
         JR      NZ,AT12         ; No - jump
-        CP      a,e             ; Is it a Pawn ?
+        CP      e               ; Is it a Pawn ?
         JR      NZ,AT12         ; No - jump
         LD      a,(P2)          ; Fetch piece including color
         BIT     7,a             ; Is it white ?
         JR      Z,AT20          ; Yes - jump
         LD      a,b             ; Get direction counter
-        CP      a,15            ; On a non-attacking diagonal ?
+        CP      15              ; On a non-attacking diagonal ?
         JR      C,AT12          ; Yes - jump
         JR      AT30            ; Jump
 AT20:   LD      a,b             ; Get direction counter
-        CP      a,15            ; On a non-attacking diagonal ?
+        CP      15              ; On a non-attacking diagonal ?
         JR      NC,AT12         ; Yes - jump
         JR      AT30            ; Jump
 AT21:   LD      a,e             ; Get piece type
-        CP      a,ROOK          ; Is is a Rook ?
+        CP      ROOK            ; Is is a Rook ?
         JR      NZ,AT12         ; No - jump
         JR      AT30            ; Jump
 AT25:   LD      a,e             ; Get piece type
-        CP      a,KNIGHT        ; Is it a Knight ?
+        CP      KNIGHT          ; Is it a Knight ?
         JR      NZ,AT12         ; No - jump
 AT30:   LD      a,(T1)          ; Attacked piece type/flag
-        CP      a,7             ; Call from POINTS ?
+        CP      7               ; Call from POINTS ?
         JR      Z,AT31          ; Yes - jump
         BIT     5,d             ; Is attacker opposite color ?
         JR      Z,AT32          ; No - jump
@@ -1309,9 +1309,9 @@ AT30:   LD      a,(T1)          ; Attacked piece type/flag
         JP      AT13            ; Jump
 AT31:   CALL    ATKSAV          ; Save attacker in attack list
 AT32:   LD      a,(T2)          ; Attacking piece type
-        CP      a,KING          ; Is it a King,?
+        CP      KING            ; Is it a King,?
         JP      Z,AT12          ; Yes - jump
-        CP      a,KNIGHT        ; Is it a Knight ?
+        CP      KNIGHT          ; Is it a Knight ?
         JP      Z,AT12          ; Yes - jump
         JP      AT10            ; Jump
 
@@ -1335,7 +1335,7 @@ AT32:   LD      a,(T2)          ; Attacking piece type
 ATKSAV: PUSH    bc              ; Save Regs BC
         PUSH    de              ; Save Regs DE
         LD      a,(NPINS)       ; Number of pinned pieces
-        AND     a,a             ; Any ?
+        AND     a               ; Any ?
         CALL    NZ,PNCK         ; yes - check pin list
         LD      ix,(T2)         ; Init index to value table
         LD      hl,ATKLST       ; Init address of attack list
@@ -1344,7 +1344,7 @@ ATKSAV: PUSH    bc              ; Save Regs BC
         BIT     7,a             ; Is it white ?
         JR      Z,rel006        ; Yes - jump
         LD      c,7             ; Init increment for black
-rel006: AND     a,7             ; Attacking piece type
+rel006: AND     7               ; Attacking piece type
         LD      e,a             ; Init increment for type
         BIT     7,d             ; Queen found this scan ?
         JR      Z,rel007        ; No - jump
@@ -1354,10 +1354,10 @@ rel007: ADD     hl,bc           ; Attack list address
         LD      d,0
         ADD     hl,de           ; Attack list slot address
         LD      a,(hl)          ; Get data already there
-        AND     a,0FH           ; Is first slot empty ?
+        AND     0FH             ; Is first slot empty ?
         JR      Z,AS20          ; Yes - jump
         LD      a,(hl)          ; Get data again
-        AND     a,0F0H          ; Is second slot empty ?
+        AND     0F0H            ; Is second slot empty ?
         JR      Z,AS19          ; Yes - jump
         INC     hl              ; Increment to King slot
         JR      AS20            ; Jump
@@ -1405,10 +1405,10 @@ PC1:    CPIR                    ; Search list for position
         PUSH    hl              ; Get corresp index to dir list
         POP     ix
         LD      a,(ix+9)        ; Get direction
-        CP      a,d             ; Same as attacking direction ?
+        CP      d               ; Same as attacking direction ?
         JR      Z,PC3           ; Yes - jump
         NEG                     ; Opposite direction ?
-        CP      a,d             ; Same as attacking direction ?
+        CP      d               ; Same as attacking direction ?
         JR      NZ,PC5          ; No - jump
 PC3:    EX      af,af'          ; Restore search parameters
         JP      PE,PC1          ; Jump if search not complete
@@ -1433,65 +1433,65 @@ PC5:    POP     af              ; Abnormal exit
 ;
 ; ARGUMENTS:  --  None
 ;***********************************************************
-PINFND: XOR     a,a             ; Zero pin count
+PINFND: XOR     a               ; Zero pin count
         LD      (NPINS),a
         LD      de,POSK         ; Addr of King/Queen pos list
 PF1:    LD      a,(de)          ; Get position of royal piece
-        AND     a,a             ; Is it on board ?
+        AND     a               ; Is it on board ?
         JP      Z,PF26          ; No- jump
-        CP      a,-1            ; At end of list ?
+        CP      -1              ; At end of list ?
         RET     Z               ; Yes return
         LD      (M3),a          ; Save position as board index
         LD      ix,(M3)         ; Load index to board
         LD      a,(ix+BOARD)    ; Get contents of board
         LD      (P1),a          ; Save
         LD      b,8             ; Init scan direction count
-        XOR     a,a
+        XOR     a
         LD      (INDX2),a       ; Init direction index
         LD      iy,(INDX2)
 PF2:    LD      a,(M3)          ; Get King/Queen position
         LD      (M2),a          ; Save
-        XOR     a,a
+        XOR     a
         LD      (M4),a          ; Clear pinned piece saved pos
         LD      c,(iy+DIRECT)   ; Get direction of scan
 PF5:    CALL    PATH            ; Compute next position
-        AND     a,a             ; Is it empty ?
+        AND     a               ; Is it empty ?
         JR      Z,PF5           ; Yes - jump
-        CP      a,3             ; Off board ?
+        CP      3               ; Off board ?
         JP      Z,PF25          ; Yes - jump
-        CP      a,2             ; Piece of same color
+        CP      2               ; Piece of same color
         LD      a,(M4)          ; Load pinned piece position
         JR      Z,PF15          ; Yes - jump
-        AND     a,a             ; Possible pin ?
+        AND     a               ; Possible pin ?
         JP      Z,PF25          ; No - jump
         LD      a,(T2)          ; Piece type encountered
-        CP      a,QUEEN         ; Queen ?
+        CP      QUEEN           ; Queen ?
         JP      Z,PF19          ; Yes - jump
         LD      l,a             ; Save piece type
         LD      a,b             ; Direction counter
-        CP      a,5             ; Non-diagonal direction ?
+        CP      5               ; Non-diagonal direction ?
         JR      C,PF10          ; Yes - jump
         LD      a,l             ; Piece type
-        CP      a,BISHOP        ; Bishop ?
+        CP      BISHOP          ; Bishop ?
         JP      NZ,PF25         ; No - jump
         JP      PF20            ; Jump
 PF10:   LD      a,l             ; Piece type
-        CP      a,ROOK          ; Rook ?
+        CP      ROOK            ; Rook ?
         JP      NZ,PF25         ; No - jump
         JP      PF20            ; Jump
-PF15:   AND     a,a             ; Possible pin ?
+PF15:   AND     a               ; Possible pin ?
         JP      NZ,PF25         ; No - jump
         LD      a,(M2)          ; Save possible pin position
         LD      (M4),a
         JP      PF5             ; Jump
 PF19:   LD      a,(P1)          ; Load King or Queen
-        AND     a,7             ; Clear flags
-        CP      a,QUEEN         ; Queen ?
+        AND     7               ; Clear flags
+        CP      QUEEN           ; Queen ?
         JR      NZ,PF20         ; No - jump
         PUSH    bc              ; Save regs.
         PUSH    de
         PUSH    iy
-        XOR     a,a             ; Zero out attack list
+        XOR     a               ; Zero out attack list
         LD      b,14
         LD      hl,ATKLST
 back02: LD      (hl),a
@@ -1508,7 +1508,7 @@ back02: LD      (hl),a
         EX      de,hl           ; Reverse for black
 rel008: LD      a,(hl)          ; Number of defenders
         EX      de,hl           ; Reverse for attackers
-        SUB     a,(hl)          ; Defenders minus attackers
+        SUB     (hl)            ; Defenders minus attackers
         DEC     a               ; Less 1
         POP     iy              ; Restore regs.
         POP     de
@@ -1564,10 +1564,10 @@ XC10:   LD      l,a             ; Save attacker value
         JR      Z,XC18          ; Jump if none
         EX      af,af'          ; Save defender value
         LD      a,b             ; Get attacked value
-        CP      a,l             ; Attacked less than attacker ?
+        CP      l               ; Attacked less than attacker ?
         JR      NC,XC19         ; No - jump
         EX      af,af'          ; -Restore defender
-XC15:   CP      a,l             ; Defender less than attacker ?
+XC15:   CP      l               ; Defender less than attacker ?
         RET     C               ; Yes - return
         CALL    NEXTAD          ; Retrieve next attacker value
         RET     Z               ; Return if none
@@ -1607,12 +1607,12 @@ NEXTAD: INC     c               ; Increment side flag
         LD      b,c
         LD      c,a
         EX      de,hl           ; Swap list pointers
-        XOR     a,a
-        CP      a,b             ; At end of list ?
+        XOR     a
+        CP      b               ; At end of list ?
         JR      Z,NX6           ; Yes - jump
         DEC     b               ; Decrement list count
 back03: INC     hl              ; Increment list pointer
-        CP      a,(hl)          ; Check next item in list
+        CP      (hl)            ; Check next item in list
         JR      Z,back03        ; Jump if empty
         RRD                     ; Get value from list
         ADD     a,a             ; Double it
@@ -1671,7 +1671,7 @@ NX6:    EXX                     ; Restore regs.
 ;
 ; ARGUMENTS:  --  None
 ;***********************************************************
-POINTS: XOR     a,a             ; Zero out variables
+POINTS: XOR     a               ; Zero out variables
         LD      (MTRL),a
         LD      (BRDC),a
         LD      (PTSL),a
@@ -1684,20 +1684,20 @@ POINTS: XOR     a,a             ; Zero out variables
 PT5:    LD      (M3),a          ; Save as board index
         LD      ix,(M3)         ; Load board index
         LD      a,(ix+BOARD)    ; Get piece from board
-        CP      a,-1            ; Off board edge ?
+        CP      -1              ; Off board edge ?
         JP      Z,PT25          ; Yes - jump
         LD      hl,P1           ; Save piece, if any
         LD      (hl),a
-        AND     a,7             ; Save piece type, if any
+        AND     7               ; Save piece type, if any
         LD      (T3),a
-        CP      a,KNIGHT        ; Less than a Knight (Pawn) ?
+        CP      KNIGHT          ; Less than a Knight (Pawn) ?
         JR      C,PT6X          ; Yes - Jump
-        CP      a,ROOK          ; Rook, Queen or King ?
+        CP      ROOK            ; Rook, Queen or King ?
         JR      C,PT6B          ; No - jump
-        CP      a,KING          ; Is it a King ?
+        CP      KING            ; Is it a King ?
         JR      Z,PT6AA         ; Yes - jump
         LD      a,(MOVENO)      ; Get move number
-        CP      a,7             ; Less than 7 ?
+        CP      7               ; Less than 7 ?
         JR      C,PT6A          ; Yes - Jump
         JP      PT6X            ; Jump
 PT6AA:  BIT     4,(hl)          ; Castled yet ?
@@ -1719,7 +1719,7 @@ PT6C:   LD      a,-2            ; Two point penalty for white
 PT6D:   LD      hl,BRDC         ; Get address of board control
         ADD     a,(hl)          ; Add on penalty/bonus points
         LD      (hl),a          ; Save
-PT6X:   XOR     a,a             ; Zero out attack list
+PT6X:   XOR     a               ; Zero out attack list
         LD      b,14
         LD      hl,ATKLST
 back04: LD      (hl),a
@@ -1728,41 +1728,41 @@ back04: LD      (hl),a
         CALL    ATTACK          ; Build attack list for square
         LD      hl,BACT         ; Get black attacker count addr
         LD      a,(WACT)        ; Get white attacker count
-        SUB     a,(hl)          ; Compute count difference
+        SUB     (hl)            ; Compute count difference
         LD      hl,BRDC         ; Address of board control
         ADD     a,(hl)          ; Accum board control score
         LD      (hl),a          ; Save
         LD      a,(P1)          ; Get piece on current square
-        AND     a,a             ; Is it empty ?
+        AND     a               ; Is it empty ?
         JP      Z,PT25          ; Yes - jump
         CALL    XCHNG           ; Evaluate exchange, if any
-        XOR     a,a             ; Check for a loss
-        CP      a,e             ; Points lost ?
+        XOR     a               ; Check for a loss
+        CP      e               ; Points lost ?
         JR      Z,PT23          ; No - Jump
         DEC     d               ; Deduct half a Pawn value
         LD      a,(P1)          ; Get piece under attack
         LD      hl,COLOR        ; Color of side just moved
-        XOR     a,(hl)          ; Compare with piece
+        XOR     (hl)            ; Compare with piece
         BIT     7,a             ; Do colors match ?
         LD      a,e             ; Points lost
         JR      NZ,PT20         ; Jump if no match
         LD      hl,PTSL         ; Previous max points lost
-        CP      a,(hl)          ; Compare to current value
+        CP      (hl)            ; Compare to current value
         JR      C,PT23          ; Jump if greater than
         LD      (hl),e          ; Store new value as max lost
         LD      ix,(MLPTRJ)     ; Load pointer to this move
         LD      a,(M3)          ; Get position of lost piece
-        CP      a,(ix+MLTOP)    ; Is it the one moving ?
+        CP      (ix+MLTOP)      ; Is it the one moving ?
         JR      NZ,PT23         ; No - jump
         LD      (PTSCK),a       ; Save position as a flag
         JP      PT23            ; Jump
 PT20:   LD      hl,PTSW1        ; Previous maximum points won
-        CP      a,(hl)          ; Compare to current value
+        CP      (hl)            ; Compare to current value
         JR      C,rel011        ; Jump if greater than
         LD      a,(hl)          ; Load previous max value
         LD      (hl),e          ; Store new value as max won
 rel011: LD      hl,PTSW2        ; Previous 2nd max points won
-        CP      a,(hl)          ; Compare to current value
+        CP      (hl)            ; Compare to current value
         JR      C,PT23          ; Jump if greater than
         LD      (hl),a          ; Store as new 2nd max lost
 PT23:   LD      hl,P1           ; Get piece
@@ -1775,29 +1775,29 @@ rel012: LD      hl,MTRL         ; Get addrs of material total
         LD      (hl),a          ; Store
 PT25:   LD      a,(M3)          ; Get current board position
         INC     a               ; Increment
-        CP      a,99            ; At end of board ?
+        CP      99              ; At end of board ?
         JP      NZ,PT5          ; No - jump
         LD      a,(PTSCK)       ; Moving piece lost flag
-        AND     a,a             ; Was it lost ?
+        AND     a               ; Was it lost ?
         JR      Z,PT25A         ; No - jump
         LD      a,(PTSW2)       ; 2nd max points won
         LD      (PTSW1),a       ; Store as max points won
-        XOR     a,a             ; Zero out 2nd max points won
+        XOR     a               ; Zero out 2nd max points won
         LD      (PTSW2),a
 PT25A:  LD      a,(PTSL)        ; Get max points lost
-        AND     a,a             ; Is it zero ?
+        AND     a               ; Is it zero ?
         JR      Z,rel013        ; Yes - jump
         DEC     a               ; Decrement it
 rel013: LD      b,a             ; Save it
         LD      a,(PTSW1)       ; Max,points won
-        AND     a,a             ; Is it zero ?
+        AND     a               ; Is it zero ?
         JR      Z,rel014        ; Yes - jump
         LD      a,(PTSW2)       ; 2nd max points won
-        AND     a,a             ; Is it zero ?
+        AND     a               ; Is it zero ?
         JR      Z,rel014        ; Yes - jump
         DEC     a               ; Decrement it
         SRL     a               ; Divide it by 2
-rel014: SUB     a,b             ; Subtract points lost
+rel014: SUB     b               ; Subtract points lost
         LD      hl,COLOR        ; Color of side just moved ???
         BIT     7,(hl)          ; Is it white ?
         JR      Z,rel015        ; Yes - jump
@@ -1805,17 +1805,17 @@ rel014: SUB     a,b             ; Subtract points lost
 rel015: LD      hl,MTRL         ; Net material on board
         ADD     a,(hl)          ; Add exchange adjustments
         LD      hl,MV0          ; Material at ply 0
-        SUB     a,(hl)          ; Subtract from current
+        SUB     (hl)            ; Subtract from current
         LD      b,a             ; Save
         LD      a,30            ; Load material limit
         CALL    LIMIT           ; Limit to plus or minus value
         LD      e,a             ; Save limited value
         LD      a,(BRDC)        ; Get board control points
         LD      hl,BC0          ; Board control at ply zero
-        SUB     a,(hl)          ; Get difference
+        SUB     (hl)            ; Get difference
         LD      b,a             ; Save
         LD      a,(PTSCK)       ; Moving piece lost flag
-        AND     a,a             ; Is it zero ?
+        AND     a               ; Is it zero ?
         JR      Z,rel026        ; Yes - jump
         LD      b,0             ; Zero board control points
 rel026: LD      a,6             ; Load board control limit
@@ -1854,11 +1854,11 @@ rel016: ADD     a,80H           ; Rescale score (neutral = 80H)
 LIMIT:  BIT     7,b             ; Is value negative ?
         JP      Z,LIM10         ; No - jump
         NEG                     ; Make positive
-        CP      a,b             ; Compare to limit
+        CP      b               ; Compare to limit
         RET     NC              ; Return if outside limit
         LD      a,b             ; Output value as is
         RET                     ; Return
-LIM10:  CP      a,b             ; Compare to limit
+LIM10:  CP      b               ; Compare to limit
         RET     C               ; Return if outside limit
         LD      a,b             ; Output value as is
         RET                     ; Return
@@ -1894,10 +1894,10 @@ MV1:    LD      a,(hl)          ; "From" position
         BIT     5,d             ; Test Pawn promotion flag
         JR      NZ,MV15         ; Jump if set
         LD      a,e             ; Piece moved
-        AND     a,7             ; Clear flag bits
-        CP      a,QUEEN         ; Is it a queen ?
+        AND     7               ; Clear flag bits
+        CP      QUEEN           ; Is it a queen ?
         JR      Z,MV20          ; Yes - jump
-        CP      a,KING          ; Is it a king ?
+        CP      KING            ; Is it a king ?
         JR      Z,MV30          ; Yes - jump
 MV5:    LD      iy,(M2)         ; Load "to" pos board index
         SET     3,e             ; Set piece moved flag
@@ -1906,14 +1906,14 @@ MV5:    LD      iy,(M2)         ; Load "to" pos board index
         BIT     6,d             ; Double move ?
         JR      NZ,MV40         ; Yes - jump
         LD      a,d             ; Get captured piece, if any
-        AND     a,7
-        CP      a,QUEEN         ; Was it a queen ?
+        AND     7
+        CP      QUEEN           ; Was it a queen ?
         RET     NZ              ; No - return
         LD      hl,POSQ         ; Addr of saved Queen position
         BIT     7,d             ; Is Queen white ?
         JR      Z,MV10          ; Yes - jump
         INC     hl              ; Increment to black Queen pos
-MV10:   XOR     a,a             ; Set saved position to zero
+MV10:   XOR     a               ; Set saved position to zero
         LD      (hl),a
         RET                     ; Return
 MV15:   SET     2,e             ; Change Pawn to a Queen
@@ -1966,23 +1966,23 @@ UM1:    LD      a,(hl)          ; Get "from" position
         BIT     5,d             ; Was it a Pawn promotion ?
         JR      NZ,UM15         ; Yes - jump
         LD      a,e             ; Get piece moved
-        AND     a,7             ; Clear flag bits
-        CP      a,QUEEN         ; Was it a Queen ?
+        AND     7               ; Clear flag bits
+        CP      QUEEN           ; Was it a Queen ?
         JR      Z,UM20          ; Yes - jump
-        CP      a,KING          ; Was it a King ?
+        CP      KING            ; Was it a King ?
         JR      Z,UM30          ; Yes - jump
 UM5:    BIT     4,d             ; Is this 1st move for piece ?
         JR      NZ,UM16         ; Yes - jump
 UM6:    LD      iy,(M1)         ; Load "from" pos board index
         LD      (iy+BOARD),e    ; Return to previous board pos
         LD      a,d             ; Get captured piece, if any
-        AND     a,8FH           ; Clear flags
+        AND     8FH             ; Clear flags
         LD      (ix+BOARD),a    ; Return to board
         BIT     6,d             ; Was it a double move ?
         JR      NZ,UM40         ; Yes - jump
         LD      a,d             ; Get captured piece, if any
-        AND     a,7             ; Clear flag bits
-        CP      a,QUEEN         ; Was it a Queen ?
+        AND     7               ; Clear flag bits
+        CP      QUEEN           ; Was it a Queen ?
         RET     NZ              ; No - return
         LD      hl,POSQ         ; Address of saved Queen pos
         BIT     7,d             ; Is Queen white ?
@@ -2034,8 +2034,8 @@ SR5:    LD      h,b
         LD      (hl),d          ; Store to link in list
         DEC     hl
         LD      (hl),e
-        XOR     a,a             ; End of list ?
-        CP      a,b
+        XOR     a               ; End of list ?
+        CP      b
         RET     Z               ; Yes - return
 SR10:   LD      (MLPTRJ),bc     ; Save list pointer
         CALL    EVAL            ; Evaluate move
@@ -2044,13 +2044,13 @@ SR10:   LD      (MLPTRJ),bc     ; Save list pointer
 SR15:   LD      e,(hl)          ; Next move for compare
         INC     hl
         LD      d,(hl)
-        XOR     a,a             ; At end of list ?
-        CP      a,d
+        XOR     a               ; At end of list ?
+        CP      d
         JR      Z,SR25          ; Yes - jump
         PUSH    de              ; Transfer move pointer
         POP     ix
         LD      a,(VALM)        ; Get new move value
-        CP      a,(ix+MLVAL)    ; Less than list value ?
+        CP      (ix+MLVAL)      ; Less than list value ?
         JR      NC,SR30         ; No - jump
 SR25:   LD      (hl),b          ; Link new move into list
         DEC     hl
@@ -2079,9 +2079,9 @@ SR30:   EX      de,hl           ; Swap pointers
 ;***********************************************************
 EVAL:   CALL    MOVE            ; Make move on the board array
         CALL    INCHK           ; Determine if move is legal
-        AND     a,a             ; Legal move ?
+        AND     a               ; Legal move ?
         JR      Z,EV5           ; Yes - jump
-        XOR     a,a             ; Score of zero
+        XOR     a               ; Score of zero
         LD      (VALM),a        ; For illegal move
         JP      EV10            ; Jump
 EV5:    CALL    PINFND          ; Compile pinned list
@@ -2108,9 +2108,9 @@ EV10:   CALL    UNMOVE          ; Restore board array
 ; ARGUMENTS:  --  None
 ;***********************************************************
 FNDMOV: LD      a,(MOVENO)      ; Current move number
-        CP      a,1             ; First move ?
+        CP      1               ; First move ?
         CALL    Z,BOOK          ; Yes - execute book opening
-        XOR     a,a             ; Initialize ply number to zero
+        XOR     a               ; Initialize ply number to zero
         LD      (NPLY),a
         LD      hl,0            ; Initialize best move to zero
         LD      (BESTM),hl
@@ -2125,7 +2125,7 @@ FNDMOV: LD      a,(MOVENO)      ; Current move number
         LD      a,(PLYMAX)      ; Get max ply number
         ADD     a,2             ; Add 2
         LD      b,a             ; Save as counter
-        XOR     a,a             ; Zero out score table
+        XOR     a               ; Zero out score table
 back05: LD      (hl),a
         INC     hl
         DJNZ    back05
@@ -2139,13 +2139,13 @@ back05: LD      (hl),a
         LD      (MV0),a         ; Save
 FM5:    LD      hl,NPLY         ; Address of ply counter
         INC     (hl)            ; Increment ply count
-        XOR     a,a             ; Initialize mate flag
+        XOR     a               ; Initialize mate flag
         LD      (MATEF),a
         CALL    GENMOV          ; Generate list of moves
         CALLBACK "after GENMOV()"
         LD      a,(NPLY)        ; Current ply counter
         LD      hl,PLYMAX       ; Address of maximum ply number
-        CP      a,(hl)          ; At max ply ?
+        CP      (hl)            ; At max ply ?
         CALL    C,SORTM         ; No - call sort
         LD      hl,(MLPTRI)     ; Load ply index pointer
         LD      (MLPTRJ),hl     ; Save as last move pointer
@@ -2154,7 +2154,7 @@ FM15:   LD      hl,(MLPTRJ)     ; Load last move pointer
         INC     hl
         LD      d,(hl)
         LD      a,d
-        AND     a,a             ; End of move list ?
+        AND     a               ; End of move list ?
         JR      Z,FM25          ; Yes - jump
         LD      (MLPTRJ),de     ; Save current move pointer
         LD      hl,(MLPTRI)     ; Save in ply pointer list
@@ -2163,32 +2163,32 @@ FM15:   LD      hl,(MLPTRJ)     ; Load last move pointer
         LD      (hl),d
         LD      a,(NPLY)        ; Current ply counter
         LD      hl,PLYMAX       ; Maximum ply number ?
-        CP      a,(hl)          ; Compare
+        CP      (hl)            ; Compare
         JR      C,FM18          ; Jump if not max
         CALL    MOVE            ; Execute move on board array
         CALL    INCHK           ; Check for legal move
-        AND     a,a             ; Is move legal
+        AND     a               ; Is move legal
         JR      Z,rel017        ; Yes - jump
         CALL    UNMOVE          ; Restore board position
         JP      FM15            ; Jump
 rel017: LD      a,(NPLY)        ; Get ply counter
         LD      hl,PLYMAX       ; Max ply number
-        CP      a,(hl)          ; Beyond max ply ?
+        CP      (hl)            ; Beyond max ply ?
         JR      NZ,FM35         ; Yes - jump
         LD      a,(COLOR)       ; Get current color
-        XOR     a,80H           ; Get opposite color
+        XOR     80H             ; Get opposite color
         CALL    INCHK1          ; Determine if King is in check
-        AND     a,a             ; In check ?
+        AND     a               ; In check ?
         JR      Z,FM35          ; No - jump
         JP      FM19            ; Jump (One more ply for check)
 FM18:   LD      ix,(MLPTRJ)     ; Load move pointer
         LD      a,(ix+MLVAL)    ; Get move score
-        AND     a,a             ; Is it zero (illegal move) ?
+        AND     a               ; Is it zero (illegal move) ?
         JR      Z,FM15          ; Yes - jump
         CALL    MOVE            ; Execute move on board array
 FM19:   LD      hl,COLOR        ; Toggle color
         LD      a,80H
-        XOR     a,(hl)
+        XOR     (hl)
         LD      (hl),a          ; Save new color
         BIT     7,a             ; Is it white ?
         JR      NZ,rel018       ; No - jump
@@ -2203,10 +2203,10 @@ rel018: LD      hl,(SCRIX)      ; Load score table pointer
         LD      (SCRIX),hl      ; Save it
         JP      FM5             ; Jump
 FM25:   LD      a,(MATEF)       ; Get mate flag
-        AND     a,a             ; Checkmate or stalemate ?
+        AND     a               ; Checkmate or stalemate ?
         JR      NZ,FM30         ; No - jump
         LD      a,(CKFLG)       ; Get check flag
-        AND     a,a             ; Was King in check ?
+        AND     a               ; Was King in check ?
         LD      a,80H           ; Pre-set stalemate score
         JR      Z,FM36          ; No - jump (stalemate)
         LD      a,(MOVENO)      ; Get move number
@@ -2214,7 +2214,7 @@ FM25:   LD      a,(MATEF)       ; Get mate flag
         LD      a,0FFH          ; Pre-set checkmate score
         JP      FM36            ; Jump
 FM30:   LD      a,(NPLY)        ; Get ply counter
-        CP      a,1             ; At top of tree ?
+        CP      1               ; At top of tree ?
         RET     Z               ; Yes - return
         CALL    ASCEND          ; Ascend one ply in tree
         LD      hl,(SCRIX)      ; Load score table pointer
@@ -2232,24 +2232,24 @@ FM36:   LD      hl,MATEF        ; Set mate flag
         SET     0,(hl)
         LD      hl,(SCRIX)      ; Load score table pointer
 FM37:   CALLBACK "Alpha beta cutoff?"
-        CP      a,(hl)          ; Compare to score 2 ply above
+        CP      (hl)            ; Compare to score 2 ply above
         JR      C,FM40          ; Jump if less
         JR      Z,FM40          ; Jump if equal
         NEG                     ; Negate score
         INC     hl              ; Incr score table pointer
-        CP      a,(hl)          ; Compare to score 1 ply above
+        CP      (hl)            ; Compare to score 1 ply above
         CALLBACK "No. Best move?"
         JP      C,FM15          ; Jump if less than
         JP      Z,FM15          ; Jump if equal
         LD      (hl),a          ; Save as new score 1 ply above
         CALLBACK "Yes! Best move"
         LD      a,(NPLY)        ; Get current ply counter
-        CP      a,1             ; At top of tree ?
+        CP      1               ; At top of tree ?
         JP      NZ,FM15         ; No - jump
         LD      hl,(MLPTRJ)     ; Load current move pointer
         LD      (BESTM),hl      ; Save as best move pointer
         LD      a,(SCORE+1)     ; Get best move score
-        CP      a,0FFH          ; Was it a checkmate ?
+        CP      0FFH            ; Was it a checkmate ?
         JP      NZ,FM15         ; No - jump
         LD      hl,PLYMAX       ; Get maximum ply number
         DEC     (hl)            ; Subtract 2
@@ -2277,7 +2277,7 @@ FM40:   CALL    ASCEND          ; Ascend one ply in tree
 ;***********************************************************
 ASCEND: LD      hl,COLOR        ; Toggle color
         LD      a,80H
-        XOR     a,(hl)
+        XOR     (hl)
         LD      (hl),a          ; Save new color
         BIT     7,a             ; Is it white ?
         JR      Z,rel019        ; Yes - jump
@@ -2322,7 +2322,7 @@ BOOK:   POP     af              ; Abort return to FNDMOV
         LD      (BESTM),hl
         LD      hl,BESTM        ; Initialize address of pointer
         LD      a,(KOLOR)       ; Get computer's color
-        AND     a,a             ; Is it white ?
+        AND     a               ; Is it white ?
         JR      NZ,BM5          ; No - jump
         LD      a,r             ; Load refresh reg (random no)
         CALLBACK "LDAR"
@@ -2340,15 +2340,15 @@ BM5:    INC     (hl)            ; Increment to black moves
         INC     (hl)
         LD      ix,(MLPTRJ)     ; Pointer to opponents 1st move
         LD      a,(ix+MLFRP)    ; Get "from" position
-        CP      a,22            ; Is it a Queen Knight move ?
+        CP      22              ; Is it a Queen Knight move ?
         JR      Z,BM9           ; Yes - Jump
-        CP      a,27            ; Is it a King Knight move ?
+        CP      27              ; Is it a King Knight move ?
         JR      Z,BM9           ; Yes - jump
-        CP      a,34            ; Is it a Queen Pawn ?
+        CP      34              ; Is it a Queen Pawn ?
         JR      Z,BM9           ; Yes - jump
         RET     C               ; If Queen side Pawn opening -
                                 ; return (P-K4)
-        CP      a,35            ; Is it a King Pawn ?
+        CP      35              ; Is it a King Pawn ?
         RET     Z               ; Yes - return (P-K4)
 BM9:    INC     (hl)            ; (P-Q4)
         INC     (hl)
@@ -2535,9 +2535,9 @@ DRIVER: LD      sp,STACK        ; Set stack pointer
         PRTLIN  GRTTNG,34       ; Output greeting
 DRIV01: CALL    CHARTR          ; Accept answer
         CARRET                  ; New line
-        CP      a,59H           ; Is it a 'Y' ?
+        CP      59H             ; Is it a 'Y' ?
         JP      NZ,ANALYS       ; Yes - jump
-        SUB     a,a             ; Code of White is zero
+        SUB     a               ; Code of White is zero
         LD      (COLOR),a       ; White always moves first
         CALL    INTERR          ; Players color/search depth
         CALL    INITBD          ; Initialize board array
@@ -2555,10 +2555,10 @@ DRIV01: CALL    CHARTR          ; Accept answer
         PRTLIN  TITLE3,15
 DRIV04: PRTBLK  MVENUM,3        ; Display move number
         LD      a,(KOLOR)       ; Bring in computer's color
-        AND     a,a             ; Is it white ?
+        AND     a               ; Is it white ?
         JR      NZ,DR08         ; No - jump
         CALL    PGIFND          ; New page if needed
-        CP      a,1             ; Was page turned ?
+        CP      1               ; Was page turned ?
         CALL    Z,TBCPCL        ; Yes - Tab to computers column
         CALL    CPTRMV          ; Make and write computers move
         PRTBLK  SPACE,1         ; Output a space
@@ -2568,27 +2568,27 @@ DRIV04: PRTBLK  MVENUM,3        ; Display move number
 DR08:   CALL    PLYRMV          ; Accept and make players move
         PRTBLK  SPACE,1         ; Output a space
         CALL    PGIFND          ; New page if needed
-        CP      a,1             ; Was page turned ?
+        CP      1               ; Was page turned ?
         CALL    Z,TBCPCL        ; Yes - Tab to computers column
         CALL    CPTRMV          ; Make and write computers move
         CARRET                  ; New line
 DR0C:   LD      hl,MVENUM+2     ; Addr of 3rd char of move
         LD      a,20H           ; Ascii space
-        CP      a,(hl)          ; Is char a space ?
+        CP      (hl)            ; Is char a space ?
         LD      a,3AH           ; Set up test value
         JR      Z,DR10          ; Yes - jump
         INC     (hl)            ; Increment value
-        CP      a,(hl)          ; Over Ascii 9 ?
+        CP      (hl)            ; Over Ascii 9 ?
         JR      NZ,DR14         ; No - jump
         LD      (hl),30H        ; Set char to zero
 DR10:   DEC     hl              ; 2nd char of Ascii move no.
         INC     (hl)            ; Increment value
-        CP      a,(hl)          ; Over Ascii 9 ?
+        CP      (hl)            ; Over Ascii 9 ?
         JR      NZ,DR14         ; No - jump
         LD      (hl),30H        ; Set char to zero
         DEC     hl              ; 1st char of Ascii move no.
         INC     (hl)            ; Increment value
-        CP      a,(hl)          ; Over Ascii 9 ?
+        CP      (hl)            ; Over Ascii 9 ?
         JR      NZ,DR14         ; No - jump
         LD      (hl),31H        ; Make 1st char a one
         LD      a,30H           ; Make 3rd char a zero
@@ -2615,9 +2615,9 @@ DR14:   LD      hl,MOVENO       ; Hexadecimal move number
 INTERR: PRTLIN  CLRMSG,41       ; Request color choice
         CALL    CHARTR          ; Accept response
         CARRET                  ; New line
-        CP      a,57H           ; Did player request white ?
+        CP      57H             ; Did player request white ?
         JR      Z,IN04          ; Yes - branch
-        SUB     a,a             ; Set computers color to white
+        SUB     a               ; Set computers color to white
         LD      (KOLOR),a
         LD      hl,TITLE1       ; Prepare move list titles
         LD      de,TITLE4+2
@@ -2643,11 +2643,11 @@ IN08:   PRTLIN  PLYDEP,23       ; Request depth of search
         CARRET                  ; New line
         LD      hl,PLYMAX       ; Address of ply depth variabl
         LD      (hl),2          ; Default depth of search
-        CP      a,31H           ; Under minimum of 1 ?
+        CP      31H             ; Under minimum of 1 ?
         RET     M               ; Yes - return
-        CP      a,37H           ; Over maximum of 6 ?
+        CP      37H             ; Over maximum of 6 ?
         RET     P               ; Yes - return
-        SUB     a,30H           ; Subtract Ascii constant
+        SUB     30H             ; Subtract Ascii constant
         LD      (hl),a          ; Set desired depth
         RET                     ; Return
         .ENDIF
@@ -2678,7 +2678,7 @@ CPTRMV: CALL    FNDMOV          ; Select best move
         LD      hl,(BESTM)      ; Move list pointer variable
         LD      (MLPTRJ),hl     ; Pointer to move data
         LD      a,(SCORE+1)     ; To check for mates
-        CP      a,1             ; Mate against computer ?
+        CP      1               ; Mate against computer ?
         JR      NZ,CP0C         ; No - jump
         LD      c,1             ; Computer mate flag
         CALL    FCDMAT          ; Full checkmate ?
@@ -2686,7 +2686,7 @@ CP0C:   CALL    MOVE            ; Produce move on board array
         CALL    EXECMV          ; Make move on graphics board
                                 ; and return info about it
         LD      a,b             ; Special move flags
-        AND     a,a             ; Special ?
+        AND     a               ; Special ?
         JR      NZ,CP10         ; Yes - jump
         LD      d,e             ; "To" position of the move
         CALL    BITASN          ; Convert to Ascii
@@ -2707,22 +2707,22 @@ rel020: BIT     2,b             ; Queen side castle ?
 rel021: PRTBLK  P_PEP,5         ; Output "PxPep" - En passant
 CP1C:   LD      a,(COLOR)       ; Should computer call check ?
         LD      b,a
-        XOR     a,80H           ; Toggle color
+        XOR     80H             ; Toggle color
         LD      (COLOR),a
         CALL    INCHK           ; Check for check
-        AND     a,a             ; Is enemy in check ?
+        AND     a               ; Is enemy in check ?
         LD      a,b             ; Restore color
         LD      (COLOR),a
         JR      Z,CP24          ; No - return
         CARRET                  ; New line
         LD      a,(SCORE+1)     ; Check for player mated
-        CP      a,0FFH          ; Forced mate ?
+        CP      0FFH            ; Forced mate ?
         CALL    NZ,TBCPMV       ; No - Tab to computer column
         PRTBLK  CKMSG,5         ; Output "check"
         LD      hl,LINECT       ; Address of screen line count
         INC     (hl)            ; Increment for message
 CP24:   LD      a,(SCORE+1)     ; Check again for mates
-        CP      a,0FFH          ; Player mated ?
+        CP      0FFH            ; Player mated ?
         RET     NZ              ; No - return
         LD      c,0             ; Set player mate flag
         CALL    FCDMAT          ; Full checkmate ?
@@ -2752,8 +2752,8 @@ CP24:   LD      a,(SCORE+1)     ; Check again for mates
 FCDMAT: LD      a,(MOVENO)      ; Current move number
         LD      b,a             ; Save
         LD      a,(PMATE)       ; Move number where mate occurs
-        SUB     a,b             ; Number of moves till mate
-        AND     a,a             ; Checkmate ?
+        SUB     b               ; Number of moves till mate
+        AND     a               ; Checkmate ?
         JR      NZ,FM0C         ; No - jump
         BIT     0,c             ; Check flag for who is mated
         JR      Z,FM04          ; Jump if player
@@ -2797,7 +2797,7 @@ FM0C:   BIT     0,c             ; Who has forced mate ?
 ;***********************************************************
 TBPLCL: PRTBLK  MVENUM,3        ; Reproduce move number
         LD      a,(KOLOR)       ; Computers color
-        AND     a,a             ; Is computer white ?
+        AND     a               ; Is computer white ?
         RET     NZ              ; No - return
         PRTBLK  SPACE,6         ; Tab to next column
         RET                     ; Return
@@ -2821,7 +2821,7 @@ TBPLCL: PRTBLK  MVENUM,3        ; Reproduce move number
 ;***********************************************************
 TBCPCL: PRTBLK  MVENUM,3        ; Reproduce move number
         LD      a,(KOLOR)       ; Computer's color
-        AND     a,a             ; Is computer white ?
+        AND     a               ; Is computer white ?
         RET     Z               ; Yes - return
         PRTBLK  SPACE,6         ; Tab to next column
         RET                     ; Return
@@ -2836,7 +2836,7 @@ TBCPCL: PRTBLK  MVENUM,3        ; Reproduce move number
 ;***********************************************************
 TBPLMV: PRTBLK  SPACE,3
         LD      a,(KOLOR)
-        AND     a,a
+        AND     a
         RET     NZ
         PRTBLK  SPACE,6
         RET
@@ -2851,7 +2851,7 @@ TBPLMV: PRTBLK  SPACE,3
 ;***********************************************************
 TBCPMV: PRTBLK  SPACE,3
         LD      a,(KOLOR)
-        AND     a,a
+        AND     a
         RET     Z
         PRTBLK  SPACE,6
         RET
@@ -2872,7 +2872,7 @@ TBCPMV: PRTBLK  SPACE,3
 ;                 Ascii square name is output in register
 ;                 pair HL.
 ;***********************************************************
-BITASN: SUB     a,a             ; Get ready for division
+BITASN: SUB     a               ; Get ready for division
         LD      e,10
         CALL    DIVIDE          ; Divide
         DEC     d               ; Get rank on 1-8 basis
@@ -2904,13 +2904,13 @@ BITASN: SUB     a,a             ; Get ready for division
 ; ARGUMENTS:  --  None
 ;***********************************************************
 PLYRMV: CALL    CHARTR          ; Accept "from" file letter
-        CP      a,12H           ; Is it instead a Control-R ?
+        CP      12H             ; Is it instead a Control-R ?
         JP      Z,FM09          ; Yes - jump
         LD      h,a             ; Save
         CALL    CHARTR          ; Accept "from" rank number
         LD      l,a             ; Save
         CALL    ASNTBI          ; Convert to a board index
-        SUB     a,b             ; Gives board index, if valid
+        SUB     b               ; Gives board index, if valid
         JR      Z,PL08          ; Jump if invalid
         LD      (MVEMSG),a      ; Move list "from" position
         CALL    CHARTR          ; Accept separator & ignore it
@@ -2919,11 +2919,11 @@ PLYRMV: CALL    CHARTR          ; Accept "from" file letter
         CALL    CHARTR
         LD      l,a
         CALL    ASNTBI
-        SUB     a,b
+        SUB     b
         JR      Z,PL08
         LD      (MVEMSG+1),a    ; Move list "to" position
         CALL    VALMOV          ; Determines if a legal move
-        AND     a,a             ; Legal ?
+        AND     a               ; Legal ?
         JP      NZ,PL08         ; No - jump
         CALL    EXECMV          ; Make move on graphics board
         RET                     ; Return
@@ -2956,20 +2956,20 @@ PL08:   LD      hl,LINECT       ; Address of screen line count
 ;                 A if invalid.
 ;***********************************************************
 ASNTBI: LD      a,l             ; Ascii rank (1 - 8)
-        SUB     a,30H           ; Rank 1 - 8
-        CP      a,1             ; Check lower bound
+        SUB     30H             ; Rank 1 - 8
+        CP      1               ; Check lower bound
         JP      M,AT04          ; Jump if invalid
-        CP      a,9             ; Check upper bound
+        CP      9               ; Check upper bound
         JR      NC,AT04         ; Jump if invalid
         INC     a               ; Rank 2 - 9
         LD      d,a             ; Ready for multiplication
         LD      e,10
         CALL    MLTPLY          ; Multiply
         LD      a,h             ; Ascii file letter (a - h)
-        SUB     a,40H           ; File 1 - 8
-        CP      a,1             ; Check lower bound
+        SUB     40H             ; File 1 - 8
+        CP      1               ; Check lower bound
         JP      M,AT04          ; Jump if invalid
-        CP      a,9             ; Check upper bound
+        CP      9               ; Check upper bound
         JR      NC,AT04         ; Jump if invalid
         ADD     a,d             ; File+Rank(20-90)=Board index
         LD      b,0             ; Ok flag
@@ -2995,7 +2995,7 @@ AT04:   LD      b,a             ; Invalid flag
 VALMOV: LD      hl,(MLPTRJ)     ; Save last move pointer
         PUSH    hl              ; Save register
         LD      a,(KOLOR)       ; Computers color
-        XOR     a,80H           ; Toggle color
+        XOR     80H             ; Toggle color
         LD      (COLOR),a       ; Store
         LD      hl,PLYIX-2      ; Load move list index
         LD      (MLPTRI),hl
@@ -3004,15 +3004,15 @@ VALMOV: LD      hl,(MLPTRJ)     ; Save last move pointer
         CALL    GENMOV          ; Generate opponents moves
         LD      ix,MLIST+1024   ; Index to start of moves
 VA5:    LD      a,(MVEMSG)      ; "From" position
-        CP      a,(ix+MLFRP)    ; Is it in list ?
+        CP      (ix+MLFRP)      ; Is it in list ?
         JR      NZ,VA6          ; No - jump
         LD      a,(MVEMSG+1)    ; "To" position
-        CP      a,(ix+MLTOP)    ; Is it in list ?
+        CP      (ix+MLTOP)      ; Is it in list ?
         JR      Z,VA7           ; Yes - jump
 VA6:    LD      e,(ix+MLPTR)    ; Pointer to next list move
         LD      d,(ix+MLPTR+1)
-        XOR     a,a             ; At end of list ?
-        CP      a,d
+        XOR     a               ; At end of list ?
+        CP      d
         JR      Z,VA10          ; Yes - jump
         PUSH    de              ; Move to X register
         POP     ix
@@ -3020,7 +3020,7 @@ VA6:    LD      e,(ix+MLPTR)    ; Pointer to next list move
 VA7:    LD      (MLPTRJ),ix     ; Save opponents move pointer
         CALL    MOVE            ; Make move on board array
         CALL    INCHK           ; Was it a legal move ?
-        AND     a,a
+        AND     a
         JR      NZ,VA9          ; No - jump
 VA8:    POP     hl              ; Restore saved register
         RET                     ; Return
@@ -3058,20 +3058,20 @@ VA10:   LD      a,1             ; Set flag for invalid move
 ;***********************************************************
 CHARTR: RST     38h             ; Jove monitor single char inpt
         DB      81H,0
-        CP      a,0DH           ; Carriage return ?
+        CP      0DH             ; Carriage return ?
         RET     Z               ; Yes - return
-        CP      a,0AH           ; Line feed ?
+        CP      0AH             ; Line feed ?
         RET     Z               ; Yes - return
-        CP      a,08H           ; Backspace ?
+        CP      08H             ; Backspace ?
         RET     Z               ; Yes - return
         RST     38h             ; Jove monitor single char echo
         DB      81H,1AH
-        AND     a,7FH           ; Mask off parity bit
-        CP      a,7BH           ; Upper range check (z+l)
+        AND     7FH             ; Mask off parity bit
+        CP      7BH             ; Upper range check (z+l)
         RET     P               ; No need to fold - return
-        CP      a,61H           ; Lower-range check (a)
+        CP      61H             ; Lower-range check (a)
         RET     M               ; No need to fold - return
-        SUB     a,20H           ; Change to one of A-Z
+        SUB     20H             ; Change to one of A-Z
         RET                     ; Return
 
 ;***********************************************************
@@ -3092,7 +3092,7 @@ CHARTR: RST     38h             ; Jove monitor single char inpt
 PGIFND: LD      hl,LINECT       ; Addr of page position counter
         INC     (hl)            ; Increment
         LD      a,1BH           ; Page bottom ?
-        CP      a,(hl)
+        CP      (hl)
         RET     NC              ; No - return
         CALL    DSPBRD          ; Put up new page
         PRTLIN  TITLE4,15       ; Re-print titles
@@ -3116,7 +3116,7 @@ PGIFND: LD      hl,LINECT       ; Addr of page position counter
 ; ARGUMENTS:  --  None
 ;***********************************************************
 MATED:  LD      a,(KOLOR)       ; Computers color
-        AND     a,a             ; Is computer white ?
+        AND     a               ; Is computer white ?
         JR      Z,rel23         ; Yes - skip
         LD      c,2             ; Set black piece flag
         LD      a,(POSK+1)      ; Position of black King
@@ -3196,7 +3196,7 @@ MA0C:   LD      b,10            ; Blink again
 ANALYS: PRTLIN  ANAMSG,37       ; "CARE TO ANALYSE A POSITION?"
         CALL    CHARTR          ; Accept answer
         CARRET                  ; New line
-        CP      a,4EH           ; Is answer a "N" ?
+        CP      4EH             ; Is answer a "N" ?
         JR      NZ,AN04         ; No - jump
         EXIT                    ; Return to monitor
 AN04:   CALL    DSPBRD          ; Current board position
@@ -3207,16 +3207,16 @@ AN08:   LD      (ANBDPS),a      ; Save
         LD      (M1),a          ; Set up board index
         LD      ix,(M1)
         LD      a,(ix+BOARD)    ; Get board contents
-        CP      a,0FFH          ; Border square ?
+        CP      0FFH            ; Border square ?
         JR      Z,AN19          ; Yes - jump
         LD      b,4H            ; Ready to blink square
         CALL    BLNKER          ; Blink
         CALL    CHARTR          ; Accept input
-        CP      a,1BH           ; Is it an escape ?
+        CP      1BH             ; Is it an escape ?
         JR      Z,AN1B          ; Yes - jump
-        CP      a,08H           ; Is it a backspace ?
+        CP      08H             ; Is it a backspace ?
         JR      Z,AN1A          ; Yes - jump
-        CP      a,0DH           ; Is it a carriage return ?
+        CP      0DH             ; Is it a carriage return ?
         JR      Z,AN19          ; Yes - jump
         LD      bc,7            ; Number of types of pieces + 1
         LD      hl,PCS          ; Address of piece symbol table
@@ -3224,30 +3224,30 @@ AN08:   LD      (ANBDPS),a      ; Save
         JR      NZ,AN18         ; Jump if not found
         CALL    CHARTR          ; Accept and ignore separator
         CALL    CHARTR          ; Color of piece
-        CP      a,42H           ; Is it black ?
+        CP      42H             ; Is it black ?
         JR      NZ,rel022       ; No - skip
         SET     7,c             ; Black piece indicator
 rel022: CALL    CHARTR          ; Accept and ignore separator
         CALL    CHARTR          ; Moved flag
-        CP      a,31H           ; Has piece moved ?
+        CP      31H             ; Has piece moved ?
         JR      NZ,AN18         ; No - jump
         SET     3,c             ; Set moved indicator
 AN18:   LD      (ix+BOARD),c    ; Insert piece into board array
         CALL    DSPBRD          ; Update graphics board
 AN19:   LD      a,(ANBDPS)      ; Current board position
         INC     a               ; Next
-        CP      a,99            ; Done ?
+        CP      99              ; Done ?
         JR      NZ,AN08         ; No - jump
         JR      AN04            ; Jump
 AN1A:   LD      a,(ANBDPS)      ; Prepare to go back a square
-        SUB     a,3             ; To get around border
-        CP      a,20            ; Off the other end ?
+        SUB     3               ; To get around border
+        CP      20              ; Off the other end ?
         JP      NC,AN08         ; No - jump
         LD      a,98            ; Wrap around to top of screen
 AN0B:   JP      AN08            ; Jump
 AN1B:   PRTLIN  CRTNES,14       ; Ask if correct
         CALL    CHARTR          ; Accept answer
-        CP      a,4EH           ; Is it "N" ?
+        CP      4EH             ; Is it "N" ?
         JP      Z,AN04          ; No - jump
         CALL    ROYALT          ; Update positions of royalty
         CLRSCR                  ; Blank screen
@@ -3257,12 +3257,12 @@ AN1C:   PRTLIN  WSMOVE,17       ; Ask whose move it is
         CALL    DSPBRD          ; Display graphics board
         PRTLIN  TITLE4,15       ; Put up titles
         PRTLIN  TITLE3,15
-        CP      a,57H           ; Is is whites move ?
+        CP      57H             ; Is is whites move ?
         JP      Z,DRIV04        ; Yes - jump
         PRTBLK  MVENUM,3        ; Print move number
         PRTBLK  SPACE,6         ; Tab to blacks column
         LD      a,(KOLOR)       ; Computer's color
-        AND     a,a             ; Is computer white ?
+        AND     a               ; Is computer white ?
         JR      NZ,AN20         ; No - jump
         CALL    PLYRMV          ; Get players move
         CARRET                  ; New line
@@ -3298,10 +3298,10 @@ RY04:   LD      (M1),a          ; Set up board index
         BIT     7,a             ; Test color bit
         JR      Z,rel023        ; Jump if white
         INC     hl              ; Offset for black
-rel023: AND     a,7             ; Delete flags, leave piece
-        CP      a,KING          ; King ?
+rel023: AND     7               ; Delete flags, leave piece
+        CP      KING            ; King ?
         JR      Z,RY08          ; Yes - jump
-        CP      a,QUEEN         ; Queen ?
+        CP      QUEEN           ; Queen ?
         JR      NZ,RY0C         ; No - jump
         INC     hl              ; Queen position
         INC     hl              ; Plus offset
@@ -3309,7 +3309,7 @@ RY08:   LD      a,(M1)          ; Index
         LD      (hl),a          ; Save
 RY0C:   LD      a,(M1)          ; Current position
         INC     a               ; Next position
-        CP      a,99            ; Done.?
+        CP      99              ; Done.?
         JR      NZ,RY04         ; No - jump
         RET                     ; Return
 
@@ -3378,7 +3378,7 @@ BSET04: LD      (BRDPOS),a      ; Ready parameter
         CALL    CONVRT          ; Norm addr into HL register
         CALL    INSPCE          ; Insert that piece onto board
         INC     a               ; Next square
-        CP      a,99            ; Done ?
+        CP      99              ; Done ?
         JR      C,BSET04        ; No - jump
         POP     af              ; Restore registers
         POP     hl
@@ -3411,15 +3411,15 @@ INSPCE: PUSH    hl              ; Save registers
         LD      (M1),a          ; Save
         LD      ix,(M1)         ; Index into board array
         LD      a,(ix+BOARD)    ; Contents of board array
-        AND     a,a             ; Is square empty ?
+        AND     a               ; Is square empty ?
         JR      Z,IP2C          ; Yes - jump
-        CP      a,0FFH          ; Is it a border square ?
+        CP      0FFH            ; Is it a border square ?
         JR      Z,IP2C          ; Yes - jump
         LD      c,0             ; Clear flag register
         BIT     7,a             ; Is piece white ?
         JR      Z,IP04          ; Yes - jump
         LD      c,2             ; Set black piece flag
-IP04:   AND     a,7             ; Delete flags, leave piece
+IP04:   AND     7               ; Delete flags, leave piece
         DEC     a               ; Piece on a 0 - 5 basis
         LD      e,a             ; Save
         LD      d,16            ; Multiplier
@@ -3437,7 +3437,7 @@ IP0C:   LD      b,4             ; Block counter
 IP10:   LD      a,(ix+BLOCK)    ; Bring in source block
         BIT     0,c             ; Should it be complemented ?
         JR      Z,IP14          ; No - jump
-        XOR     a,3FH           ; Graphics complement
+        XOR     3FH             ; Graphics complement
 IP14:   LD      (hl),a          ; Store block
         INC     l               ; Next block
         INC     ix              ; Next source block
@@ -3469,7 +3469,7 @@ IP20:   LD      b,3             ; Block counter
 IP24:   LD      a,(ix+KERNEL)   ; Kernel block
         BIT     1,c             ; Need to complement ?
         JR      NZ,IP28         ; No - jump
-        XOR     a,3FH           ; Graphics complement
+        XOR     3FH             ; Graphics complement
 IP28:   LD      (hl),a          ; Store block
         INC     l               ; Next target block
         INC     ix              ; Next source block
@@ -3509,7 +3509,7 @@ CONVRT: PUSH    bc              ; Save registers
         PUSH    af
         LD      a,(BRDPOS)      ; Get board index
         LD      d,a             ; Set up dividend
-        SUB     a,a
+        SUB     a
         LD      e,10            ; Divisor
         CALL    DIVIDE          ; Index into rank and file
                                 ; file (1-8) & rank (2-9)
@@ -3523,7 +3523,7 @@ CONVRT: PUSH    bc              ; Save registers
         ADD     a,10H           ; File norm address
         LD      l,a             ; Low order address byte
         LD      a,8             ; Rank adjust
-        SUB     a,c             ; Rank displacement
+        SUB     c               ; Rank displacement
         ADD     a,0C0H          ; Rank Norm address
         LD      h,a             ; High order addres byte
         POP     af              ; Restore registers
@@ -3541,7 +3541,7 @@ DIVIDE: PUSH    bc
         LD      b,8
 DD04:   SLA     d
         RLA
-        SUB     a,e
+        SUB     e
         JP      M,rel027
         INC     d
         JR      rel024
@@ -3556,7 +3556,7 @@ rel024: DJNZ    DD04
 ;   output hi=A lo=D
 ;***********************************************************
 MLTPLY: PUSH    bc
-        SUB     a,a
+        SUB     a
         LD      b,8
 ML04:   BIT     0,d
         JR      Z,rel025
@@ -3596,12 +3596,12 @@ BLNKER: PUSH    af              ; Save registers
 BL04:   LD      d,0             ; Bar counter
 BL08:   LD      c,0             ; Block counter
 BL0C:   LD      a,(hl)          ; Fetch block
-        XOR     a,3FH           ; Graphics complement
+        XOR     3FH             ; Graphics complement
         LD      (hl),a          ; Replace block
         INC     l               ; Next block address
         INC     c               ; Increment block counter
         LD      a,c
-        CP      a,6             ; Done ?
+        CP      6               ; Done ?
         JR      NZ,BL0C         ; No - jump
         LD      a,l             ; Address
         ADD     a,3AH           ; Adjust square position
@@ -3660,15 +3660,15 @@ EXECMV: PUSH    ix              ; Save registers
         LD      c,(ix+MLFRP)    ; Second "from" position
         LD      e,(ix+MLTOP)    ; Second "to" position
         LD      a,e             ; Get "to" position
-        CP      a,c             ; Same as "from" position ?
+        CP      c               ; Same as "from" position ?
         JR      NZ,EX04         ; No - jump
         INC     b               ; Set en passant flag
         JR      EX10            ; Jump
-EX04:   CP      a,1AH           ; White O-O ?
+EX04:   CP      1AH             ; White O-O ?
         JR      NZ,EX08         ; No - jump
         SET     1,b             ; Set O-O flag
         JR      EX10            ; Jump
-EX08:   CP      a,60H           ; Black 0-0 ?
+EX08:   CP      60H             ; Black 0-0 ?
         JR      NZ,EX0C         ; No - jump
         SET     1,b             ; Set 0-0 flag
         JR      EX10            ; Jump

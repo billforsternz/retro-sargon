@@ -1046,6 +1046,7 @@ enum ParameterPattern
     dst_src,
     dst_src_8_more,
     dst_src_16,
+    parm_8,
     parm_8_more,
     parm_16,
     jnx_around_addr,
@@ -1468,6 +1469,32 @@ bool translate_x86( const std::string &line, const std::string &instruction, con
                     }
                     break;
                 }
+                case parm_8:
+                {
+                    std::string parm = parameters[0];
+                    std::string out;
+                    AddressMode gt;
+                    bool match=false;
+                    if( is_reg8_mem8(parm,out) )
+                    {
+                        x86_out = util::sprintf( format, out.c_str() );
+                        match = true;
+                    }
+                    else if( is_generic(parm,out,gt) )
+                    {
+                        if( gt == am_imm )
+                        {
+                            x86_out = util::sprintf( format, out.c_str() );
+                            match = true;
+                        }
+                    }
+                    if( !match )
+                    {
+                        printf( "Error: Illegal parameter %s, line=[%s]\n", parm.c_str(), line.c_str() );
+                        return false;
+                    }
+                    break;
+                }
                 case parm_16:
                 {
                     std::string parm = parameters[0];
@@ -1658,30 +1685,66 @@ void translate_init( bool relax )
     //
     // Arithmetic and logic
     //
+ /*
+            8080     Z80     x86
+    ADD     8+16     8+16    8+16
+    ADC     8        8+16    8+16
+    SBC     8        8+16    8+16
+    SUB     8        8       8+16
+    CMP     8        8       8+16
+    AND     8        8       8+16
+    OR      8        8       8+16
+    XOR     8        8       8+16
 
+    CMP is SUB with the result discarded but the flags kept
+    The only 16 bit operation in this group on the 8080 was ADD (DAD in 8080 speak, add reg16 to HL)
+    Z80 broadened DAD to work on IX and IY as well, and added ADC and SBC versions too
+    8080 DAD had quirky flag rules, in particular it did not affect the Z,P,S flags
+    Z80 kept compatibility with that (of course), but the new ADC and SBC 16 don't have quirky flag rules
+    Throughout the 1.00 and 1.01 development I thought that DAD was quirky in a different way, I
+     thought it was like 16 bit INC and DEC and preserved all flags, not just Z,P,S. Not so, but fortunately
+     not a problem in Sargon, where either approach implemented here, relaxed or all flags preserved
+     works fine because Sargon doesn't care about flags after any DAD. For that reason so far I have
+     been lazy and not fixed the Z80->x86 translation of DAD (the fix would be that it preserves Z,P,S only)
+    Since SUB, CMP, AND, OR and XOR all operate on register A only in 8080 and Z80, the Z80 assembler
+    decided to omit the A parameter. So eg SUB [hl] not SUB a,[hl]. I didn't realise that until I saw
+    Hans W Kramer's work, where he was using a stricter assembler than me. I am changing over to the
+    correct form for V1.02 (even though I think it was a mistake - they should have the A, in there:)
+
+  */
     // ADD dst,src      -> ADD dst,src
     define_opcode( "ADD", { "ADD\t%s,%s", 2, dst_src_8_more } );
+
+    // 8080 DAD 16 bit add instruction doesn't effect most flags, Z80 retains this for compatibility
     if( relax )
         define_opcode( "ADD", { "ADD\t%s,%s", 2, dst_src_16 } );
     else
         define_opcode( "ADD", { "LAHF\n\tADD\t%s,%s\n\tSAHF", 2, dst_src_16 } );
 
-    // AND a,imm8      -> AND dst,src
-    define_opcode( "AND", { "AND\t%s,%s", 2, dst_src } );
+    // ADC dst,src      -> ADC dst,src
+    define_opcode( "ADC", { "ADC\t%s,%s", 2, dst_src_8_more } );
+    // 8080 doesn't have 16 bit adc or sbc instruction, so Z80 effects flags
+    define_opcode( "ADC", { "ADC\t%s,%s", 2, dst_src_16 } );
 
-    // SUB dst,src      -> SUB dst,src
-    define_opcode( "SUB", { "SUB\t%s,%s", 2, dst_src_8_more } );
-    if( relax )
-        define_opcode( "SUB", { "SUB\t%s,%s", 2, dst_src_16 } );
-    else
-        define_opcode( "SUB", { "LAHF\n\tSUB\t%s,%s\n\tSAHF", 2, dst_src_16 } );
+    // SBC
+    define_opcode( "SBC", { "SBB\t%s,%s", 2, dst_src_8_more } );
     define_opcode( "SBC", { "SBB\t%s,%s", 2, dst_src_16 } );
 
-    // XOR dst,src      -> XOR dst,src
-    define_opcode( "XOR", { "XOR\t%s,%s", 2, dst_src } );
+    // SUB parm      -> SUB al,parm
+    // Neither 8080 or Z80 has a 16 bit SUB, so no need for A parameter
+    define_opcode( "SUB", { "SUB\tal,%s", 1, parm_8 } );
 
-    // CP dst,src      -> CMP src,dst
-    define_opcode( "CP", { "CMP\t%s,%s", 2, dst_src } );
+    // CP parm      -> CMP al,parm
+    define_opcode( "CP", { "CMP\tal,%s", 1, parm_8 } );
+
+    // XOR parm      -> XOR al,parm
+    define_opcode( "XOR", { "XOR\tal,%s", 1, parm_8 } );
+
+    // AND parm      -> AND al,parm
+    define_opcode( "AND", { "AND\tal,%s", 1, parm_8 } );
+
+    // OR parm      -> OR al,parm
+    define_opcode( "OR", { "OR\tal,%s", 1, parm_8 } );
 
     // DEC parm      -> DEC parm
     define_opcode( "DEC", { "DEC\t%s", 1, parm_8_more } );

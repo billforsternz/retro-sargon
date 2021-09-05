@@ -1002,28 +1002,34 @@ void translate_init()
     xlat["ADI"] = { "ADD\tal,%s", "ADD\ta,%s", "ADD\tal,%s", imm8 };
 
     // ANA reg8_mem8 -> AND al,reg8_mem8
-    xlat["ANA"] = { "AND\tal,%s", "AND\ta,%s", "AND\tal,%s", reg8_mem8 };
+    xlat["ANA"] = { "AND\tal,%s", "AND\t%s", "AND\tal,%s", reg8_mem8 };
 
     // ANI imm8 -> AND al,imm8
-    xlat["ANI"] = { "AND\tal,%s", "AND\ta,%s", "AND\tal,%s", imm8 };
+    xlat["ANI"] = { "AND\tal,%s", "AND\t%s", "AND\tal,%s", imm8 };
+
+    // ORA reg8_mem8 -> OR al,reg8_mem8
+    xlat["ORA"] = { "OR\tal,%s", "OR\t%s", "OR\tal,%s", reg8_mem8 };
+
+    // ORI imm8 -> OR al,imm8
+    xlat["ORI"] = { "OR\tal,%s", "OR\t%s", "OR\tal,%s", imm8 };
 
     // SUB reg8_mem8 -> SUB al,reg8_mem8
-    xlat["SUB"] = { "SUB\tal,%s",  "SUB\ta,%s", "SUB\tal,%s", reg8_mem8 };
+    xlat["SUB"] = { "SUB\tal,%s",  "SUB\t%s", "SUB\tal,%s", reg8_mem8 };
 
     // SUI imm8 -> SUB al,imm8
-    xlat["SUI"] = { "SUB\tal,%s", "SUB\ta,%s", "SUB\tal,%s", imm8 };
+    xlat["SUI"] = { "SUB\tal,%s", "SUB\t%s", "SUB\tal,%s", imm8 };
 
     // XRA reg8_mem8 -> XOR al,reg8_mem8
-    xlat["XRA"] = { "XOR\tal,%s", "XOR\ta,%s", "XOR\tal,%s", reg8_mem8 };
+    xlat["XRA"] = { "XOR\tal,%s", "XOR\t%s", "XOR\tal,%s", reg8_mem8 };
 
     // XRI imm8 -> XOR al,imm8
-    xlat["XRI"] = { "XOR\tal,%s", "XOR\ta,%s", "XOR\tal,%s", imm8 };
+    xlat["XRI"] = { "XOR\tal,%s", "XOR\t%s", "XOR\tal,%s", imm8 };
 
     // CMP reg8_mem8 -> CMP al,reg8_mem8
-    xlat["CMP"] = { "CMP\tal,%s", "CP\ta,%s", "CP\tal,%s", reg8_mem8 };
+    xlat["CMP"] = { "CMP\tal,%s", "CP\t%s", "CP\tal,%s", reg8_mem8 };
 
     // CPI imm8 -> CMP al, imm8
-    xlat["CPI"] = { "CMP\tal,%s", "CP\ta,%s", "CP\tal,%s", imm8 };
+    xlat["CPI"] = { "CMP\tal,%s", "CP\t%s", "CP\tal,%s", imm8 };
 
     // DCR reg8 -> DEC reg8
     xlat["DCR"] = { "DEC\t%s", "DEC\t%s", NULL, reg8 };

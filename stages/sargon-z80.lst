@@ -525,15 +525,15 @@
  504:	0B51  77      	        LD      (hl),a          ; Save new position
  505:	0B52  DD2A0200	        LD      ix,(M2)         ; Load board index
  506:	0B56  DD7EB4  	        LD      a,(ix+BOARD)    ; Get contents of board
- 507:	0B59  FEFF    	        CP      a,-1            ; In border area ?
+ 507:	0B59  FEFF    	        CP      -1              ; In border area ?
  508:	0B5B  281A    	        JR      Z,PA2           ; Yes - jump
  509:	0B5D  322300  	        LD      (P2),a          ; Save piece
- 510:	0B60  E607    	        AND     a,7             ; Clear flags
+ 510:	0B60  E607    	        AND     7               ; Clear flags
  511:	0B62  320A00  	        LD      (T2),a          ; Save piece type
  512:	0B65  C8      	        RET     Z               ; Return if empty
  513:	0B66  3A2300  	        LD      a,(P2)          ; Get piece encountered
  514:	0B69  212200  	        LD      hl,P1           ; Get moving piece address
- 515:	0B6C  AE      	        XOR     a,(hl)          ; Compare
+ 515:	0B6C  AE      	        XOR     (hl)            ; Compare
  516:	0B6D  CB7F    	        BIT     7,a             ; Do colors match ?
  517:	0B6F  2803    	        JR      Z,PA1           ; Yes - jump
  518:	0B71  3E01    	        LD      a,1             ; Set different color flag
@@ -558,12 +558,12 @@
  537:			;
  538:			; ARGUMENTS:  The piece to be moved.
  539:			;***********************************************************
- 540:	0B7A  AE      	MPIECE: XOR     a,(hl)          ; Piece to move
- 541:	0B7B  E687    	        AND     a,87H           ; Clear flag bit
- 542:	0B7D  FE81    	        CP      a,BPAWN         ; Is it a black Pawn ?
+ 540:	0B7A  AE      	MPIECE: XOR     (hl)            ; Piece to move
+ 541:	0B7B  E687    	        AND     87H             ; Clear flag bit
+ 542:	0B7D  FE81    	        CP      BPAWN           ; Is it a black Pawn ?
  543:	0B7F  2001    	        JR      NZ,rel001       ; No-Skip
  544:	0B81  3D      	        DEC     a               ; Decrement for black Pawns
- 545:	0B82  E607    	rel001: AND     a,7             ; Get piece type
+ 545:	0B82  E607    	rel001: AND     7               ; Get piece type
  546:	0B84  320800  	        LD      (T1),a          ; Save piece type
  547:	0B87  FD2A0800	        LD      iy,(T1)         ; Load index to DCOUNT/DPOINT
  548:	0B8B  FD469F  	        LD      b,(iy+DCOUNT)   ; Get direction count
@@ -574,38 +574,38 @@
  553:	0B9B  3A0000  	        LD      a,(M1)          ; From position
  554:	0B9E  320200  	        LD      (M2),a          ; Initialize to position
  555:	0BA1  CD4C0B  	MP10:   CALL    PATH            ; Calculate next position
- 556:	0BA4  FE02    	        CP      a,2             ; Ready for new direction ?
+ 556:	0BA4  FE02    	        CP      2               ; Ready for new direction ?
  557:	0BA6  301A    	        JR      NC,MP15         ; Yes - Jump
- 558:	0BA8  A7      	        AND     a,a             ; Test for empty square
+ 558:	0BA8  A7      	        AND     a               ; Test for empty square
  559:	0BA9  08      	        EX      af,af'          ; Save result
  560:	0BAA  3A0800  	        LD      a,(T1)          ; Get piece moved
- 561:	0BAD  FE02    	        CP      a,PAWN+1        ; Is it a Pawn ?
+ 561:	0BAD  FE02    	        CP      PAWN+1          ; Is it a Pawn ?
  562:	0BAF  381E    	        JR      C,MP20          ; Yes - Jump
  563:	0BB1  CD100D  	        CALL    ADMOVE          ; Add move to list
  564:	0BB4  08      	        EX      af,af'          ; Empty square ?
  565:	0BB5  200B    	        JR      NZ,MP15         ; No - Jump
  566:	0BB7  3A0800  	        LD      a,(T1)          ; Piece type
- 567:	0BBA  FE06    	        CP      a,KING          ; King ?
+ 567:	0BBA  FE06    	        CP      KING            ; King ?
  568:	0BBC  2804    	        JR      Z,MP15          ; Yes - Jump
- 569:	0BBE  FE03    	        CP      a,BISHOP        ; Bishop, Rook, or Queen ?
+ 569:	0BBE  FE03    	        CP      BISHOP          ; Bishop, Rook, or Queen ?
  570:	0BC0  30DF    	        JR      NC,MP10         ; Yes - Jump
  571:	0BC2  FD23    	MP15:   INC     iy              ; Increment direction index
  572:	0BC4  10D2    	        DJNZ    MP5             ; Decr. count-jump if non-zerc
  573:	0BC6  3A0800  	        LD      a,(T1)          ; Piece type
- 574:	0BC9  FE06    	        CP      a,KING          ; King ?
+ 574:	0BC9  FE06    	        CP      KING            ; King ?
  575:	0BCB  CC920C  	        CALL    Z,CASTLE        ; Yes - Try Castling
  576:	0BCE  C9      	        RET                     ; Return
  577:			; ***** PAWN LOGIC *****
  578:	0BCF  78      	MP20:   LD      a,b             ; Counter for direction
- 579:	0BD0  FE03    	        CP      a,3             ; On diagonal moves ?
+ 579:	0BD0  FE03    	        CP      3               ; On diagonal moves ?
  580:	0BD2  382E    	        JR      C,MP35          ; Yes - Jump
  581:	0BD4  2823    	        JR      Z,MP30          ; -or-jump if on 2 square move
  582:	0BD6  08      	        EX      af,af'          ; Is forward square empty?
  583:	0BD7  20E9    	        JR      NZ,MP15         ; No - jump
  584:	0BD9  3A0200  	        LD      a,(M2)          ; Get "to" position
- 585:	0BDC  FE5B    	        CP      a,91            ; Promote white Pawn ?
+ 585:	0BDC  FE5B    	        CP      91              ; Promote white Pawn ?
  586:	0BDE  3004    	        JR      NC,MP25         ; Yes - Jump
- 587:	0BE0  FE1D    	        CP      a,29            ; Promote black Pawn ?
+ 587:	0BE0  FE1D    	        CP      29              ; Promote black Pawn ?
  588:	0BE2  3005    	        JR      NC,MP26         ; No - Jump
  589:	0BE4  212300  	MP25:   LD      hl,P2           ; Flag address
  590:	0BE7  CBEE    	        SET     5,(hl)          ; Set promote flag
@@ -623,9 +623,9 @@
  602:	0C02  08      	MP35:   EX      af,af'          ; Is diagonal square empty ?
  603:	0C03  2812    	        JR      Z,MP36          ; Yes - Jump
  604:	0C05  3A0200  	        LD      a,(M2)          ; Get "to" position
- 605:	0C08  FE5B    	        CP      a,91            ; Promote white Pawn ?
+ 605:	0C08  FE5B    	        CP      91              ; Promote white Pawn ?
  606:	0C0A  3004    	        JR      NC,MP37         ; Yes - Jump
- 607:	0C0C  FE1D    	        CP      a,29            ; Black Pawn promotion ?
+ 607:	0C0C  FE1D    	        CP      29              ; Black Pawn promotion ?
  608:	0C0E  30EC    	        JR      NC,MP31         ; No- Jump
  609:	0C10  212300  	MP37:   LD      hl,P2           ; Get flag address
  610:	0C13  CBEE    	        SET     5,(hl)          ; Set promote flag
@@ -652,9 +652,9 @@
  631:	0C23  CB7E    	        BIT     7,(hl)          ; Is it white ?
  632:	0C25  2802    	        JR      Z,rel002        ; Yes - skip
  633:	0C27  C60A    	        ADD     a,10            ; Add 10 for black
- 634:	0C29  FE3D    	rel002: CP      a,61            ; On en passant capture rank ?
+ 634:	0C29  FE3D    	rel002: CP      61              ; On en passant capture rank ?
  635:	0C2B  D8      	        RET     C               ; No - return
- 636:	0C2C  FE45    	        CP      a,69            ; On en passant capture rank ?
+ 636:	0C2C  FE45    	        CP      69              ; On en passant capture rank ?
  637:	0C2E  D0      	        RET     NC              ; No - return
  638:	0C2F  DD2A1600	        LD      ix,(MLPTRJ)     ; Get pointer to previous move
  639:	0C33  DDCB0466	        BIT     4,(ix+MLFLG)    ; First move for that piece ?
@@ -664,15 +664,15 @@
  643:	0C3E  DD2A0600	        LD      ix,(M4)         ; Load board index
  644:	0C42  DD7EB4  	        LD      a,(ix+BOARD)    ; Get piece moved
  645:	0C45  322400  	        LD      (P3),a          ; Save it
- 646:	0C48  E607    	        AND     a,7             ; Get piece type
- 647:	0C4A  FE01    	        CP      a,PAWN          ; Is it a Pawn ?
+ 646:	0C48  E607    	        AND     7               ; Get piece type
+ 647:	0C4A  FE01    	        CP      PAWN            ; Is it a Pawn ?
  648:	0C4C  C0      	        RET     NZ              ; No - return
  649:	0C4D  3A0600  	        LD      a,(M4)          ; Get "to" position
  650:	0C50  210200  	        LD      hl,M2           ; Get present "to" position
- 651:	0C53  96      	        SUB     a,(hl)          ; Find difference
+ 651:	0C53  96      	        SUB     (hl)            ; Find difference
  652:	0C54  F2590C  	        JP      P,rel003        ; Positive ? Yes - Jump
  653:	0C57  ED44    	        NEG                     ; Else take absolute value
- 654:	0C59  FE0A    	rel003: CP      a,10            ; Is difference 10 ?
+ 654:	0C59  FE0A    	rel003: CP      10              ; Is difference 10 ?
  655:	0C5B  C0      	        RET     NZ              ; No - return
  656:	0C5C  212300  	        LD      hl,P2           ; Address of flags
  657:	0C5F  CBF6    	        SET     6,(hl)          ; Set double move flag
@@ -732,7 +732,7 @@
  711:	0C95  CB5F    	        BIT     3,a             ; Has it moved ?
  712:	0C97  C0      	        RET     NZ              ; Yes - return
  713:	0C98  3A2900  	        LD      a,(CKFLG)       ; Fetch Check Flag
- 714:	0C9B  A7      	        AND     a,a             ; Is the King in check ?
+ 714:	0C9B  A7      	        AND     a               ; Is the King in check ?
  715:	0C9C  C0      	        RET     NZ              ; Yes - Return
  716:	0C9D  0103FF  	        LD      bc,0FF03H       ; Initialize King-side values
  717:	0CA0  3A0000  	CA5:    LD      a,(M1)          ; King position
@@ -741,31 +741,31 @@
  720:	0CA5  320400  	        LD      (M3),a          ; Store as board index
  721:	0CA8  DD2A0400	        LD      ix,(M3)         ; Load board index
  722:	0CAC  DD7EB4  	        LD      a,(ix+BOARD)    ; Get contents of board
- 723:	0CAF  E67F    	        AND     a,7FH           ; Clear color bit
- 724:	0CB1  FE04    	        CP      a,ROOK          ; Has Rook ever moved ?
+ 723:	0CAF  E67F    	        AND     7FH             ; Clear color bit
+ 724:	0CB1  FE04    	        CP      ROOK            ; Has Rook ever moved ?
  725:	0CB3  2051    	        JR      NZ,CA20         ; Yes - Jump
  726:	0CB5  79      	        LD      a,c             ; Restore Rook position
  727:	0CB6  181E    	        JR      CA15            ; Jump
  728:	0CB8  DD2A0400	CA10:   LD      ix,(M3)         ; Load board index
  729:	0CBC  DD7EB4  	        LD      a,(ix+BOARD)    ; Get contents of board
- 730:	0CBF  A7      	        AND     a,a             ; Empty ?
+ 730:	0CBF  A7      	        AND     a               ; Empty ?
  731:	0CC0  2044    	        JR      NZ,CA20         ; No - Jump
  732:	0CC2  3A0400  	        LD      a,(M3)          ; Current position
- 733:	0CC5  FE16    	        CP      a,22            ; White Queen Knight square ?
+ 733:	0CC5  FE16    	        CP      22              ; White Queen Knight square ?
  734:	0CC7  280D    	        JR      Z,CA15          ; Yes - Jump
- 735:	0CC9  FE5C    	        CP      a,92            ; Black Queen Knight square ?
+ 735:	0CC9  FE5C    	        CP      92              ; Black Queen Knight square ?
  736:	0CCB  2809    	        JR      Z,CA15          ; Yes - Jump
  737:	0CCD  CDB90D  	        CALL    ATTACK          ; Look for attack on square
- 738:	0CD0  A7      	        AND     a,a             ; Any attackers ?
+ 738:	0CD0  A7      	        AND     a               ; Any attackers ?
  739:	0CD1  2033    	        JR      NZ,CA20         ; Yes - Jump
  740:	0CD3  3A0400  	        LD      a,(M3)          ; Current position
  741:	0CD6  80      	CA15:   ADD     a,b             ; Next position
  742:	0CD7  320400  	        LD      (M3),a          ; Save as board index
  743:	0CDA  210000  	        LD      hl,M1           ; King position
- 744:	0CDD  BE      	        CP      a,(hl)          ; Reached King ?
+ 744:	0CDD  BE      	        CP      (hl)            ; Reached King ?
  745:	0CDE  20D8    	        JR      NZ,CA10         ; No - jump
- 746:	0CE0  90      	        SUB     a,b             ; Determine King's position
- 747:	0CE1  90      	        SUB     a,b
+ 746:	0CE0  90      	        SUB     b               ; Determine King's position
+ 747:	0CE1  90      	        SUB     b
  748:	0CE2  320200  	        LD      (M2),a          ; Save it
  749:	0CE5  212300  	        LD      hl,P2           ; Address of flags
  750:	0CE8  3640    	        LD      (hl),40H        ; Set double move flag
@@ -773,16 +773,16 @@
  752:	0CED  210000  	        LD      hl,M1           ; Addr of King "from" position
  753:	0CF0  7E      	        LD      a,(hl)          ; Get King's "from" position
  754:	0CF1  71      	        LD      (hl),c          ; Store Rook "from" position
- 755:	0CF2  90      	        SUB     a,b             ; Get Rook "to" position
+ 755:	0CF2  90      	        SUB     b               ; Get Rook "to" position
  756:	0CF3  320200  	        LD      (M2),a          ; Store Rook "to" position
- 757:	0CF6  AF      	        XOR     a,a             ; Zero
+ 757:	0CF6  AF      	        XOR     a               ; Zero
  758:	0CF7  322300  	        LD      (P2),a          ; Zero move flags
  759:	0CFA  CD100D  	        CALL    ADMOVE          ; Put Rook move in list
  760:	0CFD  CD820C  	        CALL    ADJPTR          ; Re-adjust move list pointer
  761:	0D00  3A0400  	        LD      a,(M3)          ; Restore King position
  762:	0D03  320000  	        LD      (M1),a          ; Store
  763:	0D06  78      	CA20:   LD      a,b             ; Scan Index
- 764:	0D07  FE01    	        CP      a,1             ; Done ?
+ 764:	0D07  FE01    	        CP      1               ; Done ?
  765:	0D09  C8      	        RET     Z               ; Yes - return
  766:	0D0A  01FC01  	        LD      bc,01FCH        ; Set Queen-side initial values
  767:	0D0D  C3A00C  	        JP      CA5             ; Jump
@@ -802,7 +802,7 @@
  781:			;***********************************************************
  782:	0D10  ED5B1E00	ADMOVE: LD      de,(MLNXT)      ; Addr of next loc in move list
  783:	0D14  21F80A  	        LD      hl,MLEND        ; Address of list end
- 784:	0D17  A7      	        AND     a,a             ; Clear carry flag
+ 784:	0D17  A7      	        AND     a               ; Clear carry flag
  785:	0D18  ED52    	        SBC     hl,de           ; Calculate difference
  786:	0D1A  3833    	        JR      C,AM10          ; Jump if out of space
  787:	0D1C  2A1C00  	        LD      hl,(MLLST)      ; Addr of prev. list area
@@ -868,18 +868,18 @@
  847:	0D71  320000  	GM5:    LD      (M1),a          ; Save as index
  848:	0D74  DD2A0000	        LD      ix,(M1)         ; Load board index
  849:	0D78  DD7EB4  	        LD      a,(ix+BOARD)    ; Fetch board contents
- 850:	0D7B  A7      	        AND     a,a             ; Is it empty ?
+ 850:	0D7B  A7      	        AND     a               ; Is it empty ?
  851:	0D7C  2810    	        JR      Z,GM10          ; Yes - Jump
- 852:	0D7E  FEFF    	        CP      a,-1            ; Is it a border square ?
+ 852:	0D7E  FEFF    	        CP      -1              ; Is it a border square ?
  853:	0D80  280C    	        JR      Z,GM10          ; Yes - Jump
  854:	0D82  322200  	        LD      (P1),a          ; Save piece
  855:	0D85  212100  	        LD      hl,COLOR        ; Address of color of piece
- 856:	0D88  AE      	        XOR     a,(hl)          ; Test color of piece
+ 856:	0D88  AE      	        XOR     (hl)            ; Test color of piece
  857:	0D89  CB7F    	        BIT     7,a             ; Match ?
  858:	0D8B  CC7A0B  	        CALL    Z,MPIECE        ; Yes - call Move Piece
  859:	0D8E  3A0000  	GM10:   LD      a,(M1)          ; Fetch current board position
  860:	0D91  3C      	        INC     a               ; Incr to next board position
- 861:	0D92  FE63    	        CP      a,99            ; End of board array ?
+ 861:	0D92  FE63    	        CP      99              ; End of board array ?
  862:	0D94  C2710D  	        JP      NZ,GM5          ; No - Jump
  863:	0D97  C9      	        RET                     ; Return
  864:			
@@ -899,7 +899,7 @@
  878:			;***********************************************************
  879:	0D98  3A2100  	INCHK:  LD      a,(COLOR)       ; Get color
  880:	0D9B  214E01  	INCHK1: LD      hl,POSK         ; Addr of white King position
- 881:	0D9E  A7      	        AND     a,a             ; White ?
+ 881:	0D9E  A7      	        AND     a               ; White ?
  882:	0D9F  2801    	        JR      Z,rel005        ; Yes - Skip
  883:	0DA1  23      	        INC     hl              ; Addr of black King position
  884:	0DA2  7E      	rel005: LD      a,(hl)          ; Fetch King position
@@ -907,7 +907,7 @@
  886:	0DA6  DD2A0400	        LD      ix,(M3)         ; Load board index
  887:	0DAA  DD7EB4  	        LD      a,(ix+BOARD)    ; Fetch board contents
  888:	0DAD  322200  	        LD      (P1),a          ; Save
- 889:	0DB0  E607    	        AND     a,7             ; Get piece type
+ 889:	0DB0  E607    	        AND     7               ; Get piece type
  890:	0DB2  320800  	        LD      (T1),a          ; Save
  891:	0DB5  CDB90D  	        CALL    ATTACK          ; Look for attackers on King
  892:	0DB8  C9      	        RET                     ; Return
@@ -948,7 +948,7 @@
  927:			; ARGUMENTS:  --  None
  928:			;***********************************************************
  929:	0DB9  C5      	ATTACK: PUSH    bc              ; Save Register B
- 930:	0DBA  AF      	        XOR     a,a             ; Clear
+ 930:	0DBA  AF      	        XOR     a               ; Clear
  931:	0DBB  0610    	        LD      b,16            ; Initial direction count
  932:	0DBD  321000  	        LD      (INDX2),a       ; Initial direction index
  933:	0DC0  FD2A1000	        LD      iy,(INDX2)      ; Load index
@@ -958,18 +958,18 @@
  937:	0DCC  320200  	        LD      (M2),a          ; Save
  938:	0DCF  14      	AT10:   INC     d               ; Increment scan count
  939:	0DD0  CD4C0B  	        CALL    PATH            ; Next position
- 940:	0DD3  FE01    	        CP      a,1             ; Piece of a opposite color ?
+ 940:	0DD3  FE01    	        CP      1               ; Piece of a opposite color ?
  941:	0DD5  2813    	        JR      Z,AT14A         ; Yes - jump
- 942:	0DD7  FE02    	        CP      a,2             ; Piece of same color ?
+ 942:	0DD7  FE02    	        CP      2               ; Piece of same color ?
  943:	0DD9  2818    	        JR      Z,AT14B         ; Yes - jump
- 944:	0DDB  A7      	        AND     a,a             ; Empty position ?
+ 944:	0DDB  A7      	        AND     a               ; Empty position ?
  945:	0DDC  2005    	        JR      NZ,AT12         ; No - jump
  946:	0DDE  78      	        LD      a,b             ; Fetch direction count
- 947:	0DDF  FE09    	        CP      a,9             ; On knight scan ?
+ 947:	0DDF  FE09    	        CP      9               ; On knight scan ?
  948:	0DE1  30EC    	        JR      NC,AT10         ; No - jump
  949:	0DE3  FD23    	AT12:   INC     iy              ; Increment direction index
  950:	0DE5  10DD    	        DJNZ    AT5             ; Done ? No - jump
- 951:	0DE7  AF      	        XOR     a,a             ; No attackers
+ 951:	0DE7  AF      	        XOR     a               ; No attackers
  952:	0DE8  C1      	AT13:   POP     bc              ; Restore register B
  953:	0DE9  C9      	        RET                     ; Return
  954:	0DEA  CB72    	AT14A:  BIT     6,d             ; Same color found already ?
@@ -985,52 +985,52 @@
  964:	0DF9  3A0A00  	AT14:   LD      a,(T2)          ; Fetch piece type encountered
  965:	0DFC  5F      	        LD      e,a             ; Save
  966:	0DFD  78      	        LD      a,b             ; Get direction-counter
- 967:	0DFE  FE09    	        CP      a,9             ; Look for Knights ?
+ 967:	0DFE  FE09    	        CP      9               ; Look for Knights ?
  968:	0E00  3845    	        JR      C,AT25          ; Yes - jump
  969:	0E02  7B      	        LD      a,e             ; Get piece type
- 970:	0E03  FE05    	        CP      a,QUEEN         ; Is is a Queen ?
+ 970:	0E03  FE05    	        CP      QUEEN           ; Is is a Queen ?
  971:	0E05  2004    	        JR      NZ,AT15         ; No - Jump
  972:	0E07  CBFA    	        SET     7,d             ; Set Queen found flag
  973:	0E09  1841    	        JR      AT30            ; Jump
  974:	0E0B  7A      	AT15:   LD      a,d             ; Get flag/scan count
- 975:	0E0C  E60F    	        AND     a,0FH           ; Isolate count
- 976:	0E0E  FE01    	        CP      a,1             ; On first position ?
+ 975:	0E0C  E60F    	        AND     0FH             ; Isolate count
+ 976:	0E0E  FE01    	        CP      1               ; On first position ?
  977:	0E10  2005    	        JR      NZ,AT16         ; No - jump
  978:	0E12  7B      	        LD      a,e             ; Get encountered piece type
- 979:	0E13  FE06    	        CP      a,KING          ; Is it a King ?
+ 979:	0E13  FE06    	        CP      KING            ; Is it a King ?
  980:	0E15  2835    	        JR      Z,AT30          ; Yes - jump
  981:	0E17  78      	AT16:   LD      a,b             ; Get direction counter
- 982:	0E18  FE0D    	        CP      a,13            ; Scanning files or ranks ?
+ 982:	0E18  FE0D    	        CP      13              ; Scanning files or ranks ?
  983:	0E1A  3824    	        JR      C,AT21          ; Yes - jump
  984:	0E1C  7B      	        LD      a,e             ; Get piece type
- 985:	0E1D  FE03    	        CP      a,BISHOP        ; Is it a Bishop ?
+ 985:	0E1D  FE03    	        CP      BISHOP          ; Is it a Bishop ?
  986:	0E1F  282B    	        JR      Z,AT30          ; Yes - jump
  987:	0E21  7A      	        LD      a,d             ; Get flags/scan count
- 988:	0E22  E60F    	        AND     a,0FH           ; Isolate count
- 989:	0E24  FE01    	        CP      a,1             ; On first position ?
+ 988:	0E22  E60F    	        AND     0FH             ; Isolate count
+ 989:	0E24  FE01    	        CP      1               ; On first position ?
  990:	0E26  20BB    	        JR      NZ,AT12         ; No - jump
- 991:	0E28  BB      	        CP      a,e             ; Is it a Pawn ?
+ 991:	0E28  BB      	        CP      e               ; Is it a Pawn ?
  992:	0E29  20B8    	        JR      NZ,AT12         ; No - jump
  993:	0E2B  3A2300  	        LD      a,(P2)          ; Fetch piece including color
  994:	0E2E  CB7F    	        BIT     7,a             ; Is it white ?
  995:	0E30  2807    	        JR      Z,AT20          ; Yes - jump
  996:	0E32  78      	        LD      a,b             ; Get direction counter
- 997:	0E33  FE0F    	        CP      a,15            ; On a non-attacking diagonal ?
+ 997:	0E33  FE0F    	        CP      15              ; On a non-attacking diagonal ?
  998:	0E35  38AC    	        JR      C,AT12          ; Yes - jump
  999:	0E37  1813    	        JR      AT30            ; Jump
 1000:	0E39  78      	AT20:   LD      a,b             ; Get direction counter
-1001:	0E3A  FE0F    	        CP      a,15            ; On a non-attacking diagonal ?
+1001:	0E3A  FE0F    	        CP      15              ; On a non-attacking diagonal ?
 1002:	0E3C  30A5    	        JR      NC,AT12         ; Yes - jump
 1003:	0E3E  180C    	        JR      AT30            ; Jump
 1004:	0E40  7B      	AT21:   LD      a,e             ; Get piece type
-1005:	0E41  FE04    	        CP      a,ROOK          ; Is is a Rook ?
+1005:	0E41  FE04    	        CP      ROOK            ; Is is a Rook ?
 1006:	0E43  209E    	        JR      NZ,AT12         ; No - jump
 1007:	0E45  1805    	        JR      AT30            ; Jump
 1008:	0E47  7B      	AT25:   LD      a,e             ; Get piece type
-1009:	0E48  FE02    	        CP      a,KNIGHT        ; Is it a Knight ?
+1009:	0E48  FE02    	        CP      KNIGHT          ; Is it a Knight ?
 1010:	0E4A  2097    	        JR      NZ,AT12         ; No - jump
 1011:	0E4C  3A0800  	AT30:   LD      a,(T1)          ; Attacked piece type/flag
-1012:	0E4F  FE07    	        CP      a,7             ; Call from POINTS ?
+1012:	0E4F  FE07    	        CP      7               ; Call from POINTS ?
 1013:	0E51  2809    	        JR      Z,AT31          ; Yes - jump
 1014:	0E53  CB6A    	        BIT     5,d             ; Is attacker opposite color ?
 1015:	0E55  2808    	        JR      Z,AT32          ; No - jump
@@ -1038,9 +1038,9 @@
 1017:	0E59  C3E80D  	        JP      AT13            ; Jump
 1018:	0E5C  CD6F0E  	AT31:   CALL    ATKSAV          ; Save attacker in attack list
 1019:	0E5F  3A0A00  	AT32:   LD      a,(T2)          ; Attacking piece type
-1020:	0E62  FE06    	        CP      a,KING          ; Is it a King,?
+1020:	0E62  FE06    	        CP      KING            ; Is it a King,?
 1021:	0E64  CAE30D  	        JP      Z,AT12          ; Yes - jump
-1022:	0E67  FE02    	        CP      a,KNIGHT        ; Is it a Knight ?
+1022:	0E67  FE02    	        CP      KNIGHT          ; Is it a Knight ?
 1023:	0E69  CAE30D  	        JP      Z,AT12          ; Yes - jump
 1024:	0E6C  C3CF0D  	        JP      AT10            ; Jump
 1025:			
@@ -1064,7 +1064,7 @@
 1043:	0E6F  C5      	ATKSAV: PUSH    bc              ; Save Regs BC
 1044:	0E70  D5      	        PUSH    de              ; Save Regs DE
 1045:	0E71  3A1200  	        LD      a,(NPINS)       ; Number of pinned pieces
-1046:	0E74  A7      	        AND     a,a             ; Any ?
+1046:	0E74  A7      	        AND     a               ; Any ?
 1047:	0E75  C4B70E  	        CALL    NZ,PNCK         ; yes - check pin list
 1048:	0E78  DD2A0A00	        LD      ix,(T2)         ; Init index to value table
 1049:	0E7C  212C01  	        LD      hl,ATKLST       ; Init address of attack list
@@ -1073,7 +1073,7 @@
 1052:	0E85  CB7F    	        BIT     7,a             ; Is it white ?
 1053:	0E87  2802    	        JR      Z,rel006        ; Yes - jump
 1054:	0E89  0E07    	        LD      c,7             ; Init increment for black
-1055:	0E8B  E607    	rel006: AND     a,7             ; Attacking piece type
+1055:	0E8B  E607    	rel006: AND     7               ; Attacking piece type
 1056:	0E8D  5F      	        LD      e,a             ; Init increment for type
 1057:	0E8E  CB7A    	        BIT     7,d             ; Queen found this scan ?
 1058:	0E90  2802    	        JR      Z,rel007        ; No - jump
@@ -1083,10 +1083,10 @@
 1062:	0E96  1600    	        LD      d,0
 1063:	0E98  19      	        ADD     hl,de           ; Attack list slot address
 1064:	0E99  7E      	        LD      a,(hl)          ; Get data already there
-1065:	0E9A  E60F    	        AND     a,0FH           ; Is first slot empty ?
+1065:	0E9A  E60F    	        AND     0FH             ; Is first slot empty ?
 1066:	0E9C  2811    	        JR      Z,AS20          ; Yes - jump
 1067:	0E9E  7E      	        LD      a,(hl)          ; Get data again
-1068:	0E9F  E6F0    	        AND     a,0F0H          ; Is second slot empty ?
+1068:	0E9F  E6F0    	        AND     0F0H            ; Is second slot empty ?
 1069:	0EA1  2803    	        JR      Z,AS19          ; Yes - jump
 1070:	0EA3  23      	        INC     hl              ; Increment to King slot
 1071:	0EA4  1809    	        JR      AS20            ; Jump
@@ -1134,10 +1134,10 @@
 1113:	0ECD  E5      	        PUSH    hl              ; Get corresp index to dir list
 1114:	0ECE  DDE1    	        POP     ix
 1115:	0ED0  DD7E09  	        LD      a,(ix+9)        ; Get direction
-1116:	0ED3  BA      	        CP      a,d             ; Same as attacking direction ?
+1116:	0ED3  BA      	        CP      d               ; Same as attacking direction ?
 1117:	0ED4  2805    	        JR      Z,PC3           ; Yes - jump
 1118:	0ED6  ED44    	        NEG                     ; Opposite direction ?
-1119:	0ED8  BA      	        CP      a,d             ; Same as attacking direction ?
+1119:	0ED8  BA      	        CP      d               ; Same as attacking direction ?
 1120:	0ED9  2005    	        JR      NZ,PC5          ; No - jump
 1121:	0EDB  08      	PC3:    EX      af,af'          ; Restore search parameters
 1122:	0EDC  EAC30E  	        JP      PE,PC1          ; Jump if search not complete
@@ -1162,65 +1162,65 @@
 1141:			;
 1142:			; ARGUMENTS:  --  None
 1143:			;***********************************************************
-1144:	0EE4  AF      	PINFND: XOR     a,a             ; Zero pin count
+1144:	0EE4  AF      	PINFND: XOR     a               ; Zero pin count
 1145:	0EE5  321200  	        LD      (NPINS),a
 1146:	0EE8  114E01  	        LD      de,POSK         ; Addr of King/Queen pos list
 1147:	0EEB  1A      	PF1:    LD      a,(de)          ; Get position of royal piece
-1148:	0EEC  A7      	        AND     a,a             ; Is it on board ?
+1148:	0EEC  A7      	        AND     a               ; Is it on board ?
 1149:	0EED  CAA70F  	        JP      Z,PF26          ; No- jump
-1150:	0EF0  FEFF    	        CP      a,-1            ; At end of list ?
+1150:	0EF0  FEFF    	        CP      -1              ; At end of list ?
 1151:	0EF2  C8      	        RET     Z               ; Yes return
 1152:	0EF3  320400  	        LD      (M3),a          ; Save position as board index
 1153:	0EF6  DD2A0400	        LD      ix,(M3)         ; Load index to board
 1154:	0EFA  DD7EB4  	        LD      a,(ix+BOARD)    ; Get contents of board
 1155:	0EFD  322200  	        LD      (P1),a          ; Save
 1156:	0F00  0608    	        LD      b,8             ; Init scan direction count
-1157:	0F02  AF      	        XOR     a,a
+1157:	0F02  AF      	        XOR     a
 1158:	0F03  321000  	        LD      (INDX2),a       ; Init direction index
 1159:	0F06  FD2A1000	        LD      iy,(INDX2)
 1160:	0F0A  3A0400  	PF2:    LD      a,(M3)          ; Get King/Queen position
 1161:	0F0D  320200  	        LD      (M2),a          ; Save
-1162:	0F10  AF      	        XOR     a,a
+1162:	0F10  AF      	        XOR     a
 1163:	0F11  320600  	        LD      (M4),a          ; Clear pinned piece saved pos
 1164:	0F14  FD4E80  	        LD      c,(iy+DIRECT)   ; Get direction of scan
 1165:	0F17  CD4C0B  	PF5:    CALL    PATH            ; Compute next position
-1166:	0F1A  A7      	        AND     a,a             ; Is it empty ?
+1166:	0F1A  A7      	        AND     a               ; Is it empty ?
 1167:	0F1B  28FA    	        JR      Z,PF5           ; Yes - jump
-1168:	0F1D  FE03    	        CP      a,3             ; Off board ?
+1168:	0F1D  FE03    	        CP      3               ; Off board ?
 1169:	0F1F  CAA30F  	        JP      Z,PF25          ; Yes - jump
-1170:	0F22  FE02    	        CP      a,2             ; Piece of same color
+1170:	0F22  FE02    	        CP      2               ; Piece of same color
 1171:	0F24  3A0600  	        LD      a,(M4)          ; Load pinned piece position
 1172:	0F27  2824    	        JR      Z,PF15          ; Yes - jump
-1173:	0F29  A7      	        AND     a,a             ; Possible pin ?
+1173:	0F29  A7      	        AND     a               ; Possible pin ?
 1174:	0F2A  CAA30F  	        JP      Z,PF25          ; No - jump
 1175:	0F2D  3A0A00  	        LD      a,(T2)          ; Piece type encountered
-1176:	0F30  FE05    	        CP      a,QUEEN         ; Queen ?
+1176:	0F30  FE05    	        CP      QUEEN           ; Queen ?
 1177:	0F32  CA5A0F  	        JP      Z,PF19          ; Yes - jump
 1178:	0F35  6F      	        LD      l,a             ; Save piece type
 1179:	0F36  78      	        LD      a,b             ; Direction counter
-1180:	0F37  FE05    	        CP      a,5             ; Non-diagonal direction ?
+1180:	0F37  FE05    	        CP      5               ; Non-diagonal direction ?
 1181:	0F39  3809    	        JR      C,PF10          ; Yes - jump
 1182:	0F3B  7D      	        LD      a,l             ; Piece type
-1183:	0F3C  FE03    	        CP      a,BISHOP        ; Bishop ?
+1183:	0F3C  FE03    	        CP      BISHOP          ; Bishop ?
 1184:	0F3E  C2A30F  	        JP      NZ,PF25         ; No - jump
 1185:	0F41  C3920F  	        JP      PF20            ; Jump
 1186:	0F44  7D      	PF10:   LD      a,l             ; Piece type
-1187:	0F45  FE04    	        CP      a,ROOK          ; Rook ?
+1187:	0F45  FE04    	        CP      ROOK            ; Rook ?
 1188:	0F47  C2A30F  	        JP      NZ,PF25         ; No - jump
 1189:	0F4A  C3920F  	        JP      PF20            ; Jump
-1190:	0F4D  A7      	PF15:   AND     a,a             ; Possible pin ?
+1190:	0F4D  A7      	PF15:   AND     a               ; Possible pin ?
 1191:	0F4E  C2A30F  	        JP      NZ,PF25         ; No - jump
 1192:	0F51  3A0200  	        LD      a,(M2)          ; Save possible pin position
 1193:	0F54  320600  	        LD      (M4),a
 1194:	0F57  C3170F  	        JP      PF5             ; Jump
 1195:	0F5A  3A2200  	PF19:   LD      a,(P1)          ; Load King or Queen
-1196:	0F5D  E607    	        AND     a,7             ; Clear flags
-1197:	0F5F  FE05    	        CP      a,QUEEN         ; Queen ?
+1196:	0F5D  E607    	        AND     7               ; Clear flags
+1197:	0F5F  FE05    	        CP      QUEEN           ; Queen ?
 1198:	0F61  202F    	        JR      NZ,PF20         ; No - jump
 1199:	0F63  C5      	        PUSH    bc              ; Save regs.
 1200:	0F64  D5      	        PUSH    de
 1201:	0F65  FDE5    	        PUSH    iy
-1202:	0F67  AF      	        XOR     a,a             ; Zero out attack list
+1202:	0F67  AF      	        XOR     a               ; Zero out attack list
 1203:	0F68  060E    	        LD      b,14
 1204:	0F6A  212C01  	        LD      hl,ATKLST
 1205:	0F6D  77      	back02: LD      (hl),a
@@ -1237,7 +1237,7 @@
 1216:	0F86  EB      	        EX      de,hl           ; Reverse for black
 1217:	0F87  7E      	rel008: LD      a,(hl)          ; Number of defenders
 1218:	0F88  EB      	        EX      de,hl           ; Reverse for attackers
-1219:	0F89  96      	        SUB     a,(hl)          ; Defenders minus attackers
+1219:	0F89  96      	        SUB     (hl)            ; Defenders minus attackers
 1220:	0F8A  3D      	        DEC     a               ; Less 1
 1221:	0F8B  FDE1    	        POP     iy              ; Restore regs.
 1222:	0F8D  D1      	        POP     de
@@ -1293,10 +1293,10 @@
 1272:	0FD8  2812    	        JR      Z,XC18          ; Jump if none
 1273:	0FDA  08      	        EX      af,af'          ; Save defender value
 1274:	0FDB  78      	        LD      a,b             ; Get attacked value
-1275:	0FDC  BD      	        CP      a,l             ; Attacked less than attacker ?
+1275:	0FDC  BD      	        CP      l               ; Attacked less than attacker ?
 1276:	0FDD  300F    	        JR      NC,XC19         ; No - jump
 1277:	0FDF  08      	        EX      af,af'          ; -Restore defender
-1278:	0FE0  BD      	XC15:   CP      a,l             ; Defender less than attacker ?
+1278:	0FE0  BD      	XC15:   CP      l               ; Defender less than attacker ?
 1279:	0FE1  D8      	        RET     C               ; Yes - return
 1280:	0FE2  CDFC0F  	        CALL    NEXTAD          ; Retrieve next attacker value
 1281:	0FE5  C8      	        RET     Z               ; Return if none
@@ -1336,12 +1336,12 @@
 1315:	0FFF  41      	        LD      b,c
 1316:	1000  4F      	        LD      c,a
 1317:	1001  EB      	        EX      de,hl           ; Swap list pointers
-1318:	1002  AF      	        XOR     a,a
-1319:	1003  B8      	        CP      a,b             ; At end of list ?
+1318:	1002  AF      	        XOR     a
+1319:	1003  B8      	        CP      b               ; At end of list ?
 1320:	1004  2809    	        JR      Z,NX6           ; Yes - jump
 1321:	1006  05      	        DEC     b               ; Decrement list count
 1322:	1007  23      	back03: INC     hl              ; Increment list pointer
-1323:	1008  BE      	        CP      a,(hl)          ; Check next item in list
+1323:	1008  BE      	        CP      (hl)            ; Check next item in list
 1324:	1009  28FC    	        JR      Z,back03        ; Jump if empty
 1325:	100B  ED67    	        RRD                     ; Get value from list
 1326:	100D  87      	        ADD     a,a             ; Double it
@@ -1364,7 +1364,7 @@
 1343:			;
 1344:			; ARGUMENTS:  --  None
 1345:			;***********************************************************
-1346:	1011  AF      	POINTS: XOR     a,a             ; Zero out variables
+1346:	1011  AF      	POINTS: XOR     a               ; Zero out variables
 1347:	1012  323000  	        LD      (MTRL),a
 1348:	1015  322C00  	        LD      (BRDC),a
 1349:	1018  322D00  	        LD      (PTSL),a
@@ -1377,20 +1377,20 @@
 1356:	102B  320400  	PT5:    LD      (M3),a          ; Save as board index
 1357:	102E  DD2A0400	        LD      ix,(M3)         ; Load board index
 1358:	1032  DD7EB4  	        LD      a,(ix+BOARD)    ; Get piece from board
-1359:	1035  FEFF    	        CP      a,-1            ; Off board edge ?
+1359:	1035  FEFF    	        CP      -1              ; Off board edge ?
 1360:	1037  CAEB10  	        JP      Z,PT25          ; Yes - jump
 1361:	103A  212200  	        LD      hl,P1           ; Save piece, if any
 1362:	103D  77      	        LD      (hl),a
-1363:	103E  E607    	        AND     a,7             ; Save piece type, if any
+1363:	103E  E607    	        AND     7               ; Save piece type, if any
 1364:	1040  320C00  	        LD      (T3),a
-1365:	1043  FE02    	        CP      a,KNIGHT        ; Less than a Knight (Pawn) ?
+1365:	1043  FE02    	        CP      KNIGHT          ; Less than a Knight (Pawn) ?
 1366:	1045  3839    	        JR      C,PT6X          ; Yes - Jump
-1367:	1047  FE04    	        CP      a,ROOK          ; Rook, Queen or King ?
+1367:	1047  FE04    	        CP      ROOK            ; Rook, Queen or King ?
 1368:	1049  3824    	        JR      C,PT6B          ; No - jump
-1369:	104B  FE06    	        CP      a,KING          ; Is it a King ?
+1369:	104B  FE06    	        CP      KING            ; Is it a King ?
 1370:	104D  280A    	        JR      Z,PT6AA         ; Yes - jump
 1371:	104F  3A2600  	        LD      a,(MOVENO)      ; Get move number
-1372:	1052  FE07    	        CP      a,7             ; Less than 7 ?
+1372:	1052  FE07    	        CP      7               ; Less than 7 ?
 1373:	1054  3812    	        JR      C,PT6A          ; Yes - Jump
 1374:	1056  C38010  	        JP      PT6X            ; Jump
 1375:	1059  CB66    	PT6AA:  BIT     4,(hl)          ; Castled yet ?
@@ -1412,7 +1412,7 @@
 1391:	107B  212C00  	PT6D:   LD      hl,BRDC         ; Get address of board control
 1392:	107E  86      	        ADD     a,(hl)          ; Add on penalty/bonus points
 1393:	107F  77      	        LD      (hl),a          ; Save
-1394:	1080  AF      	PT6X:   XOR     a,a             ; Zero out attack list
+1394:	1080  AF      	PT6X:   XOR     a               ; Zero out attack list
 1395:	1081  060E    	        LD      b,14
 1396:	1083  212C01  	        LD      hl,ATKLST
 1397:	1086  77      	back04: LD      (hl),a
@@ -1421,41 +1421,41 @@
 1400:	108A  CDB90D  	        CALL    ATTACK          ; Build attack list for square
 1401:	108D  213301  	        LD      hl,BACT         ; Get black attacker count addr
 1402:	1090  3A2C01  	        LD      a,(WACT)        ; Get white attacker count
-1403:	1093  96      	        SUB     a,(hl)          ; Compute count difference
+1403:	1093  96      	        SUB     (hl)            ; Compute count difference
 1404:	1094  212C00  	        LD      hl,BRDC         ; Address of board control
 1405:	1097  86      	        ADD     a,(hl)          ; Accum board control score
 1406:	1098  77      	        LD      (hl),a          ; Save
 1407:	1099  3A2200  	        LD      a,(P1)          ; Get piece on current square
-1408:	109C  A7      	        AND     a,a             ; Is it empty ?
+1408:	109C  A7      	        AND     a               ; Is it empty ?
 1409:	109D  CAEB10  	        JP      Z,PT25          ; Yes - jump
 1410:	10A0  CDAE0F  	        CALL    XCHNG           ; Evaluate exchange, if any
-1411:	10A3  AF      	        XOR     a,a             ; Check for a loss
-1412:	10A4  BB      	        CP      a,e             ; Points lost ?
+1411:	10A3  AF      	        XOR     a               ; Check for a loss
+1412:	10A4  BB      	        CP      e               ; Points lost ?
 1413:	10A5  2835    	        JR      Z,PT23          ; No - Jump
 1414:	10A7  15      	        DEC     d               ; Deduct half a Pawn value
 1415:	10A8  3A2200  	        LD      a,(P1)          ; Get piece under attack
 1416:	10AB  212100  	        LD      hl,COLOR        ; Color of side just moved
-1417:	10AE  AE      	        XOR     a,(hl)          ; Compare with piece
+1417:	10AE  AE      	        XOR     (hl)            ; Compare with piece
 1418:	10AF  CB7F    	        BIT     7,a             ; Do colors match ?
 1419:	10B1  7B      	        LD      a,e             ; Points lost
 1420:	10B2  2019    	        JR      NZ,PT20         ; Jump if no match
 1421:	10B4  212D00  	        LD      hl,PTSL         ; Previous max points lost
-1422:	10B7  BE      	        CP      a,(hl)          ; Compare to current value
+1422:	10B7  BE      	        CP      (hl)            ; Compare to current value
 1423:	10B8  3822    	        JR      C,PT23          ; Jump if greater than
 1424:	10BA  73      	        LD      (hl),e          ; Store new value as max lost
 1425:	10BB  DD2A1600	        LD      ix,(MLPTRJ)     ; Load pointer to this move
 1426:	10BF  3A0400  	        LD      a,(M3)          ; Get position of lost piece
-1427:	10C2  DDBE03  	        CP      a,(ix+MLTOP)    ; Is it the one moving ?
+1427:	10C2  DDBE03  	        CP      (ix+MLTOP)      ; Is it the one moving ?
 1428:	10C5  2015    	        JR      NZ,PT23         ; No - jump
 1429:	10C7  323300  	        LD      (PTSCK),a       ; Save position as a flag
 1430:	10CA  C3DC10  	        JP      PT23            ; Jump
 1431:	10CD  212E00  	PT20:   LD      hl,PTSW1        ; Previous maximum points won
-1432:	10D0  BE      	        CP      a,(hl)          ; Compare to current value
+1432:	10D0  BE      	        CP      (hl)            ; Compare to current value
 1433:	10D1  3802    	        JR      C,rel011        ; Jump if greater than
 1434:	10D3  7E      	        LD      a,(hl)          ; Load previous max value
 1435:	10D4  73      	        LD      (hl),e          ; Store new value as max won
 1436:	10D5  212F00  	rel011: LD      hl,PTSW2        ; Previous 2nd max points won
-1437:	10D8  BE      	        CP      a,(hl)          ; Compare to current value
+1437:	10D8  BE      	        CP      (hl)            ; Compare to current value
 1438:	10D9  3801    	        JR      C,PT23          ; Jump if greater than
 1439:	10DB  77      	        LD      (hl),a          ; Store as new 2nd max lost
 1440:	10DC  212200  	PT23:   LD      hl,P1           ; Get piece
@@ -1468,29 +1468,29 @@
 1447:	10EA  77      	        LD      (hl),a          ; Store
 1448:	10EB  3A0400  	PT25:   LD      a,(M3)          ; Get current board position
 1449:	10EE  3C      	        INC     a               ; Increment
-1450:	10EF  FE63    	        CP      a,99            ; At end of board ?
+1450:	10EF  FE63    	        CP      99              ; At end of board ?
 1451:	10F1  C22B10  	        JP      NZ,PT5          ; No - jump
 1452:	10F4  3A3300  	        LD      a,(PTSCK)       ; Moving piece lost flag
-1453:	10F7  A7      	        AND     a,a             ; Was it lost ?
+1453:	10F7  A7      	        AND     a               ; Was it lost ?
 1454:	10F8  280A    	        JR      Z,PT25A         ; No - jump
 1455:	10FA  3A2F00  	        LD      a,(PTSW2)       ; 2nd max points won
 1456:	10FD  322E00  	        LD      (PTSW1),a       ; Store as max points won
-1457:	1100  AF      	        XOR     a,a             ; Zero out 2nd max points won
+1457:	1100  AF      	        XOR     a               ; Zero out 2nd max points won
 1458:	1101  322F00  	        LD      (PTSW2),a
 1459:	1104  3A2D00  	PT25A:  LD      a,(PTSL)        ; Get max points lost
-1460:	1107  A7      	        AND     a,a             ; Is it zero ?
+1460:	1107  A7      	        AND     a               ; Is it zero ?
 1461:	1108  2801    	        JR      Z,rel013        ; Yes - jump
 1462:	110A  3D      	        DEC     a               ; Decrement it
 1463:	110B  47      	rel013: LD      b,a             ; Save it
 1464:	110C  3A2E00  	        LD      a,(PTSW1)       ; Max,points won
-1465:	110F  A7      	        AND     a,a             ; Is it zero ?
+1465:	110F  A7      	        AND     a               ; Is it zero ?
 1466:	1110  2809    	        JR      Z,rel014        ; Yes - jump
 1467:	1112  3A2F00  	        LD      a,(PTSW2)       ; 2nd max points won
-1468:	1115  A7      	        AND     a,a             ; Is it zero ?
+1468:	1115  A7      	        AND     a               ; Is it zero ?
 1469:	1116  2803    	        JR      Z,rel014        ; Yes - jump
 1470:	1118  3D      	        DEC     a               ; Decrement it
 1471:	1119  CB3F    	        SRL     a               ; Divide it by 2
-1472:	111B  90      	rel014: SUB     a,b             ; Subtract points lost
+1472:	111B  90      	rel014: SUB     b               ; Subtract points lost
 1473:	111C  212100  	        LD      hl,COLOR        ; Color of side just moved ???
 1474:	111F  CB7E    	        BIT     7,(hl)          ; Is it white ?
 1475:	1121  2802    	        JR      Z,rel015        ; Yes - jump
@@ -1498,17 +1498,17 @@
 1477:	1125  213000  	rel015: LD      hl,MTRL         ; Net material on board
 1478:	1128  86      	        ADD     a,(hl)          ; Add exchange adjustments
 1479:	1129  213200  	        LD      hl,MV0          ; Material at ply 0
-1480:	112C  96      	        SUB     a,(hl)          ; Subtract from current
+1480:	112C  96      	        SUB     (hl)            ; Subtract from current
 1481:	112D  47      	        LD      b,a             ; Save
 1482:	112E  3E1E    	        LD      a,30            ; Load material limit
 1483:	1130  CD6411  	        CALL    LIMIT           ; Limit to plus or minus value
 1484:	1133  5F      	        LD      e,a             ; Save limited value
 1485:	1134  3A2C00  	        LD      a,(BRDC)        ; Get board control points
 1486:	1137  213100  	        LD      hl,BC0          ; Board control at ply zero
-1487:	113A  96      	        SUB     a,(hl)          ; Get difference
+1487:	113A  96      	        SUB     (hl)            ; Get difference
 1488:	113B  47      	        LD      b,a             ; Save
 1489:	113C  3A3300  	        LD      a,(PTSCK)       ; Moving piece lost flag
-1490:	113F  A7      	        AND     a,a             ; Is it zero ?
+1490:	113F  A7      	        AND     a               ; Is it zero ?
 1491:	1140  2802    	        JR      Z,rel026        ; Yes - jump
 1492:	1142  0600    	        LD      b,0             ; Zero board control points
 1493:	1144  3E06    	rel026: LD      a,6             ; Load board control limit
@@ -1546,11 +1546,11 @@
 1525:	1164  CB78    	LIMIT:  BIT     7,b             ; Is value negative ?
 1526:	1166  CA6F11  	        JP      Z,LIM10         ; No - jump
 1527:	1169  ED44    	        NEG                     ; Make positive
-1528:	116B  B8      	        CP      a,b             ; Compare to limit
+1528:	116B  B8      	        CP      b               ; Compare to limit
 1529:	116C  D0      	        RET     NC              ; Return if outside limit
 1530:	116D  78      	        LD      a,b             ; Output value as is
 1531:	116E  C9      	        RET                     ; Return
-1532:	116F  B8      	LIM10:  CP      a,b             ; Compare to limit
+1532:	116F  B8      	LIM10:  CP      b               ; Compare to limit
 1533:	1170  D8      	        RET     C               ; Return if outside limit
 1534:	1171  78      	        LD      a,b             ; Output value as is
 1535:	1172  C9      	        RET                     ; Return
@@ -1586,10 +1586,10 @@
 1565:	118A  CB6A    	        BIT     5,d             ; Test Pawn promotion flag
 1566:	118C  202D    	        JR      NZ,MV15         ; Jump if set
 1567:	118E  7B      	        LD      a,e             ; Piece moved
-1568:	118F  E607    	        AND     a,7             ; Clear flag bits
-1569:	1191  FE05    	        CP      a,QUEEN         ; Is it a queen ?
+1568:	118F  E607    	        AND     7               ; Clear flag bits
+1569:	1191  FE05    	        CP      QUEEN           ; Is it a queen ?
 1570:	1193  282B    	        JR      Z,MV20          ; Yes - jump
-1571:	1195  FE06    	        CP      a,KING          ; Is it a king ?
+1571:	1195  FE06    	        CP      KING            ; Is it a king ?
 1572:	1197  2836    	        JR      Z,MV30          ; Yes - jump
 1573:	1199  FD2A0200	MV5:    LD      iy,(M2)         ; Load "to" pos board index
 1574:	119D  CBDB    	        SET     3,e             ; Set piece moved flag
@@ -1598,14 +1598,14 @@
 1577:	11A6  CB72    	        BIT     6,d             ; Double move ?
 1578:	11A8  2031    	        JR      NZ,MV40         ; Yes - jump
 1579:	11AA  7A      	        LD      a,d             ; Get captured piece, if any
-1580:	11AB  E607    	        AND     a,7
-1581:	11AD  FE05    	        CP      a,QUEEN         ; Was it a queen ?
+1580:	11AB  E607    	        AND     7
+1581:	11AD  FE05    	        CP      QUEEN           ; Was it a queen ?
 1582:	11AF  C0      	        RET     NZ              ; No - return
 1583:	11B0  215001  	        LD      hl,POSQ         ; Addr of saved Queen position
 1584:	11B3  CB7A    	        BIT     7,d             ; Is Queen white ?
 1585:	11B5  2801    	        JR      Z,MV10          ; Yes - jump
 1586:	11B7  23      	        INC     hl              ; Increment to black Queen pos
-1587:	11B8  AF      	MV10:   XOR     a,a             ; Set saved position to zero
+1587:	11B8  AF      	MV10:   XOR     a               ; Set saved position to zero
 1588:	11B9  77      	        LD      (hl),a
 1589:	11BA  C9      	        RET                     ; Return
 1590:	11BB  CBD3    	MV15:   SET     2,e             ; Change Pawn to a Queen
@@ -1658,23 +1658,23 @@
 1637:	11FC  CB6A    	        BIT     5,d             ; Was it a Pawn promotion ?
 1638:	11FE  2033    	        JR      NZ,UM15         ; Yes - jump
 1639:	1200  7B      	        LD      a,e             ; Get piece moved
-1640:	1201  E607    	        AND     a,7             ; Clear flag bits
-1641:	1203  FE05    	        CP      a,QUEEN         ; Was it a Queen ?
+1640:	1201  E607    	        AND     7               ; Clear flag bits
+1641:	1203  FE05    	        CP      QUEEN           ; Was it a Queen ?
 1642:	1205  2836    	        JR      Z,UM20          ; Yes - jump
-1643:	1207  FE06    	        CP      a,KING          ; Was it a King ?
+1643:	1207  FE06    	        CP      KING            ; Was it a King ?
 1644:	1209  2841    	        JR      Z,UM30          ; Yes - jump
 1645:	120B  CB62    	UM5:    BIT     4,d             ; Is this 1st move for piece ?
 1646:	120D  2029    	        JR      NZ,UM16         ; Yes - jump
 1647:	120F  FD2A0000	UM6:    LD      iy,(M1)         ; Load "from" pos board index
 1648:	1213  FD73B4  	        LD      (iy+BOARD),e    ; Return to previous board pos
 1649:	1216  7A      	        LD      a,d             ; Get captured piece, if any
-1650:	1217  E68F    	        AND     a,8FH           ; Clear flags
+1650:	1217  E68F    	        AND     8FH             ; Clear flags
 1651:	1219  DD77B4  	        LD      (ix+BOARD),a    ; Return to board
 1652:	121C  CB72    	        BIT     6,d             ; Was it a double move ?
 1653:	121E  2038    	        JR      NZ,UM40         ; Yes - jump
 1654:	1220  7A      	        LD      a,d             ; Get captured piece, if any
-1655:	1221  E607    	        AND     a,7             ; Clear flag bits
-1656:	1223  FE05    	        CP      a,QUEEN         ; Was it a Queen ?
+1655:	1221  E607    	        AND     7               ; Clear flag bits
+1656:	1223  FE05    	        CP      QUEEN           ; Was it a Queen ?
 1657:	1225  C0      	        RET     NZ              ; No - return
 1658:	1226  215001  	        LD      hl,POSQ         ; Address of saved Queen pos
 1659:	1229  CB7A    	        BIT     7,d             ; Is Queen white ?
@@ -1726,8 +1726,8 @@
 1705:	126E  72      	        LD      (hl),d          ; Store to link in list
 1706:	126F  2B      	        DEC     hl
 1707:	1270  73      	        LD      (hl),e
-1708:	1271  AF      	        XOR     a,a             ; End of list ?
-1709:	1272  B8      	        CP      a,b
+1708:	1271  AF      	        XOR     a               ; End of list ?
+1709:	1272  B8      	        CP      b
 1710:	1273  C8      	        RET     Z               ; Yes - return
 1711:	1274  ED431600	SR10:   LD      (MLPTRJ),bc     ; Save list pointer
 1712:	1278  CD9E12  	        CALL    EVAL            ; Evaluate move
@@ -1736,13 +1736,13 @@
 1715:	1282  5E      	SR15:   LD      e,(hl)          ; Next move for compare
 1716:	1283  23      	        INC     hl
 1717:	1284  56      	        LD      d,(hl)
-1718:	1285  AF      	        XOR     a,a             ; At end of list ?
-1719:	1286  BA      	        CP      a,d
+1718:	1285  AF      	        XOR     a               ; At end of list ?
+1719:	1286  BA      	        CP      d
 1720:	1287  280B    	        JR      Z,SR25          ; Yes - jump
 1721:	1289  D5      	        PUSH    de              ; Transfer move pointer
 1722:	128A  DDE1    	        POP     ix
 1723:	128C  3A2B00  	        LD      a,(VALM)        ; Get new move value
-1724:	128F  DDBE05  	        CP      a,(ix+MLVAL)    ; Less than list value ?
+1724:	128F  DDBE05  	        CP      (ix+MLVAL)      ; Less than list value ?
 1725:	1292  3006    	        JR      NC,SR30         ; No - jump
 1726:	1294  70      	SR25:   LD      (hl),b          ; Link new move into list
 1727:	1295  2B      	        DEC     hl
@@ -1771,9 +1771,9 @@
 1750:			;***********************************************************
 1751:	129E  CD7311  	EVAL:   CALL    MOVE            ; Make move on the board array
 1752:	12A1  CD980D  	        CALL    INCHK           ; Determine if move is legal
-1753:	12A4  A7      	        AND     a,a             ; Legal move ?
+1753:	12A4  A7      	        AND     a               ; Legal move ?
 1754:	12A5  2807    	        JR      Z,EV5           ; Yes - jump
-1755:	12A7  AF      	        XOR     a,a             ; Score of zero
+1755:	12A7  AF      	        XOR     a               ; Score of zero
 1756:	12A8  322B00  	        LD      (VALM),a        ; For illegal move
 1757:	12AB  C3B412  	        JP      EV10            ; Jump
 1758:	12AE  CDE40E  	EV5:    CALL    PINFND          ; Compile pinned list
@@ -1800,9 +1800,9 @@
 1779:			; ARGUMENTS:  --  None
 1780:			;***********************************************************
 1781:	12B8  3A2600  	FNDMOV: LD      a,(MOVENO)      ; Current move number
-1782:	12BB  FE01    	        CP      a,1             ; First move ?
+1782:	12BB  FE01    	        CP      1               ; First move ?
 1783:	12BD  CC3E14  	        CALL    Z,BOOK          ; Yes - execute book opening
-1784:	12C0  AF      	        XOR     a,a             ; Initialize ply number to zero
+1784:	12C0  AF      	        XOR     a               ; Initialize ply number to zero
 1785:	12C1  322800  	        LD      (NPLY),a
 1786:	12C4  210000  	        LD      hl,0            ; Initialize best move to zero
 1787:	12C7  221A00  	        LD      (BESTM),hl
@@ -1817,7 +1817,7 @@
 1796:	12E2  3A2700  	        LD      a,(PLYMAX)      ; Get max ply number
 1797:	12E5  C602    	        ADD     a,2             ; Add 2
 1798:	12E7  47      	        LD      b,a             ; Save as counter
-1799:	12E8  AF      	        XOR     a,a             ; Zero out score table
+1799:	12E8  AF      	        XOR     a               ; Zero out score table
 1800:	12E9  77      	back05: LD      (hl),a
 1801:	12EA  23      	        INC     hl
 1802:	12EB  10FC    	        DJNZ    back05
@@ -1831,12 +1831,12 @@
 1810:	1302  323200  	        LD      (MV0),a         ; Save
 1811:	1305  212800  	FM5:    LD      hl,NPLY         ; Address of ply counter
 1812:	1308  34      	        INC     (hl)            ; Increment ply count
-1813:	1309  AF      	        XOR     a,a             ; Initialize mate flag
+1813:	1309  AF      	        XOR     a               ; Initialize mate flag
 1814:	130A  322A00  	        LD      (MATEF),a
 1815:	130D  CD560D  	        CALL    GENMOV          ; Generate list of moves
 1816:	1310  3A2800  	        LD      a,(NPLY)        ; Current ply counter
 1817:	1313  212700  	        LD      hl,PLYMAX       ; Address of maximum ply number
-1818:	1316  BE      	        CP      a,(hl)          ; At max ply ?
+1818:	1316  BE      	        CP      (hl)            ; At max ply ?
 1819:	1317  DC6212  	        CALL    C,SORTM         ; No - call sort
 1820:	131A  2A1400  	        LD      hl,(MLPTRI)     ; Load ply index pointer
 1821:	131D  221600  	        LD      (MLPTRJ),hl     ; Save as last move pointer
@@ -1845,7 +1845,7 @@
 1824:	1324  23      	        INC     hl
 1825:	1325  56      	        LD      d,(hl)
 1826:	1326  7A      	        LD      a,d
-1827:	1327  A7      	        AND     a,a             ; End of move list ?
+1827:	1327  A7      	        AND     a               ; End of move list ?
 1828:	1328  2863    	        JR      Z,FM25          ; Yes - jump
 1829:	132A  ED531600	        LD      (MLPTRJ),de     ; Save current move pointer
 1830:	132E  2A1400  	        LD      hl,(MLPTRI)     ; Save in ply pointer list
@@ -1854,32 +1854,32 @@
 1833:	1333  72      	        LD      (hl),d
 1834:	1334  3A2800  	        LD      a,(NPLY)        ; Current ply counter
 1835:	1337  212700  	        LD      hl,PLYMAX       ; Maximum ply number ?
-1836:	133A  BE      	        CP      a,(hl)          ; Compare
+1836:	133A  BE      	        CP      (hl)            ; Compare
 1837:	133B  3826    	        JR      C,FM18          ; Jump if not max
 1838:	133D  CD7311  	        CALL    MOVE            ; Execute move on board array
 1839:	1340  CD980D  	        CALL    INCHK           ; Check for legal move
-1840:	1343  A7      	        AND     a,a             ; Is move legal
+1840:	1343  A7      	        AND     a               ; Is move legal
 1841:	1344  2806    	        JR      Z,rel017        ; Yes - jump
 1842:	1346  CDE511  	        CALL    UNMOVE          ; Restore board position
 1843:	1349  C32013  	        JP      FM15            ; Jump
 1844:	134C  3A2800  	rel017: LD      a,(NPLY)        ; Get ply counter
 1845:	134F  212700  	        LD      hl,PLYMAX       ; Max ply number
-1846:	1352  BE      	        CP      a,(hl)          ; Beyond max ply ?
+1846:	1352  BE      	        CP      (hl)            ; Beyond max ply ?
 1847:	1353  2065    	        JR      NZ,FM35         ; Yes - jump
 1848:	1355  3A2100  	        LD      a,(COLOR)       ; Get current color
-1849:	1358  EE80    	        XOR     a,80H           ; Get opposite color
+1849:	1358  EE80    	        XOR     80H             ; Get opposite color
 1850:	135A  CD9B0D  	        CALL    INCHK1          ; Determine if King is in check
-1851:	135D  A7      	        AND     a,a             ; In check ?
+1851:	135D  A7      	        AND     a               ; In check ?
 1852:	135E  285A    	        JR      Z,FM35          ; No - jump
 1853:	1360  C37013  	        JP      FM19            ; Jump (One more ply for check)
 1854:	1363  DD2A1600	FM18:   LD      ix,(MLPTRJ)     ; Load move pointer
 1855:	1367  DD7E05  	        LD      a,(ix+MLVAL)    ; Get move score
-1856:	136A  A7      	        AND     a,a             ; Is it zero (illegal move) ?
+1856:	136A  A7      	        AND     a               ; Is it zero (illegal move) ?
 1857:	136B  28B3    	        JR      Z,FM15          ; Yes - jump
 1858:	136D  CD7311  	        CALL    MOVE            ; Execute move on board array
 1859:	1370  212100  	FM19:   LD      hl,COLOR        ; Toggle color
 1860:	1373  3E80    	        LD      a,80H
-1861:	1375  AE      	        XOR     a,(hl)
+1861:	1375  AE      	        XOR     (hl)
 1862:	1376  77      	        LD      (hl),a          ; Save new color
 1863:	1377  CB7F    	        BIT     7,a             ; Is it white ?
 1864:	1379  2004    	        JR      NZ,rel018       ; No - jump
@@ -1894,10 +1894,10 @@
 1873:	1387  221800  	        LD      (SCRIX),hl      ; Save it
 1874:	138A  C30513  	        JP      FM5             ; Jump
 1875:	138D  3A2A00  	FM25:   LD      a,(MATEF)       ; Get mate flag
-1876:	1390  A7      	        AND     a,a             ; Checkmate or stalemate ?
+1876:	1390  A7      	        AND     a               ; Checkmate or stalemate ?
 1877:	1391  2013    	        JR      NZ,FM30         ; No - jump
 1878:	1393  3A2900  	        LD      a,(CKFLG)       ; Get check flag
-1879:	1396  A7      	        AND     a,a             ; Was King in check ?
+1879:	1396  A7      	        AND     a               ; Was King in check ?
 1880:	1397  3E80    	        LD      a,80H           ; Pre-set stalemate score
 1881:	1399  282B    	        JR      Z,FM36          ; No - jump (stalemate)
 1882:	139B  3A2600  	        LD      a,(MOVENO)      ; Get move number
@@ -1905,7 +1905,7 @@
 1884:	13A1  3EFF    	        LD      a,0FFH          ; Pre-set checkmate score
 1885:	13A3  C3C613  	        JP      FM36            ; Jump
 1886:	13A6  3A2800  	FM30:   LD      a,(NPLY)        ; Get ply counter
-1887:	13A9  FE01    	        CP      a,1             ; At top of tree ?
+1887:	13A9  FE01    	        CP      1               ; At top of tree ?
 1888:	13AB  C8      	        RET     Z               ; Yes - return
 1889:	13AC  CD0A14  	        CALL    ASCEND          ; Ascend one ply in tree
 1890:	13AF  2A1800  	        LD      hl,(SCRIX)      ; Load score table pointer
@@ -1923,22 +1923,22 @@
 1902:	13C9  CBC6    	        SET     0,(hl)
 1903:	13CB  2A1800  	        LD      hl,(SCRIX)      ; Load score table pointer
 1904:	13CE          	FM37:
-1905:	13CE  BE      	        CP      a,(hl)          ; Compare to score 2 ply above
+1905:	13CE  BE      	        CP      (hl)            ; Compare to score 2 ply above
 1906:	13CF  3833    	        JR      C,FM40          ; Jump if less
 1907:	13D1  2831    	        JR      Z,FM40          ; Jump if equal
 1908:	13D3  ED44    	        NEG                     ; Negate score
 1909:	13D5  23      	        INC     hl              ; Incr score table pointer
-1910:	13D6  BE      	        CP      a,(hl)          ; Compare to score 1 ply above
+1910:	13D6  BE      	        CP      (hl)            ; Compare to score 1 ply above
 1911:	13D7  DA2013  	        JP      C,FM15          ; Jump if less than
 1912:	13DA  CA2013  	        JP      Z,FM15          ; Jump if equal
 1913:	13DD  77      	        LD      (hl),a          ; Save as new score 1 ply above
 1914:	13DE  3A2800  	        LD      a,(NPLY)        ; Get current ply counter
-1915:	13E1  FE01    	        CP      a,1             ; At top of tree ?
+1915:	13E1  FE01    	        CP      1               ; At top of tree ?
 1916:	13E3  C22013  	        JP      NZ,FM15         ; No - jump
 1917:	13E6  2A1600  	        LD      hl,(MLPTRJ)     ; Load current move pointer
 1918:	13E9  221A00  	        LD      (BESTM),hl      ; Save as best move pointer
 1919:	13EC  3A5401  	        LD      a,(SCORE+1)     ; Get best move score
-1920:	13EF  FEFF    	        CP      a,0FFH          ; Was it a checkmate ?
+1920:	13EF  FEFF    	        CP      0FFH            ; Was it a checkmate ?
 1921:	13F1  C22013  	        JP      NZ,FM15         ; No - jump
 1922:	13F4  212700  	        LD      hl,PLYMAX       ; Get maximum ply number
 1923:	13F7  35      	        DEC     (hl)            ; Subtract 2
@@ -1966,7 +1966,7 @@
 1945:			;***********************************************************
 1946:	140A  212100  	ASCEND: LD      hl,COLOR        ; Toggle color
 1947:	140D  3E80    	        LD      a,80H
-1948:	140F  AE      	        XOR     a,(hl)
+1948:	140F  AE      	        XOR     (hl)
 1949:	1410  77      	        LD      (hl),a          ; Save new color
 1950:	1411  CB7F    	        BIT     7,a             ; Is it white ?
 1951:	1413  2804    	        JR      Z,rel019        ; Yes - jump
@@ -2011,7 +2011,7 @@
 1990:	1447  221A00  	        LD      (BESTM),hl
 1991:	144A  211A00  	        LD      hl,BESTM        ; Initialize address of pointer
 1992:	144D  3A2000  	        LD      a,(KOLOR)       ; Get computer's color
-1993:	1450  A7      	        AND     a,a             ; Is it white ?
+1993:	1450  A7      	        AND     a               ; Is it white ?
 1994:	1451  2009    	        JR      NZ,BM5          ; No - jump
 1995:	1453  ED5F    	        LD      a,r             ; Load refresh reg (random no)
 1996:	1455  CB47    	        BIT     0,a             ; Test random bit
@@ -2028,15 +2028,15 @@
 2007:	1461  34      	        INC     (hl)
 2008:	1462  DD2A1600	        LD      ix,(MLPTRJ)     ; Pointer to opponents 1st move
 2009:	1466  DD7E02  	        LD      a,(ix+MLFRP)    ; Get "from" position
-2010:	1469  FE16    	        CP      a,22            ; Is it a Queen Knight move ?
+2010:	1469  FE16    	        CP      22              ; Is it a Queen Knight move ?
 2011:	146B  280C    	        JR      Z,BM9           ; Yes - Jump
-2012:	146D  FE1B    	        CP      a,27            ; Is it a King Knight move ?
+2012:	146D  FE1B    	        CP      27              ; Is it a King Knight move ?
 2013:	146F  2808    	        JR      Z,BM9           ; Yes - jump
-2014:	1471  FE22    	        CP      a,34            ; Is it a Queen Pawn ?
+2014:	1471  FE22    	        CP      34              ; Is it a Queen Pawn ?
 2015:	1473  2804    	        JR      Z,BM9           ; Yes - jump
 2016:	1475  D8      	        RET     C               ; If Queen side Pawn opening -
 2017:			                                ; return (P-K4)
-2018:	1476  FE23    	        CP      a,35            ; Is it a King Pawn ?
+2018:	1476  FE23    	        CP      35              ; Is it a King Pawn ?
 2019:	1478  C8      	        RET     Z               ; Yes - return (P-K4)
 2020:	1479  34      	BM9:    INC     (hl)            ; (P-Q4)
 2021:	147A  34      	        INC     (hl)
@@ -2294,9 +2294,9 @@
 2200:	1A11  CD431D  	DRIV01: CALL    CHARTR          ; Accept answer
 2201:	1A14' FF921A00	        CARRET                  ; New line
 	      00
-2202:	1A19  FE59    	        CP      a,59H           ; Is it a 'Y' ?
+2202:	1A19  FE59    	        CP      59H             ; Is it a 'Y' ?
 2203:	1A1B  C2B81D  	        JP      NZ,ANALYS       ; Yes - jump
-2204:	1A1E  97      	        SUB     a,a             ; Code of White is zero
+2204:	1A1E  97      	        SUB     a               ; Code of White is zero
 2205:	1A1F  322100  	        LD      (COLOR),a       ; White always moves first
 2206:	1A22  CDB91A  	        CALL    INTERR          ; Players color/search depth
 2207:	1A25  CD000B  	        CALL    INITBD          ; Initialize board array
@@ -2317,10 +2317,10 @@
 2220:	1A4C' FFB31A86	DRIV04: PRTBLK  MVENUM,3        ; Display move number
 	      180300
 2221:	1A53  3A2000  	        LD      a,(KOLOR)       ; Bring in computer's color
-2222:	1A56  A7      	        AND     a,a             ; Is it white ?
+2222:	1A56  A7      	        AND     a               ; Is it white ?
 2223:	1A57  201C    	        JR      NZ,DR08         ; No - jump
 2224:	1A59  CD5D1D  	        CALL    PGIFND          ; New page if needed
-2225:	1A5C  FE01    	        CP      a,1             ; Was page turned ?
+2225:	1A5C  FE01    	        CP      1               ; Was page turned ?
 2226:	1A5E  CC261C  	        CALL    Z,TBCPCL        ; Yes - Tab to computers column
 2227:	1A61  CD211B  	        CALL    CPTRMV          ; Make and write computers move
 2228:	1A64' FFB31A7C	        PRTBLK  SPACE,1         ; Output a space
@@ -2333,28 +2333,28 @@
 2233:	1A78' FFB31A7C	        PRTBLK  SPACE,1         ; Output a space
 	      180100
 2234:	1A7F  CD5D1D  	        CALL    PGIFND          ; New page if needed
-2235:	1A82  FE01    	        CP      a,1             ; Was page turned ?
+2235:	1A82  FE01    	        CP      1               ; Was page turned ?
 2236:	1A84  CC261C  	        CALL    Z,TBCPCL        ; Yes - Tab to computers column
 2237:	1A87  CD211B  	        CALL    CPTRMV          ; Make and write computers move
 2238:	1A8A' FF921A00	        CARRET                  ; New line
 	      00
 2239:	1A8F  218818  	DR0C:   LD      hl,MVENUM+2     ; Addr of 3rd char of move
 2240:	1A92  3E20    	        LD      a,20H           ; Ascii space
-2241:	1A94  BE      	        CP      a,(hl)          ; Is char a space ?
+2241:	1A94  BE      	        CP      (hl)            ; Is char a space ?
 2242:	1A95  3E3A    	        LD      a,3AH           ; Set up test value
 2243:	1A97  2806    	        JR      Z,DR10          ; Yes - jump
 2244:	1A99  34      	        INC     (hl)            ; Increment value
-2245:	1A9A  BE      	        CP      a,(hl)          ; Over Ascii 9 ?
+2245:	1A9A  BE      	        CP      (hl)            ; Over Ascii 9 ?
 2246:	1A9B  2015    	        JR      NZ,DR14         ; No - jump
 2247:	1A9D  3630    	        LD      (hl),30H        ; Set char to zero
 2248:	1A9F  2B      	DR10:   DEC     hl              ; 2nd char of Ascii move no.
 2249:	1AA0  34      	        INC     (hl)            ; Increment value
-2250:	1AA1  BE      	        CP      a,(hl)          ; Over Ascii 9 ?
+2250:	1AA1  BE      	        CP      (hl)            ; Over Ascii 9 ?
 2251:	1AA2  200E    	        JR      NZ,DR14         ; No - jump
 2252:	1AA4  3630    	        LD      (hl),30H        ; Set char to zero
 2253:	1AA6  2B      	        DEC     hl              ; 1st char of Ascii move no.
 2254:	1AA7  34      	        INC     (hl)            ; Increment value
-2255:	1AA8  BE      	        CP      a,(hl)          ; Over Ascii 9 ?
+2255:	1AA8  BE      	        CP      (hl)            ; Over Ascii 9 ?
 2256:	1AA9  2007    	        JR      NZ,DR14         ; No - jump
 2257:	1AAB  3631    	        LD      (hl),31H        ; Make 1st char a one
 2258:	1AAD  3E30    	        LD      a,30H           ; Make 3rd char a zero
@@ -2383,9 +2383,9 @@
 2280:	1AC0  CD431D  	        CALL    CHARTR          ; Accept response
 2281:	1AC3' FF921A00	        CARRET                  ; New line
 	      00
-2282:	1AC8  FE57    	        CP      a,57H           ; Did player request white ?
+2282:	1AC8  FE57    	        CP      57H             ; Did player request white ?
 2283:	1ACA  281C    	        JR      Z,IN04          ; Yes - branch
-2284:	1ACC  97      	        SUB     a,a             ; Set computers color to white
+2284:	1ACC  97      	        SUB     a               ; Set computers color to white
 2285:	1ACD  322000  	        LD      (KOLOR),a
 2286:	1AD0  217018  	        LD      hl,TITLE1       ; Prepare move list titles
 2287:	1AD3  111D19  	        LD      de,TITLE4+2
@@ -2413,11 +2413,11 @@
 	      00
 2308:	1B12  212700  	        LD      hl,PLYMAX       ; Address of ply depth variabl
 2309:	1B15  3602    	        LD      (hl),2          ; Default depth of search
-2310:	1B17  FE31    	        CP      a,31H           ; Under minimum of 1 ?
+2310:	1B17  FE31    	        CP      31H             ; Under minimum of 1 ?
 2311:	1B19  F8      	        RET     M               ; Yes - return
-2312:	1B1A  FE37    	        CP      a,37H           ; Over maximum of 6 ?
+2312:	1B1A  FE37    	        CP      37H             ; Over maximum of 6 ?
 2313:	1B1C  F0      	        RET     P               ; Yes - return
-2314:	1B1D  D630    	        SUB     a,30H           ; Subtract Ascii constant
+2314:	1B1D  D630    	        SUB     30H             ; Subtract Ascii constant
 2315:	1B1F  77      	        LD      (hl),a          ; Set desired depth
 2316:	1B20  C9      	        RET                     ; Return
 2317:			
@@ -2446,7 +2446,7 @@
 2340:	1B24  2A1A00  	        LD      hl,(BESTM)      ; Move list pointer variable
 2341:	1B27  221600  	        LD      (MLPTRJ),hl     ; Pointer to move data
 2342:	1B2A  3A5401  	        LD      a,(SCORE+1)     ; To check for mates
-2343:	1B2D  FE01    	        CP      a,1             ; Mate against computer ?
+2343:	1B2D  FE01    	        CP      1               ; Mate against computer ?
 2344:	1B2F  2005    	        JR      NZ,CP0C         ; No - jump
 2345:	1B31  0E01    	        LD      c,1             ; Computer mate flag
 2346:	1B33  CDAF1B  	        CALL    FCDMAT          ; Full checkmate ?
@@ -2454,7 +2454,7 @@
 2348:	1B39  CD5E20  	        CALL    EXECMV          ; Make move on graphics board
 2349:			                                ; and return info about it
 2350:	1B3C  78      	        LD      a,b             ; Special move flags
-2351:	1B3D  A7      	        AND     a,a             ; Special ?
+2351:	1B3D  A7      	        AND     a               ; Special ?
 2352:	1B3E  2017    	        JR      NZ,CP10         ; Yes - jump
 2353:	1B40  53      	        LD      d,e             ; "To" position of the move
 2354:	1B41  CD621C  	        CALL    BITASN          ; Convert to Ascii
@@ -2479,24 +2479,24 @@
 	      190500
 2370:	1B78  3A2100  	CP1C:   LD      a,(COLOR)       ; Should computer call check ?
 2371:	1B7B  47      	        LD      b,a
-2372:	1B7C  EE80    	        XOR     a,80H           ; Toggle color
+2372:	1B7C  EE80    	        XOR     80H             ; Toggle color
 2373:	1B7E  322100  	        LD      (COLOR),a
 2374:	1B81  CD980D  	        CALL    INCHK           ; Check for check
-2375:	1B84  A7      	        AND     a,a             ; Is enemy in check ?
+2375:	1B84  A7      	        AND     a               ; Is enemy in check ?
 2376:	1B85  78      	        LD      a,b             ; Restore color
 2377:	1B86  322100  	        LD      (COLOR),a
 2378:	1B89  2818    	        JR      Z,CP24          ; No - return
 2379:	1B8B' FF921A00	        CARRET                  ; New line
 	      00
 2380:	1B90  3A5401  	        LD      a,(SCORE+1)     ; Check for player mated
-2381:	1B93  FEFF    	        CP      a,0FFH          ; Forced mate ?
+2381:	1B93  FEFF    	        CP      0FFH            ; Forced mate ?
 2382:	1B95  C44E1C  	        CALL    NZ,TBCPMV       ; No - Tab to computer column
 2383:	1B98' FFB31AC0	        PRTBLK  CKMSG,5         ; Output "check"
 	      180500
 2384:	1B9F  215F19  	        LD      hl,LINECT       ; Address of screen line count
 2385:	1BA2  34      	        INC     (hl)            ; Increment for message
 2386:	1BA3  3A5401  	CP24:   LD      a,(SCORE+1)     ; Check again for mates
-2387:	1BA6  FEFF    	        CP      a,0FFH          ; Player mated ?
+2387:	1BA6  FEFF    	        CP      0FFH            ; Player mated ?
 2388:	1BA8  C0      	        RET     NZ              ; No - return
 2389:	1BA9  0E00    	        LD      c,0             ; Set player mate flag
 2390:	1BAB  CDAF1B  	        CALL    FCDMAT          ; Full checkmate ?
@@ -2525,8 +2525,8 @@
 2413:	1BAF  3A2600  	FCDMAT: LD      a,(MOVENO)      ; Current move number
 2414:	1BB2  47      	        LD      b,a             ; Save
 2415:	1BB3  3A2500  	        LD      a,(PMATE)       ; Move number where mate occurs
-2416:	1BB6  90      	        SUB     a,b             ; Number of moves till mate
-2417:	1BB7  A7      	        AND     a,a             ; Checkmate ?
+2416:	1BB6  90      	        SUB     b               ; Number of moves till mate
+2417:	1BB7  A7      	        AND     a               ; Checkmate ?
 2418:	1BB8  2040    	        JR      NZ,FM0C         ; No - jump
 2419:	1BBA  CB41    	        BIT     0,c             ; Check flag for who is mated
 2420:	1BBC  2818    	        JR      Z,FM04          ; Jump if player
@@ -2648,7 +2648,7 @@
 2459:	1C12' FFB31A86	TBPLCL: PRTBLK  MVENUM,3        ; Reproduce move number
 	      180300
 2460:	1C19  3A2000  	        LD      a,(KOLOR)       ; Computers color
-2461:	1C1C  A7      	        AND     a,a             ; Is computer white ?
+2461:	1C1C  A7      	        AND     a               ; Is computer white ?
 2462:	1C1D  C0      	        RET     NZ              ; No - return
 2463:	1C1E' FFB31A7C	        PRTBLK  SPACE,6         ; Tab to next column
 	      180600
@@ -2674,7 +2674,7 @@
 2483:	1C26' FFB31A86	TBCPCL: PRTBLK  MVENUM,3        ; Reproduce move number
 	      180300
 2484:	1C2D  3A2000  	        LD      a,(KOLOR)       ; Computer's color
-2485:	1C30  A7      	        AND     a,a             ; Is computer white ?
+2485:	1C30  A7      	        AND     a               ; Is computer white ?
 2486:	1C31  C8      	        RET     Z               ; Yes - return
 2487:	1C32' FFB31A7C	        PRTBLK  SPACE,6         ; Tab to next column
 	      180600
@@ -2691,7 +2691,7 @@
 2498:	1C3A' FFB31A7C	TBPLMV: PRTBLK  SPACE,3
 	      180300
 2499:	1C41  3A2000  	        LD      a,(KOLOR)
-2500:	1C44  A7      	        AND     a,a
+2500:	1C44  A7      	        AND     a
 2501:	1C45  C0      	        RET     NZ
 2502:	1C46' FFB31A7C	        PRTBLK  SPACE,6
 	      180600
@@ -2708,7 +2708,7 @@
 2513:	1C4E' FFB31A7C	TBCPMV: PRTBLK  SPACE,3
 	      180300
 2514:	1C55  3A2000  	        LD      a,(KOLOR)
-2515:	1C58  A7      	        AND     a,a
+2515:	1C58  A7      	        AND     a
 2516:	1C59  C8      	        RET     Z
 2517:	1C5A' FFB31A7C	        PRTBLK  SPACE,6
 	      180600
@@ -2729,7 +2729,7 @@
 2532:			;                 Ascii square name is output in register
 2533:			;                 pair HL.
 2534:			;***********************************************************
-2535:	1C62  97      	BITASN: SUB     a,a             ; Get ready for division
+2535:	1C62  97      	BITASN: SUB     a               ; Get ready for division
 2536:	1C63  1E0A    	        LD      e,10
 2537:	1C65  CD0420  	        CALL    DIVIDE          ; Divide
 2538:	1C68  15      	        DEC     d               ; Get rank on 1-8 basis
@@ -2760,13 +2760,13 @@
 2563:			; ARGUMENTS:  --  None
 2564:			;***********************************************************
 2565:	1C71  CD431D  	PLYRMV: CALL    CHARTR          ; Accept "from" file letter
-2566:	1C74  FE12    	        CP      a,12H           ; Is it instead a Control-R ?
+2566:	1C74  FE12    	        CP      12H             ; Is it instead a Control-R ?
 2567:	1C76  CAE91B  	        JP      Z,FM09          ; Yes - jump
 2568:	1C79  67      	        LD      h,a             ; Save
 2569:	1C7A  CD431D  	        CALL    CHARTR          ; Accept "from" rank number
 2570:	1C7D  6F      	        LD      l,a             ; Save
 2571:	1C7E  CDC71C  	        CALL    ASNTBI          ; Convert to a board index
-2572:	1C81  90      	        SUB     a,b             ; Gives board index, if valid
+2572:	1C81  90      	        SUB     b               ; Gives board index, if valid
 2573:	1C82  2822    	        JR      Z,PL08          ; Jump if invalid
 2574:	1C84  32B118  	        LD      (MVEMSG),a      ; Move list "from" position
 2575:	1C87  CD431D  	        CALL    CHARTR          ; Accept separator & ignore it
@@ -2775,11 +2775,11 @@
 2578:	1C8E  CD431D  	        CALL    CHARTR
 2579:	1C91  6F      	        LD      l,a
 2580:	1C92  CDC71C  	        CALL    ASNTBI
-2581:	1C95  90      	        SUB     a,b
+2581:	1C95  90      	        SUB     b
 2582:	1C96  280E    	        JR      Z,PL08
 2583:	1C98  32B218  	        LD      (MVEMSG+1),a    ; Move list "to" position
 2584:	1C9B  CDEC1C  	        CALL    VALMOV          ; Determines if a legal move
-2585:	1C9E  A7      	        AND     a,a             ; Legal ?
+2585:	1C9E  A7      	        AND     a               ; Legal ?
 2586:	1C9F  C2A61C  	        JP      NZ,PL08         ; No - jump
 2587:	1CA2  CD5E20  	        CALL    EXECMV          ; Make move on graphics board
 2588:	1CA5  C9      	        RET                     ; Return
@@ -2814,20 +2814,20 @@
 2614:			;                 A if invalid.
 2615:			;***********************************************************
 2616:	1CC7  7D      	ASNTBI: LD      a,l             ; Ascii rank (1 - 8)
-2617:	1CC8  D630    	        SUB     a,30H           ; Rank 1 - 8
-2618:	1CCA  FE01    	        CP      a,1             ; Check lower bound
+2617:	1CC8  D630    	        SUB     30H             ; Rank 1 - 8
+2618:	1CCA  FE01    	        CP      1               ; Check lower bound
 2619:	1CCC  FAEA1C  	        JP      M,AT04          ; Jump if invalid
-2620:	1CCF  FE09    	        CP      a,9             ; Check upper bound
+2620:	1CCF  FE09    	        CP      9               ; Check upper bound
 2621:	1CD1  3017    	        JR      NC,AT04         ; Jump if invalid
 2622:	1CD3  3C      	        INC     a               ; Rank 2 - 9
 2623:	1CD4  57      	        LD      d,a             ; Ready for multiplication
 2624:	1CD5  1E0A    	        LD      e,10
 2625:	1CD7  CD1620  	        CALL    MLTPLY          ; Multiply
 2626:	1CDA  7C      	        LD      a,h             ; Ascii file letter (a - h)
-2627:	1CDB  D640    	        SUB     a,40H           ; File 1 - 8
-2628:	1CDD  FE01    	        CP      a,1             ; Check lower bound
+2627:	1CDB  D640    	        SUB     40H             ; File 1 - 8
+2628:	1CDD  FE01    	        CP      1               ; Check lower bound
 2629:	1CDF  FAEA1C  	        JP      M,AT04          ; Jump if invalid
-2630:	1CE2  FE09    	        CP      a,9             ; Check upper bound
+2630:	1CE2  FE09    	        CP      9               ; Check upper bound
 2631:	1CE4  3004    	        JR      NC,AT04         ; Jump if invalid
 2632:	1CE6  82      	        ADD     a,d             ; File+Rank(20-90)=Board index
 2633:	1CE7  0600    	        LD      b,0             ; Ok flag
@@ -2853,7 +2853,7 @@
 2653:	1CEC  2A1600  	VALMOV: LD      hl,(MLPTRJ)     ; Save last move pointer
 2654:	1CEF  E5      	        PUSH    hl              ; Save register
 2655:	1CF0  3A2000  	        LD      a,(KOLOR)       ; Computers color
-2656:	1CF3  EE80    	        XOR     a,80H           ; Toggle color
+2656:	1CF3  EE80    	        XOR     80H             ; Toggle color
 2657:	1CF5  322100  	        LD      (COLOR),a       ; Store
 2658:	1CF8  215D01  	        LD      hl,PLYIX-2      ; Load move list index
 2659:	1CFB  221400  	        LD      (MLPTRI),hl
@@ -2862,15 +2862,15 @@
 2662:	1D04  CD560D  	        CALL    GENMOV          ; Generate opponents moves
 2663:	1D07  DD210007	        LD      ix,MLIST+1024   ; Index to start of moves
 2664:	1D0B  3AB118  	VA5:    LD      a,(MVEMSG)      ; "From" position
-2665:	1D0E  DDBE02  	        CP      a,(ix+MLFRP)    ; Is it in list ?
+2665:	1D0E  DDBE02  	        CP      (ix+MLFRP)      ; Is it in list ?
 2666:	1D11  2008    	        JR      NZ,VA6          ; No - jump
 2667:	1D13  3AB218  	        LD      a,(MVEMSG+1)    ; "To" position
-2668:	1D16  DDBE03  	        CP      a,(ix+MLTOP)    ; Is it in list ?
+2668:	1D16  DDBE03  	        CP      (ix+MLTOP)      ; Is it in list ?
 2669:	1D19  280F    	        JR      Z,VA7           ; Yes - jump
 2670:	1D1B  DD5E00  	VA6:    LD      e,(ix+MLPTR)    ; Pointer to next list move
 2671:	1D1E  DD5601  	        LD      d,(ix+MLPTR+1)
-2672:	1D21  AF      	        XOR     a,a             ; At end of list ?
-2673:	1D22  BA      	        CP      a,d
+2672:	1D21  AF      	        XOR     a               ; At end of list ?
+2673:	1D22  BA      	        CP      d
 2674:	1D23  2817    	        JR      Z,VA10          ; Yes - jump
 2675:	1D25  D5      	        PUSH    de              ; Move to X register
 2676:	1D26  DDE1    	        POP     ix
@@ -2878,7 +2878,7 @@
 2678:	1D2A  DD221600	VA7:    LD      (MLPTRJ),ix     ; Save opponents move pointer
 2679:	1D2E  CD7311  	        CALL    MOVE            ; Make move on board array
 2680:	1D31  CD980D  	        CALL    INCHK           ; Was it a legal move ?
-2681:	1D34  A7      	        AND     a,a
+2681:	1D34  A7      	        AND     a
 2682:	1D35  2002    	        JR      NZ,VA9          ; No - jump
 2683:	1D37  E1      	VA8:    POP     hl              ; Restore saved register
 2684:	1D38  C9      	        RET                     ; Return
@@ -2915,20 +2915,20 @@
 2715:			;***********************************************************
 2716:	1D43  FF      	CHARTR: RST     38h             ; Jove monitor single char inpt
 2717:	1D44  8100    	        DB      81H,0
-2718:	1D46  FE0D    	        CP      a,0DH           ; Carriage return ?
+2718:	1D46  FE0D    	        CP      0DH             ; Carriage return ?
 2719:	1D48  C8      	        RET     Z               ; Yes - return
-2720:	1D49  FE0A    	        CP      a,0AH           ; Line feed ?
+2720:	1D49  FE0A    	        CP      0AH             ; Line feed ?
 2721:	1D4B  C8      	        RET     Z               ; Yes - return
-2722:	1D4C  FE08    	        CP      a,08H           ; Backspace ?
+2722:	1D4C  FE08    	        CP      08H             ; Backspace ?
 2723:	1D4E  C8      	        RET     Z               ; Yes - return
 2724:	1D4F  FF      	        RST     38h             ; Jove monitor single char echo
 2725:	1D50  811A    	        DB      81H,1AH
-2726:	1D52  E67F    	        AND     a,7FH           ; Mask off parity bit
-2727:	1D54  FE7B    	        CP      a,7BH           ; Upper range check (z+l)
+2726:	1D52  E67F    	        AND     7FH             ; Mask off parity bit
+2727:	1D54  FE7B    	        CP      7BH             ; Upper range check (z+l)
 2728:	1D56  F0      	        RET     P               ; No need to fold - return
-2729:	1D57  FE61    	        CP      a,61H           ; Lower-range check (a)
+2729:	1D57  FE61    	        CP      61H             ; Lower-range check (a)
 2730:	1D59  F8      	        RET     M               ; No need to fold - return
-2731:	1D5A  D620    	        SUB     a,20H           ; Change to one of A-Z
+2731:	1D5A  D620    	        SUB     20H             ; Change to one of A-Z
 2732:	1D5C  C9      	        RET                     ; Return
 2733:			
 2734:			;***********************************************************
@@ -2949,7 +2949,7 @@
 2749:	1D5D  215F19  	PGIFND: LD      hl,LINECT       ; Addr of page position counter
 2750:	1D60  34      	        INC     (hl)            ; Increment
 2751:	1D61  3E1B    	        LD      a,1BH           ; Page bottom ?
-2752:	1D63  BE      	        CP      a,(hl)
+2752:	1D63  BE      	        CP      (hl)
 2753:	1D64  D0      	        RET     NC              ; No - return
 2754:	1D65  CDDB1E  	        CALL    DSPBRD          ; Put up new page
 2755:	1D68' FFB21A1B	        PRTLIN  TITLE4,15       ; Re-print titles
@@ -2975,7 +2975,7 @@
 2773:			; ARGUMENTS:  --  None
 2774:			;***********************************************************
 2775:	1D7C  3A2000  	MATED:  LD      a,(KOLOR)       ; Computers color
-2776:	1D7F  A7      	        AND     a,a             ; Is computer white ?
+2776:	1D7F  A7      	        AND     a               ; Is computer white ?
 2777:	1D80  2807    	        JR      Z,rel23         ; Yes - skip
 2778:	1D82  0E02    	        LD      c,2             ; Set black piece flag
 2779:	1D84  3A4F01  	        LD      a,(POSK+1)      ; Position of black King
@@ -3057,7 +3057,7 @@
 2854:	1DBF  CD431D  	        CALL    CHARTR          ; Accept answer
 2855:	1DC2' FF921A00	        CARRET                  ; New line
 	      00
-2856:	1DC7  FE4E    	        CP      a,4EH           ; Is answer a "N" ?
+2856:	1DC7  FE4E    	        CP      4EH             ; Is answer a "N" ?
 2857:	1DC9  2002    	        JR      NZ,AN04         ; No - jump
 2858:	1DCB' FF1F    	        EXIT                    ; Return to monitor
 2859:	1DCD  CDDB1E  	AN04:   CALL    DSPBRD          ; Current board position
@@ -3068,16 +3068,16 @@
 2864:	1DDB  320000  	        LD      (M1),a          ; Set up board index
 2865:	1DDE  DD2A0000	        LD      ix,(M1)
 2866:	1DE2  DD7EB4  	        LD      a,(ix+BOARD)    ; Get board contents
-2867:	1DE5  FEFF    	        CP      a,0FFH          ; Border square ?
+2867:	1DE5  FEFF    	        CP      0FFH            ; Border square ?
 2868:	1DE7  283C    	        JR      Z,AN19          ; Yes - jump
 2869:	1DE9  0604    	        LD      b,4H            ; Ready to blink square
 2870:	1DEB  CD2720  	        CALL    BLNKER          ; Blink
 2871:	1DEE  CD431D  	        CALL    CHARTR          ; Accept input
-2872:	1DF1  FE1B    	        CP      a,1BH           ; Is it an escape ?
+2872:	1DF1  FE1B    	        CP      1BH             ; Is it an escape ?
 2873:	1DF3  2849    	        JR      Z,AN1B          ; Yes - jump
-2874:	1DF5  FE08    	        CP      a,08H           ; Is it a backspace ?
+2874:	1DF5  FE08    	        CP      08H             ; Is it a backspace ?
 2875:	1DF7  2836    	        JR      Z,AN1A          ; Yes - jump
-2876:	1DF9  FE0D    	        CP      a,0DH           ; Is it a carriage return ?
+2876:	1DF9  FE0D    	        CP      0DH             ; Is it a carriage return ?
 2877:	1DFB  2828    	        JR      Z,AN19          ; Yes - jump
 2878:	1DFD  010700  	        LD      bc,7            ; Number of types of pieces + 1
 2879:	1E00  21CE18  	        LD      hl,PCS          ; Address of piece symbol table
@@ -3085,31 +3085,31 @@
 2881:	1E05  2018    	        JR      NZ,AN18         ; Jump if not found
 2882:	1E07  CD431D  	        CALL    CHARTR          ; Accept and ignore separator
 2883:	1E0A  CD431D  	        CALL    CHARTR          ; Color of piece
-2884:	1E0D  FE42    	        CP      a,42H           ; Is it black ?
+2884:	1E0D  FE42    	        CP      42H             ; Is it black ?
 2885:	1E0F  2002    	        JR      NZ,rel022       ; No - skip
 2886:	1E11  CBF9    	        SET     7,c             ; Black piece indicator
 2887:	1E13  CD431D  	rel022: CALL    CHARTR          ; Accept and ignore separator
 2888:	1E16  CD431D  	        CALL    CHARTR          ; Moved flag
-2889:	1E19  FE31    	        CP      a,31H           ; Has piece moved ?
+2889:	1E19  FE31    	        CP      31H             ; Has piece moved ?
 2890:	1E1B  2002    	        JR      NZ,AN18         ; No - jump
 2891:	1E1D  CBD9    	        SET     3,c             ; Set moved indicator
 2892:	1E1F  DD71B4  	AN18:   LD      (ix+BOARD),c    ; Insert piece into board array
 2893:	1E22  CDDB1E  	        CALL    DSPBRD          ; Update graphics board
 2894:	1E25  3A5A19  	AN19:   LD      a,(ANBDPS)      ; Current board position
 2895:	1E28  3C      	        INC     a               ; Next
-2896:	1E29  FE63    	        CP      a,99            ; Done ?
+2896:	1E29  FE63    	        CP      99              ; Done ?
 2897:	1E2B  20A5    	        JR      NZ,AN08         ; No - jump
 2898:	1E2D  189E    	        JR      AN04            ; Jump
 2899:	1E2F  3A5A19  	AN1A:   LD      a,(ANBDPS)      ; Prepare to go back a square
-2900:	1E32  D603    	        SUB     a,3             ; To get around border
-2901:	1E34  FE14    	        CP      a,20            ; Off the other end ?
+2900:	1E32  D603    	        SUB     3               ; To get around border
+2901:	1E34  FE14    	        CP      20              ; Off the other end ?
 2902:	1E36  D2D21D  	        JP      NC,AN08         ; No - jump
 2903:	1E39  3E62    	        LD      a,98            ; Wrap around to top of screen
 2904:	1E3B  C3D21D  	AN0B:   JP      AN08            ; Jump
 2905:	1E3E' FFB21AF6	AN1B:   PRTLIN  CRTNES,14       ; Ask if correct
 	      180E00
 2906:	1E45  CD431D  	        CALL    CHARTR          ; Accept answer
-2907:	1E48  FE4E    	        CP      a,4EH           ; Is it "N" ?
+2907:	1E48  FE4E    	        CP      4EH             ; Is it "N" ?
 2908:	1E4A  CACD1D  	        JP      Z,AN04          ; No - jump
 2909:	1E4D  CDA41E  	        CALL    ROYALT          ; Update positions of royalty
 2910:	1E50' FFB21A3C	        CLRSCR                  ; Blank screen
@@ -3123,14 +3123,14 @@
 	      190F00
 2916:	1E6E' FFB21A89	        PRTLIN  TITLE3,15
 	      180F00
-2917:	1E75  FE57    	        CP      a,57H           ; Is is whites move ?
+2917:	1E75  FE57    	        CP      57H             ; Is is whites move ?
 2918:	1E77  CA4C1A  	        JP      Z,DRIV04        ; Yes - jump
 2919:	1E7A' FFB31A86	        PRTBLK  MVENUM,3        ; Print move number
 	      180300
 2920:	1E81' FFB31A7C	        PRTBLK  SPACE,6         ; Tab to blacks column
 	      180600
 2921:	1E88  3A2000  	        LD      a,(KOLOR)       ; Computer's color
-2922:	1E8B  A7      	        AND     a,a             ; Is computer white ?
+2922:	1E8B  A7      	        AND     a               ; Is computer white ?
 2923:	1E8C  200B    	        JR      NZ,AN20         ; No - jump
 2924:	1E8E  CD711C  	        CALL    PLYRMV          ; Get players move
 2925:	1E91' FF921A00	        CARRET                  ; New line
@@ -3167,10 +3167,10 @@
 2954:	1EBD  CB7F    	        BIT     7,a             ; Test color bit
 2955:	1EBF  2801    	        JR      Z,rel023        ; Jump if white
 2956:	1EC1  23      	        INC     hl              ; Offset for black
-2957:	1EC2  E607    	rel023: AND     a,7             ; Delete flags, leave piece
-2958:	1EC4  FE06    	        CP      a,KING          ; King ?
+2957:	1EC2  E607    	rel023: AND     7               ; Delete flags, leave piece
+2958:	1EC4  FE06    	        CP      KING            ; King ?
 2959:	1EC6  2806    	        JR      Z,RY08          ; Yes - jump
-2960:	1EC8  FE05    	        CP      a,QUEEN         ; Queen ?
+2960:	1EC8  FE05    	        CP      QUEEN           ; Queen ?
 2961:	1ECA  2006    	        JR      NZ,RY0C         ; No - jump
 2962:	1ECC  23      	        INC     hl              ; Queen position
 2963:	1ECD  23      	        INC     hl              ; Plus offset
@@ -3178,7 +3178,7 @@
 2965:	1ED1  77      	        LD      (hl),a          ; Save
 2966:	1ED2  3A0000  	RY0C:   LD      a,(M1)          ; Current position
 2967:	1ED5  3C      	        INC     a               ; Next position
-2968:	1ED6  FE63    	        CP      a,99            ; Done.?
+2968:	1ED6  FE63    	        CP      99              ; Done.?
 2969:	1ED8  20D6    	        JR      NZ,RY04         ; No - jump
 2970:	1EDA  C9      	        RET                     ; Return
 2971:			
@@ -3247,7 +3247,7 @@
 3033:	1F37  CDE01F  	        CALL    CONVRT          ; Norm addr into HL register
 3034:	1F3A  CD471F  	        CALL    INSPCE          ; Insert that piece onto board
 3035:	1F3D  3C      	        INC     a               ; Next square
-3036:	1F3E  FE63    	        CP      a,99            ; Done ?
+3036:	1F3E  FE63    	        CP      99              ; Done ?
 3037:	1F40  38F2    	        JR      C,BSET04        ; No - jump
 3038:	1F42  F1      	        POP     af              ; Restore registers
 3039:	1F43  E1      	        POP     hl
@@ -3280,15 +3280,15 @@
 3066:	1F50  320000  	        LD      (M1),a          ; Save
 3067:	1F53  DD2A0000	        LD      ix,(M1)         ; Index into board array
 3068:	1F57  DD7EB4  	        LD      a,(ix+BOARD)    ; Contents of board array
-3069:	1F5A  A7      	        AND     a,a             ; Is square empty ?
+3069:	1F5A  A7      	        AND     a               ; Is square empty ?
 3070:	1F5B  287C    	        JR      Z,IP2C          ; Yes - jump
-3071:	1F5D  FEFF    	        CP      a,0FFH          ; Is it a border square ?
+3071:	1F5D  FEFF    	        CP      0FFH            ; Is it a border square ?
 3072:	1F5F  2878    	        JR      Z,IP2C          ; Yes - jump
 3073:	1F61  0E00    	        LD      c,0             ; Clear flag register
 3074:	1F63  CB7F    	        BIT     7,a             ; Is piece white ?
 3075:	1F65  2802    	        JR      Z,IP04          ; Yes - jump
 3076:	1F67  0E02    	        LD      c,2             ; Set black piece flag
-3077:	1F69  E607    	IP04:   AND     a,7             ; Delete flags, leave piece
+3077:	1F69  E607    	IP04:   AND     7               ; Delete flags, leave piece
 3078:	1F6B  3D      	        DEC     a               ; Piece on a 0 - 5 basis
 3079:	1F6C  5F      	        LD      e,a             ; Save
 3080:	1F6D  1610    	        LD      d,16            ; Multiplier
@@ -3306,7 +3306,7 @@
 3092:	1F85  DD7E80  	IP10:   LD      a,(ix+BLOCK)    ; Bring in source block
 3093:	1F88  CB41    	        BIT     0,c             ; Should it be complemented ?
 3094:	1F8A  2802    	        JR      Z,IP14          ; No - jump
-3095:	1F8C  EE3F    	        XOR     a,3FH           ; Graphics complement
+3095:	1F8C  EE3F    	        XOR     3FH             ; Graphics complement
 3096:	1F8E  77      	IP14:   LD      (hl),a          ; Store block
 3097:	1F8F  2C      	        INC     l               ; Next block
 3098:	1F90  DD23    	        INC     ix              ; Next source block
@@ -3338,7 +3338,7 @@
 3124:	1FC1  DD7EF0  	IP24:   LD      a,(ix+KERNEL)   ; Kernel block
 3125:	1FC4  CB49    	        BIT     1,c             ; Need to complement ?
 3126:	1FC6  2002    	        JR      NZ,IP28         ; No - jump
-3127:	1FC8  EE3F    	        XOR     a,3FH           ; Graphics complement
+3127:	1FC8  EE3F    	        XOR     3FH             ; Graphics complement
 3128:	1FCA  77      	IP28:   LD      (hl),a          ; Store block
 3129:	1FCB  2C      	        INC     l               ; Next target block
 3130:	1FCC  DD23    	        INC     ix              ; Next source block
@@ -3378,7 +3378,7 @@
 3164:	1FE2  F5      	        PUSH    af
 3165:	1FE3  3A5919  	        LD      a,(BRDPOS)      ; Get board index
 3166:	1FE6  57      	        LD      d,a             ; Set up dividend
-3167:	1FE7  97      	        SUB     a,a
+3167:	1FE7  97      	        SUB     a
 3168:	1FE8  1E0A    	        LD      e,10            ; Divisor
 3169:	1FEA  CD0420  	        CALL    DIVIDE          ; Index into rank and file
 3170:			                                ; file (1-8) & rank (2-9)
@@ -3392,7 +3392,7 @@
 3178:	1FF7  C610    	        ADD     a,10H           ; File norm address
 3179:	1FF9  6F      	        LD      l,a             ; Low order address byte
 3180:	1FFA  3E08    	        LD      a,8             ; Rank adjust
-3181:	1FFC  91      	        SUB     a,c             ; Rank displacement
+3181:	1FFC  91      	        SUB     c               ; Rank displacement
 3182:	1FFD  C6C0    	        ADD     a,0C0H          ; Rank Norm address
 3183:	1FFF  67      	        LD      h,a             ; High order addres byte
 3184:	2000  F1      	        POP     af              ; Restore registers
@@ -3409,7 +3409,7 @@
 3195:	2005  0608    	        LD      b,8
 3196:	2007  CB22    	DD04:   SLA     d
 3197:	2009  17      	        RLA
-3198:	200A  93      	        SUB     a,e
+3198:	200A  93      	        SUB     e
 3199:	200B  FA1120  	        JP      M,rel027
 3200:	200E  14      	        INC     d
 3201:	200F  1801    	        JR      rel024
@@ -3424,7 +3424,7 @@
 3210:			;   output hi=A lo=D
 3211:			;***********************************************************
 3212:	2016  C5      	MLTPLY: PUSH    bc
-3213:	2017  97      	        SUB     a,a
+3213:	2017  97      	        SUB     a
 3214:	2018  0608    	        LD      b,8
 3215:	201A  CB42    	ML04:   BIT     0,d
 3216:	201C  2801    	        JR      Z,rel025
@@ -3463,12 +3463,12 @@
 3249:	2030  1600    	BL04:   LD      d,0             ; Bar counter
 3250:	2032  0E00    	BL08:   LD      c,0             ; Block counter
 3251:	2034  7E      	BL0C:   LD      a,(hl)          ; Fetch block
-3252:	2035  EE3F    	        XOR     a,3FH           ; Graphics complement
+3252:	2035  EE3F    	        XOR     3FH             ; Graphics complement
 3253:	2037  77      	        LD      (hl),a          ; Replace block
 3254:	2038  2C      	        INC     l               ; Next block address
 3255:	2039  0C      	        INC     c               ; Increment block counter
 3256:	203A  79      	        LD      a,c
-3257:	203B  FE06    	        CP      a,6             ; Done ?
+3257:	203B  FE06    	        CP      6               ; Done ?
 3258:	203D  20F5    	        JR      NZ,BL0C         ; No - jump
 3259:	203F  7D      	        LD      a,l             ; Address
 3260:	2040  C63A    	        ADD     a,3AH           ; Adjust square position
@@ -3526,15 +3526,15 @@
 3312:	207C  DD4E02  	        LD      c,(ix+MLFRP)    ; Second "from" position
 3313:	207F  DD5E03  	        LD      e,(ix+MLTOP)    ; Second "to" position
 3314:	2082  7B      	        LD      a,e             ; Get "to" position
-3315:	2083  B9      	        CP      a,c             ; Same as "from" position ?
+3315:	2083  B9      	        CP      c               ; Same as "from" position ?
 3316:	2084  2003    	        JR      NZ,EX04         ; No - jump
 3317:	2086  04      	        INC     b               ; Set en passant flag
 3318:	2087  1812    	        JR      EX10            ; Jump
-3319:	2089  FE1A    	EX04:   CP      a,1AH           ; White O-O ?
+3319:	2089  FE1A    	EX04:   CP      1AH             ; White O-O ?
 3320:	208B  2004    	        JR      NZ,EX08         ; No - jump
 3321:	208D  CBC8    	        SET     1,b             ; Set O-O flag
 3322:	208F  180A    	        JR      EX10            ; Jump
-3323:	2091  FE60    	EX08:   CP      a,60H           ; Black 0-0 ?
+3323:	2091  FE60    	EX08:   CP      60H             ; Black 0-0 ?
 3324:	2093  2004    	        JR      NZ,EX0C         ; No - jump
 3325:	2095  CBC8    	        SET     1,b             ; Set 0-0 flag
 3326:	2097  1802    	        JR      EX10            ; Jump
