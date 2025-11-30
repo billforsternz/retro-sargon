@@ -406,6 +406,9 @@ void sargon_import_position( const thc::ChessPosition &cp, bool avoid_book )
     //  "I was wondering if this might be a bug. I noticed that when playing with black if
     //   white opens with 1.Nf3 Sargon v1.01 has responded 1.e5. This has happened twice now
     //   this morning playing some test games with Zeta 0.99m."
+    // (On 2023-05-2023 I made a new Github release V1.01b - this project was completely stable
+    //  for a couple of years - but the bugfix this comment discusses at length was not in the
+    //  most recent Github release - only in the source code - this had been 'bugging' me)
     bool one_white_move_after_initial_position = false;
     thc::Move one_white_move;
 
