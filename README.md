@@ -6,6 +6,8 @@ published by Hayden in 1978 presents the source code to the classic
 early chess program Sargon in Z80 assembly language. This is a project
 to bring the code presented in the book back to life in the modern era.
 
+(By the way: Please also check out [my new Sargon project](https://github.com/billforsternz/zargon).)
+
 Why would you do that?
 ======================
 
