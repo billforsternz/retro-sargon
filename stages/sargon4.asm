@@ -974,6 +974,18 @@ AT32:   LDA     T2              ; Attacking piece type
 ;
 ; ARGUMENTS:  --  None
 ;***********************************************************
+; ATKSAV as published in the 1978 book has a rather invidious bug
+; The POP D instruction was placed before the POP B at AS25:
+; Unfortunately PNCK disturbs register D and this made the
+; "Queen found in this scan?" test invalid if PNCK was called.
+; This fix is to pop DE early so we do have access to D = scan count
+; and flags at the critical time, then use BC rather than DE to bump
+; HL pointer to point at slot (i.e. don't damage DE, so we exit with
+; the correct value the same as if we popped it at the end). This is
+; essentially identical to the original in terms of code size and
+; speed, if anything slightly smaller and faster because LD D,0 is
+; eliminated rather than translated to LD B,0 as the top half of BC
+; is still zero.
 ATKSAV: PUSH    B               ; Save Regs BC
         PUSH    D               ; Save Regs DE
         LDA     NPINS           ; Number of pinned pieces

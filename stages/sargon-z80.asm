@@ -1040,10 +1040,22 @@ AT32:   LD      a,(T2)          ; Attacking piece type
 ;
 ; ARGUMENTS:  --  None
 ;***********************************************************
+; ATKSAV as published in the 1978 book has a rather invidious bug
+; The POP D instruction was placed before the POP B at AS25:
+; Unfortunately PNCK disturbs register D and this made the
+; "Queen found in this scan?" test invalid if PNCK was called.
+; This fix is to pop DE early so we do have access to D = scan count
+; and flags at the critical time, then use BC rather than DE to bump
+; HL pointer to point at slot (i.e. don't damage DE, so we exit with
+; the correct value the same as if we popped it at the end). This is
+; essentially identical to the original in terms of code size and
+; speed, if anything slightly smaller and faster because LD D,0 is
+; eliminated rather than translated to LD B,0 as the top half of BC
+; is still zero.
 ATKSAV: PUSH    bc              ; Save Regs BC
         PUSH    de              ; Save Regs DE
         LD      a,(NPINS)       ; Number of pinned pieces
-        AND     a               ; Any ?
+        AND     a               ; Any pins ?
         CALL    NZ,PNCK         ; yes - check pin list
         LD      ix,(T2)         ; Init index to value table
         LD      hl,ATKLST       ; Init address of attack list
@@ -1052,15 +1064,15 @@ ATKSAV: PUSH    bc              ; Save Regs BC
         BIT     7,a             ; Is it white ?
         JR      Z,rel006        ; Yes - jump
         LD      c,7             ; Init increment for black
-rel006: AND     7               ; Attacking piece type
-        LD      e,a             ; Init increment for type
+rel006: ADD     hl,bc           ; Attack list address
+        AND     7               ; Attacking piece type (or QUEEN)
+        LD      c,a             ; Init increment for type
+        POP     de              ; Restore DE regs
         BIT     7,d             ; Queen found this scan ?
         JR      Z,rel007        ; No - jump
-        LD      e,QUEEN         ; Use Queen slot in attack list
-rel007: ADD     hl,bc           ; Attack list address
-        INC     (hl)            ; Increment list count
-        LD      d,0
-        ADD     hl,de           ; Attack list slot address
+        LD      c,QUEEN         ; Use Queen slot, pushes piece behind queen
+rel007: INC     (hl)            ; Increment list count
+        ADD     hl,bc           ; Attack list slot address
         LD      a,(hl)          ; Get data already there
         AND     0FH             ; Is first slot empty ?
         JR      Z,AS20          ; Yes - jump
@@ -1075,8 +1087,7 @@ AS19:   RLD                     ; Temp save lower in upper
         JR      AS25            ; Jump
 AS20:   LD      a,(ix+PVALUE)   ; Get new value for attack list
         RLD                     ; Put in 1st attack list slot
-AS25:   POP     de              ; Restore DE regs
-        POP     bc              ; Restore BC regs
+AS25:   POP     bc              ; Restore BC regs
         RET                     ; Return
 
 ;***********************************************************
