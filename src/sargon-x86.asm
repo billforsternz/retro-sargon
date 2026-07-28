@@ -1382,6 +1382,9 @@ AT32:   MOV     al,byte ptr [ebp+T2]            ; Attacking piece type
 ; speed, if anything slightly smaller and faster because LD D,0 is
 ; eliminated rather than translated to LD B,0 as the top half of BC
 ; is still zero.
+
+        ;Fixed version
+        IF 0
 ATKSAV: PUSH    ecx                             ; Save Regs BC
         PUSH    edx                             ; Save Regs DE
         MOV     al,byte ptr [ebp+NPINS]         ; Number of pinned pieces
@@ -1421,7 +1424,51 @@ AS20:   MOV     al,byte ptr [ebp+esi+PVALUE]    ; Get new value for attack list
         Z80_RLD                                 ; Put in 1st attack list slot
 AS25:   POP     ecx                             ; Restore BC regs
         RET                                     ; Return
+        ENDIF
 
+        ; Broken version
+        IF 1
+ATKSAV: PUSH    ecx                             ; Save Regs BC
+        PUSH    edx                             ; Save Regs DE
+        MOV     al,byte ptr [ebp+NPINS]         ; Number of pinned pieces
+        AND     al,al                           ; Any ?
+        JZ      skip12                          ; yes - check pin list
+        CALL    PNCK
+skip12:
+        MOV     si,word ptr [ebp+T2]            ; Init index to value table
+        MOV     bx,ATKLST                       ; Init address of attack list
+        MOV     cx,0                            ; Init increment for white
+        MOV     al,byte ptr [ebp+P2]            ; Attacking piece
+        TEST    al,80h                          ; Is it white ?
+        JZ      rel006                          ; Yes - jump
+        MOV     cl,7                            ; Init increment for black
+rel006: AND     al,7                            ; Attacking piece type
+        MOV     dl,al                           ; Init increment for type
+        TEST    dh,80h                          ; Queen found this scan ?
+        JZ      rel007                          ; No - jump
+        MOV     dl,QUEEN                        ; Use Queen slot in attack list
+rel007: ADD     bx,cx                           ; Attack list address
+        INC     byte ptr [ebp+ebx]              ; Increment list count
+        MOV     dh,0
+        ADD     bx,dx                           ; Attack list slot address
+        MOV     al,byte ptr [ebp+ebx]           ; Get data already there
+        AND     al,0FH                          ; Is first slot empty ?
+        JZ      AS20                            ; Yes - jump
+        MOV     al,byte ptr [ebp+ebx]           ; Get data again
+        AND     al,0F0H                         ; Is second slot empty ?
+        JZ      AS19                            ; Yes - jump
+        INC     bx                              ; Increment to King slot
+        JMP     AS20                            ; Jump
+AS19:   Z80_RLD                                 ; Temp save lower in upper
+        MOV     al,byte ptr [ebp+esi+PVALUE]    ; Get new value for attack list
+        Z80_RRD                                 ; Put in 2nd attack list slot
+        JMP     AS25                            ; Jump
+AS20:   MOV     al,byte ptr [ebp+esi+PVALUE]    ; Get new value for attack list
+        Z80_RLD                                 ; Put in 1st attack list slot
+AS25:   POP     edx                             ; Restore DE regs
+        POP     ecx                             ; Restore BC regs
+        RET                                     ; Return
+        ENDIF
 ;***********************************************************
 ; PIN CHECK ROUTINE
 ;***********************************************************
