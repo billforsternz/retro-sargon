@@ -1384,7 +1384,7 @@ AT32:   MOV     al,byte ptr [ebp+T2]            ; Attacking piece type
 ; is still zero.
 
         ;Fixed version
-        IF 0
+        IF 1
 ATKSAV: PUSH    ecx                             ; Save Regs BC
         PUSH    edx                             ; Save Regs DE
         MOV     al,byte ptr [ebp+NPINS]         ; Number of pinned pieces
@@ -1427,7 +1427,7 @@ AS25:   POP     ecx                             ; Restore BC regs
         ENDIF
 
         ; Broken version
-        IF 1
+        IF 0
 ATKSAV: PUSH    ecx                             ; Save Regs BC
         PUSH    edx                             ; Save Regs DE
         MOV     al,byte ptr [ebp+NPINS]         ; Number of pinned pieces
